@@ -178,7 +178,70 @@ func (l StockOpnameLine) Variance() int {
 	return l.CountedQty - l.SystemQty
 }
 
+// Stock document types (Transaksi Stock).
+const (
+	DocMaterialIssue = "material_issue"         // Pengambilan Bahan
+	DocFinishedGoods = "finished_goods_receipt" // Penerimaan Barang Jadi
+	DocScrap         = "scrap"                  // Scrap
+	DocMemoIn        = "memo_in"                // Memo stock masuk (penyesuaian +)
+	DocMemoOut       = "memo_out"               // Memo stock keluar (penyesuaian -)
+)
+
+// StockDocument is a posted stock transaction: materials issued to production,
+// finished goods received from production, scrap, or a stock memo. Posting it
+// moves the stock of every line and books the value to the general ledger.
+type StockDocument struct {
+	types.BaseEntity
+	TenantID    *uuid.UUID `gorm:"type:uuid;index" json:"tenantId,omitempty"`
+	Number      string     `gorm:"type:varchar(50);not null;index" json:"number"`
+	Type        string     `gorm:"type:varchar(30);not null;index" json:"type"`
+	Date        string     `gorm:"type:varchar(10);not null;index" json:"date"`
+	WarehouseID uuid.UUID  `gorm:"type:uuid;not null;index" json:"warehouseId"`
+	// Reference ties the document to something outside stock, e.g. a production order or work order number.
+	Reference string `gorm:"type:varchar(100)" json:"reference"`
+	// ProductionOrderID links a material issue to the production order it supplies.
+	ProductionOrderID *uuid.UUID `gorm:"type:uuid;index" json:"productionOrderId,omitempty"`
+	Reason            string     `gorm:"type:varchar(255)" json:"reason"`
+	Notes             string     `gorm:"type:varchar(500)" json:"notes"`
+	TotalValue        float64    `gorm:"type:decimal(15,2);default:0" json:"totalValue"`
+	// Posted is set once the journal entry exists; false means the stock moved but the posting failed.
+	Posted    bool                `gorm:"not null;default:false" json:"posted"`
+	CreatedBy string              `gorm:"type:varchar(255)" json:"createdBy,omitempty"`
+	Lines     []StockDocumentLine `gorm:"foreignKey:DocumentID" json:"lines,omitempty"`
+}
+
+func (StockDocument) TableName() string { return "inventory_stock_documents" }
+
+// StockDocumentLine is one product of a stock document. Quantity is always
+// positive; the document type decides whether it goes in or out.
+type StockDocumentLine struct {
+	types.BaseEntity
+	DocumentID uuid.UUID `gorm:"type:uuid;not null;index" json:"documentId"`
+	ProductID  uuid.UUID `gorm:"type:uuid;not null;index" json:"productId"`
+	Quantity   int       `gorm:"not null" json:"quantity"`
+	UnitCost   float64   `gorm:"type:decimal(15,2);default:0" json:"unitCost"`
+	Amount     float64   `gorm:"type:decimal(15,2);default:0" json:"amount"`
+	BatchNo    string    `gorm:"type:varchar(100)" json:"batchNo,omitempty"`
+	ExpiryDate string    `gorm:"type:varchar(10)" json:"expiryDate,omitempty"`
+}
+
+func (StockDocumentLine) TableName() string { return "inventory_stock_document_lines" }
+
+// StockDocumentFilter narrows a document listing; empty fields are ignored.
+type StockDocumentFilter struct {
+	Type, From, To string
+}
+
 type InventoryRepository interface {
+	// Stock documents
+	CreateStockDocument(ctx context.Context, d *StockDocument) error
+	UpdateStockDocument(ctx context.Context, d *StockDocument) error
+	GetStockDocument(ctx context.Context, id uuid.UUID) (*StockDocument, error)
+	ListStockDocuments(ctx context.Context, f StockDocumentFilter) ([]StockDocument, error)
+	CountStockDocuments(ctx context.Context, docType, numberPrefix string) (int64, error)
+	// SumIssuedByOrder totals the quantity of every product issued to a production order by material issue documents.
+	SumIssuedByOrder(ctx context.Context, orderID uuid.UUID) (map[uuid.UUID]int, error)
+
 	// Warehouses
 	CreateWarehouse(ctx context.Context, w *Warehouse) error
 	GetWarehouseByID(ctx context.Context, id uuid.UUID) (*Warehouse, error)

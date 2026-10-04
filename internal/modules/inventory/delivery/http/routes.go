@@ -45,4 +45,10 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	opname.Get("/:id", h.GetOpnameByID)
 	opname.Post("/:id/count", h.CountOpnameLine)
 	opname.Post("/:id/finalize", h.FinalizeOpname)
+	opname.Post("/:id/import", h.ImportOpnameCounts)
+
+	documents := inventory.Group("/documents")
+	documents.Post("/", h.CreateStockDocument)
+	documents.Get("/", h.ListStockDocuments)
+	documents.Get("/:id", h.GetStockDocument)
 }

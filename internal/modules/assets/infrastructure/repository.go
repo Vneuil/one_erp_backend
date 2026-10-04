@@ -75,3 +75,17 @@ func (r *assetsRepository) CountAssets(ctx context.Context) (int64, error) {
 	err := r.db.WithContext(ctx).Model(&domain.FixedAsset{}).Count(&total).Error
 	return total, err
 }
+
+func (r *assetsRepository) CreateDepreciationPosting(ctx context.Context, p *domain.DepreciationPosting) error {
+	return r.db.WithContext(ctx).Create(p).Error
+}
+
+func (r *assetsRepository) ListDepreciationPostings(ctx context.Context, period string) ([]domain.DepreciationPosting, error) {
+	var out []domain.DepreciationPosting
+	db := r.db.WithContext(ctx)
+	if period != "" {
+		db = db.Where("period = ?", period)
+	}
+	err := db.Order("period asc").Find(&out).Error
+	return out, err
+}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/divinecoid/one-backend/internal/modules/customer/domain"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
+	"github.com/divinecoid/one-backend/internal/shared/taxid"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/google/uuid"
 )
@@ -62,12 +63,23 @@ func (uc *customerUseCase) Create(ctx context.Context, dto CreateCustomerDTO) (*
 		segment = "Enterprise B2B"
 	}
 
+	npwp, err := taxid.NPWP(dto.NPWP)
+	if err != nil {
+		return nil, err
+	}
+	nik, err := taxid.NIK(dto.NIK)
+	if err != nil {
+		return nil, err
+	}
+
 	customer := &domain.Customer{
 		Code:    code,
 		Name:    name,
 		Email:   dto.Email,
 		Phone:   dto.Phone,
 		Address: dto.Address,
+		NPWP:    npwp,
+		NIK:     nik,
 		Segment: segment,
 		Status:  status,
 	}
@@ -121,6 +133,20 @@ func (uc *customerUseCase) Update(ctx context.Context, id uuid.UUID, dto UpdateC
 	}
 	if dto.Address != nil {
 		customer.Address = *dto.Address
+	}
+	if dto.NPWP != nil {
+		npwp, err := taxid.NPWP(*dto.NPWP)
+		if err != nil {
+			return nil, err
+		}
+		customer.NPWP = npwp
+	}
+	if dto.NIK != nil {
+		nik, err := taxid.NIK(*dto.NIK)
+		if err != nil {
+			return nil, err
+		}
+		customer.NIK = nik
 	}
 	if dto.Segment != nil {
 		customer.Segment = *dto.Segment

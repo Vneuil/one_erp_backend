@@ -44,3 +44,33 @@ func TestLegacyPurchaseInvoiceEntryUnchanged(t *testing.T) {
 		t.Fatalf("legacy entry changed: %+v", e.Lines)
 	}
 }
+
+func TestPurchaseInvoiceLedgerInputVAT(t *testing.T) {
+	a, err := financeApp.ComputeInvoiceAmounts(financeApp.InvoiceAdjustmentInput{Subtotal: 2_000_000, VAT: financeApp.VATInput{Apply: true, OtherValueBase: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	inv := &domain.PurchaseInvoice{TotalAmount: a.Total, Subtotal: a.Subtotal, TaxBase: a.VAT.TaxBase, VATAmount: a.VAT.Amount, VATCreditable: true}
+	byAcct := func(e financeApp.LedgerEntry) map[string]float64 {
+		dr, cr := 0.0, 0.0
+		m := map[string]float64{}
+		for _, l := range e.Lines {
+			dr += l.Debit
+			cr += l.Credit
+			m[l.AccountCode] += l.Debit
+		}
+		if dr != cr {
+			t.Fatalf("unbalanced: %+v", e.Lines)
+		}
+		return m
+	}
+	m := byAcct(PurchaseInvoiceLedgerEntry(inv))
+	if m[financeApp.AccountInputVAT] != 220_000 || m[financeApp.AccountInventory] != 2_000_000 {
+		t.Fatalf("creditable: %+v", m)
+	}
+	inv.VATCreditable = false // not backed by a valid faktur: the VAT becomes part of the cost
+	m = byAcct(PurchaseInvoiceLedgerEntry(inv))
+	if m[financeApp.AccountInputVAT] != 0 || m[financeApp.AccountInventory] != 2_220_000 {
+		t.Fatalf("non-creditable: %+v", m)
+	}
+}

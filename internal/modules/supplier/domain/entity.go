@@ -21,8 +21,11 @@ type Supplier struct {
 	Email         string     `gorm:"type:varchar(255)" json:"email"`
 	Phone         string     `gorm:"type:varchar(50)" json:"phone"`
 	Address       string     `gorm:"type:text" json:"address"`
-	Category      string     `gorm:"type:varchar(100);default:'Raw Materials'" json:"category"`
-	Status        string     `gorm:"type:varchar(50);default:'Active'" json:"status"`
+	// NPWP (15/16 digits) and NIK (16 digits) identify the seller on Faktur Pajak Masukan.
+	NPWP     string `gorm:"type:varchar(20)" json:"npwp"`
+	NIK      string `gorm:"type:varchar(20)" json:"nik"`
+	Category string `gorm:"type:varchar(100);default:'Raw Materials'" json:"category"`
+	Status   string `gorm:"type:varchar(50);default:'Active'" json:"status"`
 }
 
 func (Supplier) TableName() string {

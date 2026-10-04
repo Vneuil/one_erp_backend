@@ -35,6 +35,13 @@ const (
 	AccountCOGS                 = "5200"
 	AccountDeliveryExpense      = "5300"
 	AccountEmployeeAdvance      = "1400"
+	AccountInputVAT             = "1600"
+	AccountWIP                  = "1250"
+	AccountScrapLoss            = "5500"
+	AccountInventoryAdjustment  = "5510"
+	AccountFixedAssets          = "1500"
+	AccountAccumDepreciation    = "1590"
+	AccountDepreciationExpense  = "5400"
 )
 
 // defaultAccounts are created on demand when an automatic posting needs a
@@ -62,6 +69,13 @@ var defaultAccounts = map[string]struct{ Name, Type string }{
 	AccountCOGS:                 {"Cost of Goods Sold", "expense"},
 	AccountDeliveryExpense:      {"Delivery Expense", "expense"},
 	AccountEmployeeAdvance:      {"Employee Advances", "asset"},
+	AccountInputVAT:             {InputVATAccountName, "asset"},
+	AccountWIP:                  {"Work in Process", "asset"},
+	AccountScrapLoss:            {"Scrap Loss", "expense"},
+	AccountInventoryAdjustment:  {"Inventory Adjustments", "expense"},
+	AccountFixedAssets:          {"Fixed Assets", "asset"},
+	AccountAccumDepreciation:    {"Accumulated Depreciation", "asset"},
+	AccountDepreciationExpense:  {"Depreciation Expense", "expense"},
 }
 
 // LedgerLine is one side of an automatic posting, addressed by account code so

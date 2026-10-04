@@ -62,7 +62,16 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	budgets.Put("/:id", h.UpdateBudget)
 	budgets.Delete("/:id", h.DeleteBudget)
 
+	cashVouchers := finance.Group("/cash-vouchers")
+	cashVouchers.Post("/", h.CreateCashVoucher)
+	cashVouchers.Get("/", h.ListCashVouchers)
+	cashVouchers.Get("/:id", h.GetCashVoucher)
+
 	reports := finance.Group("/reports")
+	reports.Get("/general-ledger", h.GeneralLedger)
+	reports.Get("/cash-book", h.CashBook)
+	reports.Get("/expense-breakdown", h.ExpenseBreakdown)
+	reports.Get("/non-operating", h.NonOperating)
 	reports.Get("/trial-balance", h.TrialBalance)
 	reports.Get("/insights", h.Insights)
 	reports.Get("/profit-loss", h.ProfitAndLoss)

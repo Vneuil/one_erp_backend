@@ -115,8 +115,16 @@ type Invoice struct {
 	DiscountAmount float64 `gorm:"type:decimal(15,2);default:0" json:"discountAmount"`
 	AdditionalCost float64 `gorm:"type:decimal(15,2);default:0" json:"additionalCost"`
 	RoundingAmount float64 `gorm:"type:decimal(15,2);default:0" json:"roundingAmount"`
-	PaidAmount     float64 `gorm:"type:decimal(15,2);not null;default:0" json:"paidAmount"`
-	Status         string  `gorm:"type:varchar(50);default:'pending'" json:"status"`
+	// PPN (VAT). TaxBase is the DPP (subtotal - discount + additional cost);
+	// DPPOtherValue is the 11/12 "nilai lain" base when VATOtherValueBase is
+	// set. TotalAmount includes VATAmount. All zero for invoices without PPN.
+	TaxBase           float64 `gorm:"type:decimal(15,2);default:0" json:"taxBase"`
+	DPPOtherValue     float64 `gorm:"type:decimal(15,2);default:0" json:"dppOtherValue"`
+	VATRate           float64 `gorm:"type:decimal(5,2);default:0" json:"vatRate"`
+	VATOtherValueBase bool    `gorm:"default:false" json:"vatOtherValueBase"`
+	VATAmount         float64 `gorm:"type:decimal(15,2);default:0" json:"vatAmount"`
+	PaidAmount        float64 `gorm:"type:decimal(15,2);not null;default:0" json:"paidAmount"`
+	Status            string  `gorm:"type:varchar(50);default:'pending'" json:"status"`
 	// SalesOrderID optionally links this invoice back to the Sales Order it
 	// was billed against. Nil for invoices that predate this field or that
 	// were never tied to a specific order - both remain fully valid.

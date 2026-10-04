@@ -33,6 +33,8 @@ func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager
 				&domain.PettyCashFund{},
 				&domain.PettyCashTransaction{},
 				&domain.Budget{},
+				&domain.CashVoucher{},
+				&domain.CashVoucherLine{},
 			)
 		},
 		SeedKind: tenantMgr.SeedReference, // the default chart of accounts is needed by every company

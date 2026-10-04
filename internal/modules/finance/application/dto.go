@@ -15,6 +15,8 @@ type CreateAccountDTO struct {
 	Type     string     `json:"type"`
 	ParentID *uuid.UUID `json:"parentId,omitempty"`
 	IsActive *bool      `json:"isActive,omitempty"`
+	// Category: marketing | admin_general | non_operating (optional).
+	Category *string `json:"category,omitempty"`
 }
 
 type AccountResponseDTO struct {
@@ -24,6 +26,7 @@ type AccountResponseDTO struct {
 	Type      string     `json:"type"`
 	ParentID  *uuid.UUID `json:"parentId,omitempty"`
 	IsActive  bool       `json:"isActive"`
+	Category  string     `json:"category"`
 	Balance   float64    `json:"balance"`
 	Currency  string     `json:"currency"`
 	Status    string     `json:"status"`
@@ -45,6 +48,7 @@ func ToAccountResponse(a *domain.Account, balance float64) *AccountResponseDTO {
 		Type:      a.Type,
 		ParentID:  a.ParentID,
 		IsActive:  a.IsActive,
+		Category:  ClassifyAccount(*a),
 		Balance:   balance,
 		Currency:  "IDR",
 		Status:    status,

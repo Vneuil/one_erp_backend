@@ -19,6 +19,10 @@ type Account struct {
 	Type     string     `gorm:"type:varchar(50);not null" json:"type"`
 	ParentID *uuid.UUID `gorm:"type:uuid;index" json:"parentId,omitempty"`
 	IsActive bool       `gorm:"default:true" json:"isActive"`
+	// Category sub-classifies revenue/expense accounts for the statutory
+	// expense reports: marketing, admin_general or non_operating. Empty falls
+	// back to the default mapping in application.ClassifyAccount.
+	Category string `gorm:"type:varchar(30)" json:"category,omitempty"`
 }
 
 func (Account) TableName() string {
@@ -184,7 +188,63 @@ type OtherIncome struct {
 
 func (OtherIncome) TableName() string { return "finance_other_income" }
 
+// CashVoucher is a cash/bank receipt (Bukti Kas/Bank Masuk) or payment (Bukti
+// Kas/Bank Keluar) against one cash or bank account, spread over one or more
+// counter accounts. It posts to the general ledger when saved.
+type CashVoucher struct {
+	types.BaseEntity
+	CompanyID       *uuid.UUID        `gorm:"type:uuid;index" json:"companyId,omitempty"`
+	TenantID        *uuid.UUID        `gorm:"type:uuid;index" json:"tenantId,omitempty"`
+	Number          string            `gorm:"type:varchar(50);not null;index" json:"number"`
+	Type            string            `gorm:"type:varchar(20);not null;index" json:"type"` // receipt | payment
+	Date            string            `gorm:"type:varchar(10);not null;index" json:"date"`
+	CashAccountCode string            `gorm:"type:varchar(50);not null" json:"cashAccountCode"`
+	Counterparty    string            `gorm:"type:varchar(255)" json:"counterparty"`
+	Description     string            `gorm:"type:varchar(500)" json:"description"`
+	Total           float64           `gorm:"type:decimal(15,2);not null" json:"total"`
+	Posted          bool              `gorm:"not null;default:false" json:"posted"`
+	CreatedByEmail  string            `gorm:"type:varchar(255)" json:"createdByEmail,omitempty"`
+	Lines           []CashVoucherLine `gorm:"foreignKey:VoucherID" json:"lines,omitempty"`
+}
+
+func (CashVoucher) TableName() string { return "finance_cash_vouchers" }
+
+// CashVoucherLine is one counter-account allocation of a cash voucher.
+type CashVoucherLine struct {
+	types.BaseEntity
+	VoucherID   uuid.UUID `gorm:"type:uuid;not null;index" json:"voucherId"`
+	AccountCode string    `gorm:"type:varchar(50);not null" json:"accountCode"`
+	Description string    `gorm:"type:varchar(255)" json:"description"`
+	Amount      float64   `gorm:"type:decimal(15,2);not null" json:"amount"`
+}
+
+func (CashVoucherLine) TableName() string { return "finance_cash_voucher_lines" }
+
+// JournalLineDetail is a posted journal line joined with its entry header,
+// used by the general ledger and cash book reports.
+type JournalLineDetail struct {
+	AccountID   uuid.UUID
+	Date        string
+	EntryNumber string
+	Memo        string
+	SourceDoc   string
+	Description string
+	Debit       float64
+	Credit      float64
+}
+
 type FinanceRepository interface {
+	// Cash vouchers
+	CreateCashVoucher(ctx context.Context, v *CashVoucher) error
+	UpdateCashVoucher(ctx context.Context, v *CashVoucher) error
+	GetCashVoucherByID(ctx context.Context, id uuid.UUID) (*CashVoucher, error)
+	ListCashVouchers(ctx context.Context, typ, from, to string) ([]CashVoucher, error)
+	CountCashVouchers(ctx context.Context, typ, numberPrefix string) (int64, error)
+
+	// ListPostedLines returns posted journal lines in date order. A nil
+	// accountIDs filter means every account.
+	ListPostedLines(ctx context.Context, from, to string, accountIDs []uuid.UUID) ([]JournalLineDetail, error)
+
 	// Owner capital and other income
 	CreateCapitalTransaction(ctx context.Context, c *CapitalTransaction) error
 	UpdateCapitalTransaction(ctx context.Context, c *CapitalTransaction) error

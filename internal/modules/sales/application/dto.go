@@ -184,7 +184,13 @@ type CreateInvoiceDTO struct {
 	AdditionalCost  float64 `json:"additionalCost"`
 	// RoundTo rounds the final total to this step (e.g. 100 or 1000); 0 = off.
 	RoundTo float64 `json:"roundTo"`
-	DueDate string  `json:"dueDate"`
+	// ApplyVAT adds PPN on top of the amount after discount and additional
+	// cost. VATRate 0 means the statutory rate (12%); VATOtherValueBase
+	// defaults to true (DPP nilai lain 11/12, effective 11%).
+	ApplyVAT          bool    `json:"applyVat"`
+	VATRate           float64 `json:"vatRate"`
+	VATOtherValueBase *bool   `json:"vatOtherValueBase,omitempty"`
+	DueDate           string  `json:"dueDate"`
 	// SalesOrderID is optional - when supplied it must reference a real
 	// Sales Order, but an invoice can still be created without one so
 	// existing callers/invoices keep working unchanged.
@@ -196,21 +202,26 @@ type RecordSalesPaymentDTO struct {
 }
 
 type InvoiceResponseDTO struct {
-	ID             uuid.UUID  `json:"id"`
-	InvoiceNumber  string     `json:"invoiceNumber"`
-	CustomerName   string     `json:"customerName"`
-	InvoiceDate    string     `json:"invoiceDate"`
-	DueDate        string     `json:"dueDate"`
-	TotalAmount    float64    `json:"totalAmount"`
-	Subtotal       float64    `json:"subtotal"`
-	DiscountAmount float64    `json:"discountAmount"`
-	AdditionalCost float64    `json:"additionalCost"`
-	RoundingAmount float64    `json:"roundingAmount"`
-	PaidAmount     float64    `json:"paidAmount"`
-	Outstanding    float64    `json:"outstanding"`
-	Status         string     `json:"status"`
-	SalesOrderID   *uuid.UUID `json:"salesOrderId,omitempty"`
-	CreatedAt      time.Time  `json:"createdAt"`
+	ID                uuid.UUID  `json:"id"`
+	InvoiceNumber     string     `json:"invoiceNumber"`
+	CustomerName      string     `json:"customerName"`
+	InvoiceDate       string     `json:"invoiceDate"`
+	DueDate           string     `json:"dueDate"`
+	TotalAmount       float64    `json:"totalAmount"`
+	Subtotal          float64    `json:"subtotal"`
+	DiscountAmount    float64    `json:"discountAmount"`
+	AdditionalCost    float64    `json:"additionalCost"`
+	RoundingAmount    float64    `json:"roundingAmount"`
+	TaxBase           float64    `json:"taxBase"`
+	DPPOtherValue     float64    `json:"dppOtherValue"`
+	VATRate           float64    `json:"vatRate"`
+	VATOtherValueBase bool       `json:"vatOtherValueBase"`
+	VATAmount         float64    `json:"vatAmount"`
+	PaidAmount        float64    `json:"paidAmount"`
+	Outstanding       float64    `json:"outstanding"`
+	Status            string     `json:"status"`
+	SalesOrderID      *uuid.UUID `json:"salesOrderId,omitempty"`
+	CreatedAt         time.Time  `json:"createdAt"`
 }
 
 func ToInvoiceResponse(inv *domain.Invoice) *InvoiceResponseDTO {
@@ -221,6 +232,7 @@ func ToInvoiceResponse(inv *domain.Invoice) *InvoiceResponseDTO {
 		ID: inv.ID, InvoiceNumber: inv.InvoiceNumber, CustomerName: inv.CustomerName,
 		InvoiceDate: inv.InvoiceDate, DueDate: inv.DueDate, TotalAmount: inv.TotalAmount,
 		Subtotal: inv.Subtotal, DiscountAmount: inv.DiscountAmount, AdditionalCost: inv.AdditionalCost, RoundingAmount: inv.RoundingAmount,
+		TaxBase: inv.TaxBase, DPPOtherValue: inv.DPPOtherValue, VATRate: inv.VATRate, VATOtherValueBase: inv.VATOtherValueBase, VATAmount: inv.VATAmount,
 		PaidAmount: inv.PaidAmount, Outstanding: inv.TotalAmount - inv.PaidAmount,
 		Status: inv.Status, SalesOrderID: inv.SalesOrderID, CreatedAt: inv.CreatedAt,
 	}

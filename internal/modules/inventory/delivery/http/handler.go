@@ -470,3 +470,71 @@ func (h *Handler) WriteOffBatch(c *fiber.Ctx) error {
 	}
 	return response.OK(c, "Batch written off", b)
 }
+
+// Stock documents
+
+func (h *Handler) CreateStockDocument(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var dto application.CreateStockDocumentDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	d, err := uc.CreateStockDocument(h.ctx(c), dto)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Stock document posted successfully", d)
+}
+
+func (h *Handler) GetStockDocument(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	d, err := uc.GetStockDocument(h.ctx(c), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Stock document retrieved successfully", d)
+}
+
+func (h *Handler) ListStockDocuments(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	items, err := uc.ListStockDocuments(h.ctx(c), c.Query("type"), c.Query("from"), c.Query("to"))
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Stock documents retrieved successfully", items)
+}
+
+func (h *Handler) ImportOpnameCounts(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var body struct {
+		Rows []application.OpnameCountRow `json:"rows"`
+	}
+	if err := c.BodyParser(&body); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	res, err := uc.ImportOpnameCounts(h.ctx(c), id, body.Rows)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Opname counts imported", res)
+}

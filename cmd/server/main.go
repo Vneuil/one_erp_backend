@@ -33,6 +33,7 @@ import (
 	"github.com/divinecoid/one-backend/internal/modules/docflow"
 	"github.com/divinecoid/one-backend/internal/modules/finance"
 	"github.com/divinecoid/one-backend/internal/modules/goal"
+	"github.com/divinecoid/one-backend/internal/modules/hrletters"
 	"github.com/divinecoid/one-backend/internal/modules/hrm"
 	"github.com/divinecoid/one-backend/internal/modules/hrops"
 	"github.com/divinecoid/one-backend/internal/modules/integration"
@@ -64,6 +65,7 @@ import (
 	"github.com/divinecoid/one-backend/internal/modules/supplier"
 	"github.com/divinecoid/one-backend/internal/modules/support"
 	"github.com/divinecoid/one-backend/internal/modules/systemlogs"
+	"github.com/divinecoid/one-backend/internal/modules/tax"
 	"github.com/divinecoid/one-backend/internal/modules/tenant"
 	tenantInfra "github.com/divinecoid/one-backend/internal/modules/tenant/infrastructure"
 	"github.com/divinecoid/one-backend/internal/modules/user"
@@ -174,6 +176,7 @@ func main() {
 	hrm.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	hrops.NewModule(server.V1, cfg.JWT.Secret, tenantManager, objectStore)
 	leave.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
+	hrletters.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	kpi.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	cooperative.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	reimbursement.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
@@ -181,6 +184,7 @@ func main() {
 	projecttask.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	projectticket.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	finance.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
+	tax.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	inventory.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	procurement.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	banking.NewModule(server.V1, cfg.JWT.Secret, tenantManager)

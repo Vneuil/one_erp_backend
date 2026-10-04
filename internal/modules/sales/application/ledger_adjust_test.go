@@ -49,3 +49,27 @@ func TestLegacyInvoiceWithoutAdjustmentColumnsStillPostsPlainEntry(t *testing.T)
 		t.Fatalf("legacy entry changed: %+v", e.Lines)
 	}
 }
+
+func TestInvoiceLedgerWithVATPostsPPNKeluaran(t *testing.T) {
+	a, err := financeApp.ComputeInvoiceAmounts(financeApp.InvoiceAdjustmentInput{Subtotal: 1_000_000, DiscountAmount: 100_000, AdditionalCost: 50_000, RoundTo: 1000,
+		VAT: financeApp.VATInput{Apply: true, OtherValueBase: true}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	inv := &domain.Invoice{TotalAmount: a.Total, Subtotal: a.Subtotal, DiscountAmount: a.Discount, AdditionalCost: a.AdditionalCost,
+		RoundingAmount: a.Rounding, TaxBase: a.VAT.TaxBase, VATAmount: a.VAT.Amount}
+	e := InvoiceLedgerEntry(inv)
+	balanced(t, e.Lines)
+	var ppn, revenue float64
+	for _, l := range e.Lines {
+		switch l.AccountCode {
+		case financeApp.AccountSalesTaxPayable:
+			ppn += l.Credit
+		case financeApp.AccountRevenue:
+			revenue += l.Credit
+		}
+	}
+	if ppn != 104_500 || revenue != 1_000_000 {
+		t.Fatalf("ppn=%v revenue=%v, want 104500 / 1000000", ppn, revenue)
+	}
+}

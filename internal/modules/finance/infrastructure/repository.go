@@ -488,3 +488,72 @@ func (r *financeRepository) ListOtherIncome(ctx context.Context, category, perio
 	}
 	return out, db.Order("date desc, created_at desc").Find(&out).Error
 }
+
+// Cash vouchers
+
+func (r *financeRepository) CreateCashVoucher(ctx context.Context, v *domain.CashVoucher) error {
+	tenantctx.SetTenantID(ctx, &v.TenantID)
+	return r.db.WithContext(ctx).Create(v).Error
+}
+
+func (r *financeRepository) UpdateCashVoucher(ctx context.Context, v *domain.CashVoucher) error {
+	return r.db.WithContext(ctx).Model(&domain.CashVoucher{}).Where("id = ?", v.ID).
+		Updates(map[string]any{"posted": v.Posted}).Error
+}
+
+func (r *financeRepository) GetCashVoucherByID(ctx context.Context, id uuid.UUID) (*domain.CashVoucher, error) {
+	var v domain.CashVoucher
+	err := tenantctx.Scope(ctx, r.db.WithContext(ctx)).Preload("Lines").Where("id = ?", id).First(&v).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &v, nil
+}
+
+func (r *financeRepository) ListCashVouchers(ctx context.Context, typ, from, to string) ([]domain.CashVoucher, error) {
+	var out []domain.CashVoucher
+	db := tenantctx.Scope(ctx, r.db.WithContext(ctx)).Preload("Lines")
+	if typ != "" {
+		db = db.Where("type = ?", typ)
+	}
+	if from != "" {
+		db = db.Where("date >= ?", from)
+	}
+	if to != "" {
+		db = db.Where("date <= ?", to)
+	}
+	err := db.Order("date desc, created_at desc").Find(&out).Error
+	return out, err
+}
+
+func (r *financeRepository) CountCashVouchers(ctx context.Context, typ, numberPrefix string) (int64, error) {
+	var n int64
+	// Unscoped: soft-deleted vouchers still hold their number.
+	err := r.db.WithContext(ctx).Unscoped().Model(&domain.CashVoucher{}).
+		Where("type = ? AND number LIKE ?", typ, numberPrefix+"%").Count(&n).Error
+	return n, err
+}
+
+func (r *financeRepository) ListPostedLines(ctx context.Context, from, to string, accountIDs []uuid.UUID) ([]domain.JournalLineDetail, error) {
+	var out []domain.JournalLineDetail
+	db := r.db.WithContext(ctx).
+		Table("finance_journal_lines AS l").
+		Select("l.account_id AS account_id, e.date AS date, e.entry_number AS entry_number, e.memo AS memo, e.source_doc AS source_doc, l.description AS description, l.debit AS debit, l.credit AS credit").
+		Joins("JOIN finance_journal_entries AS e ON e.id = l.journal_entry_id").
+		Where("e.status = ?", "posted").
+		Where("e.deleted_at IS NULL")
+	if from != "" {
+		db = db.Where("e.date >= ?", from)
+	}
+	if to != "" {
+		db = db.Where("e.date <= ?", to)
+	}
+	if accountIDs != nil {
+		db = db.Where("l.account_id IN ?", accountIDs)
+	}
+	err := db.Order("e.date asc, e.created_at asc, l.created_at asc").Scan(&out).Error
+	return out, err
+}

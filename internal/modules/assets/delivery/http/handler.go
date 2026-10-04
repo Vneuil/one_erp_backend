@@ -8,6 +8,8 @@ import (
 	"github.com/divinecoid/one-backend/internal/foundation/tenantctx"
 	"github.com/divinecoid/one-backend/internal/modules/assets/application"
 	"github.com/divinecoid/one-backend/internal/modules/assets/infrastructure"
+	financeApp "github.com/divinecoid/one-backend/internal/modules/finance/application"
+	financeInfra "github.com/divinecoid/one-backend/internal/modules/finance/infrastructure"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/gofiber/fiber/v2"
@@ -37,7 +39,8 @@ func (h *Handler) resolve(c *fiber.Ctx) (application.AssetsUseCase, error) {
 		return nil, apperrors.NewBadRequest("No active company. Please select or provision a company first.")
 	}
 	repo := infrastructure.NewAssetsRepository(tenantDB)
-	return application.NewAssetsUseCase(repo), nil
+	ledger := financeApp.NewLedgerPoster(financeInfra.NewFinanceRepository(tenantDB))
+	return application.NewAssetsUseCase(repo, application.WithLedger(ledger)), nil
 }
 
 // ctx returns the request context with the active Tenant ID (see
@@ -169,4 +172,35 @@ func (h *Handler) RecalculateAllDepreciation(c *fiber.Ctx) error {
 		return err
 	}
 	return response.OK(c, "Depreciation recalculated for all assets successfully", items)
+}
+
+func (h *Handler) PostDepreciation(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var in struct {
+		Period  string `json:"period"`
+		CatchUp bool   `json:"catchUp"`
+	}
+	if err := c.BodyParser(&in); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	res, err := uc.PostDepreciation(h.ctx(c), in.Period, in.CatchUp)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Depreciation posted to the ledger", res)
+}
+
+func (h *Handler) DepreciationReport(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	res, err := uc.DepreciationReport(h.ctx(c), c.Query("period"))
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Depreciation report retrieved successfully", res)
 }

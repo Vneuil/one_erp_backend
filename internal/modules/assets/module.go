@@ -25,7 +25,7 @@ func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager
 	tenantMgr.RegisterSchema(tenantMgr.SchemaMigrator{
 		Name: "assets",
 		Migrate: func(tenantDB *gorm.DB) error {
-			return tenantDB.AutoMigrate(&domain.FixedAsset{})
+			return tenantDB.AutoMigrate(&domain.FixedAsset{}, &domain.DepreciationPosting{})
 		},
 		Seed: func(tenantDB *gorm.DB) error {
 			repo := infrastructure.NewAssetsRepository(tenantDB)

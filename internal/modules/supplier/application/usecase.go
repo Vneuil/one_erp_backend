@@ -7,6 +7,7 @@ import (
 
 	"github.com/divinecoid/one-backend/internal/modules/supplier/domain"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
+	"github.com/divinecoid/one-backend/internal/shared/taxid"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/google/uuid"
 )
@@ -62,6 +63,15 @@ func (uc *supplierUseCase) Create(ctx context.Context, dto CreateSupplierDTO) (*
 		category = "Raw Materials"
 	}
 
+	npwp, err := taxid.NPWP(dto.NPWP)
+	if err != nil {
+		return nil, err
+	}
+	nik, err := taxid.NIK(dto.NIK)
+	if err != nil {
+		return nil, err
+	}
+
 	supplier := &domain.Supplier{
 		Code:          code,
 		Name:          name,
@@ -69,6 +79,8 @@ func (uc *supplierUseCase) Create(ctx context.Context, dto CreateSupplierDTO) (*
 		Email:         dto.Email,
 		Phone:         dto.Phone,
 		Address:       dto.Address,
+		NPWP:          npwp,
+		NIK:           nik,
 		Category:      category,
 		Status:        status,
 	}
@@ -125,6 +137,20 @@ func (uc *supplierUseCase) Update(ctx context.Context, id uuid.UUID, dto UpdateS
 	}
 	if dto.Address != nil {
 		supplier.Address = *dto.Address
+	}
+	if dto.NPWP != nil {
+		npwp, err := taxid.NPWP(*dto.NPWP)
+		if err != nil {
+			return nil, err
+		}
+		supplier.NPWP = npwp
+	}
+	if dto.NIK != nil {
+		nik, err := taxid.NIK(*dto.NIK)
+		if err != nil {
+			return nil, err
+		}
+		supplier.NIK = nik
 	}
 	if dto.Category != nil {
 		supplier.Category = *dto.Category

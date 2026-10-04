@@ -14,18 +14,19 @@ const (
 )
 
 // InvoiceLedgerEntry is Dr Accounts Receivable (final total) and Dr Sales
-// Discounts / Cr Sales Revenue (gross amount) and Cr Additional Charges Income,
-// with any rounding difference to the Rounding Adjustment account. Gross
-// revenue is derived as total + discount - additional - rounding, which equals
-// the subtotal for adjusted invoices and the plain total for legacy ones, so
-// the entry always balances.
+// Discounts / Cr Sales Revenue (gross amount), Cr Additional Charges Income and
+// Cr PPN Keluaran (Sales Tax Payable), with any rounding difference to the
+// Rounding Adjustment account. Gross revenue is derived as total + discount -
+// additional - PPN - rounding, which equals the subtotal for adjusted invoices
+// and the plain total for legacy ones, so the entry always balances.
 func InvoiceLedgerEntry(inv *domain.Invoice) financeApp.LedgerEntry {
-	gross := inv.TotalAmount + inv.DiscountAmount - inv.AdditionalCost - inv.RoundingAmount
+	gross := inv.TotalAmount + inv.DiscountAmount - inv.AdditionalCost - inv.VATAmount - inv.RoundingAmount
 	lines := []financeApp.LedgerLine{
 		{AccountCode: financeApp.AccountReceivble, Debit: inv.TotalAmount, Description: inv.CustomerName},
 		{AccountCode: financeApp.AccountSalesDiscount, Debit: inv.DiscountAmount, Description: inv.InvoiceNumber},
 		{AccountCode: financeApp.AccountRevenue, Credit: gross, Description: inv.InvoiceNumber},
 		{AccountCode: financeApp.AccountAdditionalCharges, Credit: inv.AdditionalCost, Description: inv.InvoiceNumber},
+		{AccountCode: financeApp.AccountSalesTaxPayable, Credit: inv.VATAmount, Description: "PPN " + inv.InvoiceNumber},
 	}
 	// Rounding up means the customer pays more than gross-discount+charges: credit the difference.
 	if inv.RoundingAmount > 0 {

@@ -57,6 +57,17 @@ type FinanceUseCase interface {
 	UpdateBudget(ctx context.Context, id uuid.UUID, dto UpdateBudgetDTO) (*BudgetResponseDTO, error)
 	DeleteBudget(ctx context.Context, id uuid.UUID) error
 
+	// Cash vouchers (Penerimaan / Pengeluaran Kas dan Bank)
+	CreateCashVoucher(ctx context.Context, in CashVoucherInput) (*domain.CashVoucher, error)
+	GetCashVoucher(ctx context.Context, id uuid.UUID) (*domain.CashVoucher, error)
+	ListCashVouchers(ctx context.Context, typ, from, to string) ([]domain.CashVoucher, error)
+
+	// Statutory reports
+	GeneralLedger(ctx context.Context, accountID *uuid.UUID, from, to string) (*GeneralLedgerDTO, error)
+	CashBook(ctx context.Context, accountCode, from, to string) (*GeneralLedgerDTO, error)
+	ExpenseBreakdown(ctx context.Context, from, to string) (*ExpenseBreakdownDTO, error)
+	NonOperating(ctx context.Context, from, to string) (*NonOperatingDTO, error)
+
 	// Reports
 	TrialBalance(ctx context.Context, asOf string) (*TrialBalanceDTO, error)
 	Insights(ctx context.Context, from string) ([]Insight, error)
@@ -117,12 +128,22 @@ func (uc *financeUseCase) CreateAccount(ctx context.Context, dto CreateAccountDT
 		isActive = *dto.IsActive
 	}
 
+	category := ""
+	if dto.Category != nil {
+		c, err := validCategory(*dto.Category)
+		if err != nil {
+			return nil, err
+		}
+		category = c
+	}
+
 	a := &domain.Account{
 		Code:     dto.Code,
 		Name:     dto.Name,
 		Type:     dto.Type,
 		ParentID: dto.ParentID,
 		IsActive: isActive,
+		Category: category,
 	}
 
 	if err := uc.repo.CreateAccount(ctx, a); err != nil {
@@ -198,6 +219,13 @@ func (uc *financeUseCase) UpdateAccount(ctx context.Context, id uuid.UUID, dto C
 	}
 	if dto.IsActive != nil {
 		a.IsActive = *dto.IsActive
+	}
+	if dto.Category != nil {
+		c, err := validCategory(*dto.Category)
+		if err != nil {
+			return nil, err
+		}
+		a.Category = c
 	}
 	if err := uc.repo.UpdateAccount(ctx, a); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to update account")

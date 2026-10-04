@@ -6,6 +6,8 @@ import (
 	"github.com/divinecoid/one-backend/internal/foundation/middleware"
 	"github.com/divinecoid/one-backend/internal/foundation/response"
 	"github.com/divinecoid/one-backend/internal/foundation/tenantctx"
+	financeApp "github.com/divinecoid/one-backend/internal/modules/finance/application"
+	financeInfra "github.com/divinecoid/one-backend/internal/modules/finance/infrastructure"
 	inventoryInfra "github.com/divinecoid/one-backend/internal/modules/inventory/infrastructure"
 	"github.com/divinecoid/one-backend/internal/modules/manufacturing/application"
 	"github.com/divinecoid/one-backend/internal/modules/manufacturing/infrastructure"
@@ -45,7 +47,10 @@ func (h *Handler) resolve(c *fiber.Ctx) (application.ManufacturingUseCase, error
 	repo := infrastructure.NewManufacturingRepository(tenantDB)
 	inventoryRepo := inventoryInfra.NewInventoryRepository(tenantDB)
 	productRepo := productInfra.NewProductRepository(tenantDB)
-	return application.NewManufacturingUseCase(repo, inventoryRepo, productRepo), nil
+	finRepo := financeInfra.NewFinanceRepository(tenantDB)
+	return application.NewManufacturingUseCase(repo, inventoryRepo, productRepo,
+		application.WithLedger(financeApp.NewLedgerPoster(finRepo)),
+		application.WithWIPReader(infrastructure.LedgerWIPReader{Repo: finRepo})), nil
 }
 
 // ctx returns the request context with the active Tenant ID (see
@@ -261,4 +266,65 @@ func (h *Handler) GetDashboardSummary(c *fiber.Ctx) error {
 		return err
 	}
 	return response.OK(c, "Manufacturing dashboard summary retrieved successfully", summary)
+}
+
+func (h *Handler) LogStep(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	orderID, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	stepID, err := parseID(c, "stepId")
+	if err != nil {
+		return err
+	}
+	var dto application.LogStepDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	o, err := uc.LogStep(h.ctx(c), orderID, stepID, dto)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Process output logged", o)
+}
+
+// report resolves the use-case, runs fn and wraps the result as 200 OK.
+func report[T any](h *Handler, c *fiber.Ctx, message string, fn func(application.ManufacturingUseCase, context.Context) (T, error)) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	data, err := fn(uc, h.ctx(c))
+	if err != nil {
+		return err
+	}
+	return response.OK(c, message, data)
+}
+
+func (h *Handler) DailyReport(c *fiber.Ctx) error {
+	return report(h, c, "Daily production report retrieved", func(uc application.ManufacturingUseCase, ctx context.Context) (*application.DailyReportDTO, error) {
+		return uc.DailyReport(ctx, c.Query("from"), c.Query("to"))
+	})
+}
+
+func (h *Handler) OrderSummary(c *fiber.Ctx) error {
+	return report(h, c, "Production order summary retrieved", func(uc application.ManufacturingUseCase, ctx context.Context) (*application.OrderSummaryDTO, error) {
+		return uc.OrderSummary(ctx, c.Query("from"), c.Query("to"))
+	})
+}
+
+func (h *Handler) ProcessSummary(c *fiber.Ctx) error {
+	return report(h, c, "Process summary retrieved", func(uc application.ManufacturingUseCase, ctx context.Context) (*application.ProcessSummaryDTO, error) {
+		return uc.ProcessSummary(ctx, c.Query("from"), c.Query("to"))
+	})
+}
+
+func (h *Handler) WIPReport(c *fiber.Ctx) error {
+	return report(h, c, "Work in process report retrieved", func(uc application.ManufacturingUseCase, ctx context.Context) (*application.WIPReportDTO, error) {
+		return uc.WIPReport(ctx)
+	})
 }

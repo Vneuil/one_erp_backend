@@ -695,24 +695,30 @@ func (uc *salesUseCase) CreateInvoice(ctx context.Context, dto CreateInvoiceDTO)
 	amounts, err := financeApp.ComputeInvoiceAmounts(financeApp.InvoiceAdjustmentInput{
 		Subtotal: dto.TotalAmount, DiscountPercent: dto.DiscountPercent, DiscountAmount: dto.DiscountAmount,
 		AdditionalCost: dto.AdditionalCost, RoundTo: dto.RoundTo,
+		VAT: financeApp.VATInput{Apply: dto.ApplyVAT, Rate: dto.VATRate, OtherValueBase: dto.VATOtherValueBase == nil || *dto.VATOtherValueBase},
 	})
 	if err != nil {
 		return nil, err
 	}
 
 	inv := &domain.Invoice{
-		InvoiceNumber:  invNum,
-		CustomerName:   dto.CustomerName,
-		TotalAmount:    amounts.Total,
-		Subtotal:       amounts.Subtotal,
-		DiscountAmount: amounts.Discount,
-		AdditionalCost: amounts.AdditionalCost,
-		RoundingAmount: amounts.Rounding,
-		InvoiceDate:    time.Now().Format("2006-01-02"),
-		DueDate:        dueDate,
-		PaidAmount:     0,
-		Status:         "pending",
-		SalesOrderID:   dto.SalesOrderID,
+		TaxBase:           amounts.VAT.TaxBase,
+		DPPOtherValue:     amounts.VAT.DPPOtherValue,
+		VATRate:           amounts.VAT.Rate,
+		VATOtherValueBase: amounts.VAT.OtherValueBase,
+		VATAmount:         amounts.VAT.Amount,
+		InvoiceNumber:     invNum,
+		CustomerName:      dto.CustomerName,
+		TotalAmount:       amounts.Total,
+		Subtotal:          amounts.Subtotal,
+		DiscountAmount:    amounts.Discount,
+		AdditionalCost:    amounts.AdditionalCost,
+		RoundingAmount:    amounts.Rounding,
+		InvoiceDate:       time.Now().Format("2006-01-02"),
+		DueDate:           dueDate,
+		PaidAmount:        0,
+		Status:            "pending",
+		SalesOrderID:      dto.SalesOrderID,
 	}
 
 	if err := uc.repo.CreateInvoice(ctx, inv); err != nil {

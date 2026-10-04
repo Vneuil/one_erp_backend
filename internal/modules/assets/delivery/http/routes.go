@@ -14,6 +14,8 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	assets.Post("/", h.CreateAsset)
 	assets.Get("/", h.ListAssets)
 	assets.Post("/recalculate-all", h.RecalculateAllDepreciation)
+	assets.Post("/depreciation/post", h.PostDepreciation)
+	assets.Get("/depreciation/report", h.DepreciationReport)
 	assets.Get("/:id", h.GetAssetByID)
 	assets.Put("/:id", h.UpdateAsset)
 	assets.Put("/:id/status", h.UpdateAssetStatus)

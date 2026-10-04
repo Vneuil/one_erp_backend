@@ -20,9 +20,16 @@ const (
 // account. Inventory is derived as total - rounding (= subtotal - discount +
 // additional cost), which equals the plain total for legacy invoices, so the
 // entry always balances.
+//
+// PPN Masukan: a creditable VAT is debited to Input VAT (1600) instead of
+// inventory; a non-creditable one stays in the inventory cost.
 func PurchaseInvoiceLedgerEntry(inv *domain.PurchaseInvoice) financeApp.LedgerEntry {
+	inputVAT := 0.0
+	if inv.VATCreditable {
+		inputVAT = inv.VATAmount
+	}
 	lines := []financeApp.LedgerLine{
-		{AccountCode: financeApp.AccountInventory, Debit: inv.TotalAmount - inv.RoundingAmount, Description: inv.SupplierName},
+		{AccountCode: financeApp.AccountInventory, Debit: inv.TotalAmount - inv.RoundingAmount - inputVAT, Description: inv.SupplierName},
 		{AccountCode: financeApp.AccountPayable, Credit: inv.TotalAmount, Description: inv.InvoiceNumber},
 	}
 	// Rounding up raises the payable above the inventory cost: expense the difference.
@@ -30,6 +37,9 @@ func PurchaseInvoiceLedgerEntry(inv *domain.PurchaseInvoice) financeApp.LedgerEn
 		lines = append(lines, financeApp.LedgerLine{AccountCode: financeApp.AccountRounding, Debit: inv.RoundingAmount, Description: inv.InvoiceNumber})
 	} else if inv.RoundingAmount < 0 {
 		lines = append(lines, financeApp.LedgerLine{AccountCode: financeApp.AccountRounding, Credit: -inv.RoundingAmount, Description: inv.InvoiceNumber})
+	}
+	if inputVAT != 0 {
+		lines = append(lines, financeApp.LedgerLine{AccountCode: financeApp.AccountInputVAT, Debit: inputVAT, Description: "PPN Masukan " + inv.InvoiceNumber})
 	}
 	return financeApp.LedgerEntry{
 		SourceDoc: PurchaseInvoiceSourcePrefix + inv.ID.String(),

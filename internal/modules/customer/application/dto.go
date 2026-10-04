@@ -13,6 +13,8 @@ type CreateCustomerDTO struct {
 	Email   string `json:"email"`
 	Phone   string `json:"phone"`
 	Address string `json:"address"`
+	NPWP    string `json:"npwp"`
+	NIK     string `json:"nik"`
 	Segment string `json:"segment"`
 	Status  string `json:"status"`
 }
@@ -22,6 +24,8 @@ type UpdateCustomerDTO struct {
 	Email   *string `json:"email,omitempty"`
 	Phone   *string `json:"phone,omitempty"`
 	Address *string `json:"address,omitempty"`
+	NPWP    *string `json:"npwp,omitempty"`
+	NIK     *string `json:"nik,omitempty"`
 	Segment *string `json:"segment,omitempty"`
 	Status  *string `json:"status,omitempty"`
 }
@@ -33,6 +37,8 @@ type CustomerResponseDTO struct {
 	Email     string    `json:"email"`
 	Phone     string    `json:"phone"`
 	Address   string    `json:"address"`
+	NPWP      string    `json:"npwp"`
+	NIK       string    `json:"nik"`
 	Segment   string    `json:"segment"`
 	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"createdAt"`
@@ -50,6 +56,8 @@ func ToCustomerResponse(c *domain.Customer) *CustomerResponseDTO {
 		Email:     c.Email,
 		Phone:     c.Phone,
 		Address:   c.Address,
+		NPWP:      c.NPWP,
+		NIK:       c.NIK,
 		Segment:   c.Segment,
 		Status:    c.Status,
 		CreatedAt: c.CreatedAt,

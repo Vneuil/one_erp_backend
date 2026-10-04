@@ -594,6 +594,7 @@ func (uc *procurementUseCase) CreatePurchaseInvoice(ctx context.Context, dto Cre
 	amounts, err := financeApp.ComputeInvoiceAmounts(financeApp.InvoiceAdjustmentInput{
 		Subtotal: dto.TotalAmount, DiscountPercent: dto.DiscountPercent, DiscountAmount: dto.DiscountAmount,
 		AdditionalCost: dto.AdditionalCost, RoundTo: dto.RoundTo,
+		VAT: financeApp.VATInput{Apply: dto.ApplyVAT, Rate: dto.VATRate, OtherValueBase: dto.VATOtherValueBase == nil || *dto.VATOtherValueBase},
 	})
 	if err != nil {
 		return nil, err
@@ -607,18 +608,24 @@ func (uc *procurementUseCase) CreatePurchaseInvoice(ctx context.Context, dto Cre
 		invoiceDate = time.Now().Format("2006-01-02")
 	}
 	inv := &domain.PurchaseInvoice{
-		SupplierID:      dto.SupplierID,
-		SupplierName:    dto.SupplierName,
-		PurchaseOrderID: dto.PurchaseOrderID,
-		InvoiceNumber:   invoiceNumber,
-		InvoiceDate:     invoiceDate,
-		DueDate:         dto.DueDate,
-		TotalAmount:     amounts.Total,
-		Subtotal:        amounts.Subtotal,
-		DiscountAmount:  amounts.Discount,
-		AdditionalCost:  amounts.AdditionalCost,
-		RoundingAmount:  amounts.Rounding,
-		Status:          "unpaid",
+		SupplierID:        dto.SupplierID,
+		SupplierName:      dto.SupplierName,
+		PurchaseOrderID:   dto.PurchaseOrderID,
+		InvoiceNumber:     invoiceNumber,
+		InvoiceDate:       invoiceDate,
+		DueDate:           dto.DueDate,
+		TotalAmount:       amounts.Total,
+		Subtotal:          amounts.Subtotal,
+		DiscountAmount:    amounts.Discount,
+		AdditionalCost:    amounts.AdditionalCost,
+		RoundingAmount:    amounts.Rounding,
+		TaxBase:           amounts.VAT.TaxBase,
+		DPPOtherValue:     amounts.VAT.DPPOtherValue,
+		VATRate:           amounts.VAT.Rate,
+		VATOtherValueBase: amounts.VAT.OtherValueBase,
+		VATAmount:         amounts.VAT.Amount,
+		VATCreditable:     amounts.VAT.Amount > 0 && (dto.VATCreditable == nil || *dto.VATCreditable),
+		Status:            "unpaid",
 	}
 	if err := uc.repo.CreatePurchaseInvoice(ctx, inv); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to create purchase invoice")

@@ -32,8 +32,11 @@ func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager
 			return tenantDB.AutoMigrate(
 				&domain.BillOfMaterial{},
 				&domain.BOMLine{},
+				&domain.BOMProcess{},
 				&domain.ProductionOrder{},
 				&domain.ProductionBatch{},
+				&domain.ProductionStep{},
+				&domain.ProductionStepLog{},
 			)
 		},
 		Seed: func(tenantDB *gorm.DB) error {

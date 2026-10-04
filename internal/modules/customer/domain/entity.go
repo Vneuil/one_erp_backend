@@ -18,8 +18,11 @@ type Customer struct {
 	Email    string     `gorm:"type:varchar(255)" json:"email"`
 	Phone    string     `gorm:"type:varchar(50)" json:"phone"`
 	Address  string     `gorm:"type:text" json:"address"`
-	Segment  string     `gorm:"type:varchar(100);default:'Enterprise B2B'" json:"segment"`
-	Status   string     `gorm:"type:varchar(50);default:'Active'" json:"status"`
+	// NPWP (15/16 digits) and NIK (16 digits) identify the buyer on Faktur Pajak.
+	NPWP    string `gorm:"type:varchar(20)" json:"npwp"`
+	NIK     string `gorm:"type:varchar(20)" json:"nik"`
+	Segment string `gorm:"type:varchar(100);default:'Enterprise B2B'" json:"segment"`
+	Status  string `gorm:"type:varchar(50);default:'Active'" json:"status"`
 }
 
 func (Customer) TableName() string {

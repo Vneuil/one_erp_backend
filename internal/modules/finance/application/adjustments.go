@@ -16,16 +16,20 @@ type InvoiceAdjustmentInput struct {
 	DiscountAmount  float64
 	AdditionalCost  float64
 	RoundTo         float64
+	// VAT optionally adds PPN on (subtotal - discount + additional cost).
+	VAT VATInput
 }
 
 // InvoiceAmounts is the resolved breakdown. Total = Subtotal - Discount +
-// AdditionalCost + Rounding; Rounding is signed (negative when rounded down).
+// AdditionalCost + VATAmount + Rounding; Rounding is signed (negative when
+// rounded down). The VAT fields are zero for invoices without PPN.
 type InvoiceAmounts struct {
-	Subtotal       float64 `json:"subtotal"`
-	Discount       float64 `json:"discountAmount"`
-	AdditionalCost float64 `json:"additionalCost"`
-	Rounding       float64 `json:"roundingAmount"`
-	Total          float64 `json:"totalAmount"`
+	Subtotal       float64   `json:"subtotal"`
+	Discount       float64   `json:"discountAmount"`
+	AdditionalCost float64   `json:"additionalCost"`
+	Rounding       float64   `json:"roundingAmount"`
+	Total          float64   `json:"totalAmount"`
+	VAT            VATResult `json:"vat"`
 }
 
 func round2(v float64) float64 { return math.Round(v*100) / 100 }
@@ -49,7 +53,11 @@ func ComputeInvoiceAmounts(in InvoiceAdjustmentInput) (InvoiceAmounts, error) {
 	if discount > in.Subtotal {
 		return InvoiceAmounts{}, apperrors.NewBadRequest("The discount cannot exceed the invoice amount")
 	}
-	total := round2(in.Subtotal - discount + in.AdditionalCost)
+	vat, err := ComputeVAT(round2(in.Subtotal-discount+in.AdditionalCost), in.VAT)
+	if err != nil {
+		return InvoiceAmounts{}, err
+	}
+	total := round2(vat.TaxBase + vat.Amount)
 	var rounding float64
 	if in.RoundTo > 0 {
 		rounded := math.Round(total/in.RoundTo) * in.RoundTo
@@ -59,5 +67,5 @@ func ComputeInvoiceAmounts(in InvoiceAdjustmentInput) (InvoiceAmounts, error) {
 	if total <= 0 {
 		return InvoiceAmounts{}, apperrors.NewBadRequest("The invoice total must stay positive after adjustments")
 	}
-	return InvoiceAmounts{Subtotal: round2(in.Subtotal), Discount: discount, AdditionalCost: round2(in.AdditionalCost), Rounding: rounding, Total: total}, nil
+	return InvoiceAmounts{Subtotal: round2(in.Subtotal), Discount: discount, AdditionalCost: round2(in.AdditionalCost), Rounding: rounding, Total: total, VAT: vat}, nil
 }

@@ -30,7 +30,25 @@ func (FixedAsset) TableName() string {
 	return "assets_fixed_assets"
 }
 
+// DepreciationPosting records that one asset's depreciation for one month
+// (YYYY-MM) has been posted to the general ledger. (asset, period) is unique,
+// so a month can never be posted twice for the same asset.
+type DepreciationPosting struct {
+	types.BaseEntity
+	AssetID uuid.UUID `gorm:"type:uuid;not null;uniqueIndex:idx_dep_asset_period" json:"assetId"`
+	Period  string    `gorm:"type:varchar(7);not null;uniqueIndex:idx_dep_asset_period;index" json:"period"`
+	Amount  float64   `gorm:"type:decimal(15,2);not null" json:"amount"`
+	// JournalSourceDoc is the source-doc key of the ledger entry.
+	JournalSourceDoc string `gorm:"type:varchar(120)" json:"journalSourceDoc"`
+}
+
+func (DepreciationPosting) TableName() string { return "assets_depreciation_postings" }
+
 type AssetsRepository interface {
+	CreateDepreciationPosting(ctx context.Context, p *DepreciationPosting) error
+	// ListDepreciationPostings returns postings for one period, or all when period is empty.
+	ListDepreciationPostings(ctx context.Context, period string) ([]DepreciationPosting, error)
+
 	CreateAsset(ctx context.Context, a *FixedAsset) error
 	GetAssetByID(ctx context.Context, id uuid.UUID) (*FixedAsset, error)
 	ListAssets(ctx context.Context, query types.PaginationQuery) ([]FixedAsset, int64, error)

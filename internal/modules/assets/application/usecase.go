@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/divinecoid/one-backend/internal/modules/assets/domain"
+	financeApp "github.com/divinecoid/one-backend/internal/modules/finance/application"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/google/uuid"
@@ -31,16 +32,31 @@ type AssetsUseCase interface {
 	UpdateAssetStatus(ctx context.Context, id uuid.UUID, dto UpdateAssetStatusDTO) (*AssetResponseDTO, error)
 	RecalculateDepreciation(ctx context.Context, id uuid.UUID) (*AssetResponseDTO, error)
 	RecalculateAllDepreciation(ctx context.Context) ([]AssetResponseDTO, error)
+	PostDepreciation(ctx context.Context, period string, catchUp bool) (*DepreciationPostResultDTO, error)
+	DepreciationReport(ctx context.Context, period string) (*DepreciationReportDTO, error)
 
 	SeedInitialData(ctx context.Context) error
 }
 
 type assetsUseCase struct {
-	repo domain.AssetsRepository
+	repo   domain.AssetsRepository
+	ledger financeApp.LedgerPoster
 }
 
-func NewAssetsUseCase(repo domain.AssetsRepository) AssetsUseCase {
-	return &assetsUseCase{repo: repo}
+// Option configures optional collaborators of the assets use case.
+type Option func(*assetsUseCase)
+
+// WithLedger enables posting depreciation to the general ledger.
+func WithLedger(l financeApp.LedgerPoster) Option {
+	return func(uc *assetsUseCase) { uc.ledger = l }
+}
+
+func NewAssetsUseCase(repo domain.AssetsRepository, opts ...Option) AssetsUseCase {
+	uc := &assetsUseCase{repo: repo}
+	for _, o := range opts {
+		o(uc)
+	}
+	return uc
 }
 
 // computeDepreciation applies straight-line depreciation as of now.

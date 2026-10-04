@@ -14,6 +14,8 @@ type CreateSupplierDTO struct {
 	Email         string `json:"email"`
 	Phone         string `json:"phone"`
 	Address       string `json:"address"`
+	NPWP          string `json:"npwp"`
+	NIK           string `json:"nik"`
 	Category      string `json:"category"`
 	Status        string `json:"status"`
 }
@@ -24,6 +26,8 @@ type UpdateSupplierDTO struct {
 	Email         *string `json:"email,omitempty"`
 	Phone         *string `json:"phone,omitempty"`
 	Address       *string `json:"address,omitempty"`
+	NPWP          *string `json:"npwp,omitempty"`
+	NIK           *string `json:"nik,omitempty"`
 	Category      *string `json:"category,omitempty"`
 	Status        *string `json:"status,omitempty"`
 }
@@ -36,6 +40,8 @@ type SupplierResponseDTO struct {
 	Email         string    `json:"email"`
 	Phone         string    `json:"phone"`
 	Address       string    `json:"address"`
+	NPWP          string    `json:"npwp"`
+	NIK           string    `json:"nik"`
 	Category      string    `json:"category"`
 	Status        string    `json:"status"`
 	CreatedAt     time.Time `json:"createdAt"`
@@ -54,6 +60,8 @@ func ToSupplierResponse(s *domain.Supplier) *SupplierResponseDTO {
 		Email:         s.Email,
 		Phone:         s.Phone,
 		Address:       s.Address,
+		NPWP:          s.NPWP,
+		NIK:           s.NIK,
 		Category:      s.Category,
 		Status:        s.Status,
 		CreatedAt:     s.CreatedAt,

@@ -254,6 +254,71 @@ func (r *inventoryRepository) UpdateOpnameLine(ctx context.Context, l *domain.St
 	return r.db.WithContext(ctx).Save(l).Error
 }
 
+// Stock documents
+
+func (r *inventoryRepository) CreateStockDocument(ctx context.Context, d *domain.StockDocument) error {
+	tenantctx.SetTenantID(ctx, &d.TenantID)
+	return r.db.WithContext(ctx).Create(d).Error
+}
+
+// UpdateStockDocument saves the header only; lines are immutable once posted.
+func (r *inventoryRepository) UpdateStockDocument(ctx context.Context, d *domain.StockDocument) error {
+	return r.db.WithContext(ctx).Model(&domain.StockDocument{}).Where("id = ?", d.ID).
+		Updates(map[string]any{"posted": d.Posted, "total_value": d.TotalValue}).Error
+}
+
+func (r *inventoryRepository) GetStockDocument(ctx context.Context, id uuid.UUID) (*domain.StockDocument, error) {
+	var d domain.StockDocument
+	err := tenantctx.Scope(ctx, r.db.WithContext(ctx)).Preload("Lines").Where("id = ?", id).First(&d).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &d, nil
+}
+
+func (r *inventoryRepository) ListStockDocuments(ctx context.Context, f domain.StockDocumentFilter) ([]domain.StockDocument, error) {
+	var out []domain.StockDocument
+	db := tenantctx.Scope(ctx, r.db.WithContext(ctx)).Preload("Lines")
+	if f.Type != "" {
+		db = db.Where("type = ?", f.Type)
+	}
+	if f.From != "" {
+		db = db.Where("date >= ?", f.From)
+	}
+	if f.To != "" {
+		db = db.Where("date <= ?", f.To)
+	}
+	err := db.Order("date desc, created_at desc").Limit(500).Find(&out).Error
+	return out, err
+}
+
+func (r *inventoryRepository) CountStockDocuments(ctx context.Context, docType, numberPrefix string) (int64, error) {
+	var n int64
+	// Unscoped: soft-deleted documents still hold their number.
+	err := r.db.WithContext(ctx).Unscoped().Model(&domain.StockDocument{}).
+		Where("type = ? AND number LIKE ?", docType, numberPrefix+"%").Count(&n).Error
+	return n, err
+}
+
+func (r *inventoryRepository) SumIssuedByOrder(ctx context.Context, orderID uuid.UUID) (map[uuid.UUID]int, error) {
+	var rows []struct {
+		ProductID uuid.UUID
+		Qty       int
+	}
+	err := r.db.WithContext(ctx).Table("inventory_stock_document_lines l").
+		Joins("JOIN inventory_stock_documents d ON d.id = l.document_id AND d.deleted_at IS NULL").
+		Where("l.deleted_at IS NULL AND d.type = ? AND d.production_order_id = ?", domain.DocMaterialIssue, orderID).
+		Select("l.product_id AS product_id, COALESCE(SUM(l.quantity),0) AS qty").Group("l.product_id").Scan(&rows).Error
+	out := make(map[uuid.UUID]int, len(rows))
+	for _, r := range rows {
+		out[r.ProductID] = r.Qty
+	}
+	return out, err
+}
+
 func (r *inventoryRepository) WithTransaction(ctx context.Context, fn func(txRepo domain.InventoryRepository) error) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		return fn(&inventoryRepository{db: tx})

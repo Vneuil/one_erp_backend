@@ -38,6 +38,7 @@ var approvalRules = []approvalRule{
 	rule(http.MethodPost, `/api/v1/leaves/`+idSeg+`/(approve|reject)`, "hrm"),
 	rule(http.MethodPost, `/api/v1/reimbursements/`+idSeg+`/(approve|reject|mark-paid)`, "hrm"),
 	rule(http.MethodPost, `/api/v1/hrm/(corrections|shift-changes|overtime|cash-advances)/`+idSeg+`/(approve|reject)`, "hrm"),
+	rule(http.MethodPost, `/api/v1/hr-letters/`+idSeg+`/(issue|cancel|apply)`, "hrm"),
 	rule(http.MethodPost, `/api/v1/payroll/entries/calculate`, "hrm"),
 	rule(http.MethodPut, `/api/v1/payroll/entries/`+idSeg+`/status`, "hrm"),
 	rule(http.MethodPut, `/api/v1/kpi/`+idSeg+`/status`, "hrm"),

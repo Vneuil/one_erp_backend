@@ -30,7 +30,7 @@ func (r *manufacturingRepository) CreateBOM(ctx context.Context, b *domain.BillO
 
 func (r *manufacturingRepository) GetBOMByID(ctx context.Context, id uuid.UUID) (*domain.BillOfMaterial, error) {
 	var b domain.BillOfMaterial
-	err := r.db.WithContext(ctx).Preload("Lines").Where("id = ?", id).First(&b).Error
+	err := r.db.WithContext(ctx).Preload("Lines").Preload("Processes", orderBySequence).Where("id = ?", id).First(&b).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -55,7 +55,7 @@ func (r *manufacturingRepository) ListBOMs(ctx context.Context, query types.Pagi
 	}
 
 	offset := (query.Page - 1) * query.PerPage
-	err := db.Preload("Lines").Order("created_at desc").Offset(offset).Limit(query.PerPage).Find(&boms).Error
+	err := db.Preload("Lines").Preload("Processes", orderBySequence).Order("created_at desc").Offset(offset).Limit(query.PerPage).Find(&boms).Error
 	return boms, total, err
 }
 
@@ -78,7 +78,7 @@ func (r *manufacturingRepository) CreateOrder(ctx context.Context, o *domain.Pro
 
 func (r *manufacturingRepository) GetOrderByID(ctx context.Context, id uuid.UUID) (*domain.ProductionOrder, error) {
 	var o domain.ProductionOrder
-	err := r.db.WithContext(ctx).Where("id = ?", id).First(&o).Error
+	err := r.db.WithContext(ctx).Preload("Steps", orderBySequence).Where("id = ?", id).First(&o).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -99,12 +99,48 @@ func (r *manufacturingRepository) ListOrders(ctx context.Context, query types.Pa
 	}
 
 	offset := (query.Page - 1) * query.PerPage
-	err := db.Order("created_at desc").Offset(offset).Limit(query.PerPage).Find(&orders).Error
+	err := db.Preload("Steps", orderBySequence).Order("created_at desc").Offset(offset).Limit(query.PerPage).Find(&orders).Error
 	return orders, total, err
 }
 
+// UpdateOrder saves the order itself; steps are saved one by one with UpdateStep.
 func (r *manufacturingRepository) UpdateOrder(ctx context.Context, o *domain.ProductionOrder) error {
-	return r.db.WithContext(ctx).Save(o).Error
+	return r.db.WithContext(ctx).Omit("Steps").Save(o).Error
+}
+
+func orderBySequence(db *gorm.DB) *gorm.DB { return db.Order("sequence asc") }
+
+func (r *manufacturingRepository) UpdateStep(ctx context.Context, s *domain.ProductionStep) error {
+	return r.db.WithContext(ctx).Save(s).Error
+}
+
+func (r *manufacturingRepository) CreateStepLog(ctx context.Context, l *domain.ProductionStepLog) error {
+	return r.db.WithContext(ctx).Create(l).Error
+}
+
+func (r *manufacturingRepository) ListStepLogs(ctx context.Context, from, to string) ([]domain.ProductionStepLog, error) {
+	var out []domain.ProductionStepLog
+	err := r.db.WithContext(ctx).Where("date >= ? AND date <= ?", from, to).Order("date asc, created_at asc").Find(&out).Error
+	return out, err
+}
+
+func (r *manufacturingRepository) ListBatchesBetween(ctx context.Context, from, to string) ([]domain.ProductionBatch, error) {
+	var out []domain.ProductionBatch
+	err := r.db.WithContext(ctx).Where("completion_date >= ? AND completion_date <= ?", from, to).Order("completion_date asc, created_at asc").Find(&out).Error
+	return out, err
+}
+
+func (r *manufacturingRepository) ListAllOrders(ctx context.Context) ([]domain.ProductionOrder, error) {
+	var out []domain.ProductionOrder
+	err := tenantctx.Scope(ctx, r.db.WithContext(ctx).Model(&domain.ProductionOrder{})).Preload("Steps", orderBySequence).Order("created_at asc").Find(&out).Error
+	return out, err
+}
+
+func (r *manufacturingRepository) CountOrdersByPrefix(ctx context.Context, prefix string) (int64, error) {
+	var n int64
+	// Unscoped: soft-deleted orders still hold their number.
+	err := r.db.WithContext(ctx).Unscoped().Model(&domain.ProductionOrder{}).Where("order_number LIKE ?", prefix+"%").Count(&n).Error
+	return n, err
 }
 
 // Production batches

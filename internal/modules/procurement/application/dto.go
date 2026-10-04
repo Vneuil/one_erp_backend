@@ -226,6 +226,13 @@ type CreatePurchaseInvoiceDTO struct {
 	DiscountAmount  float64 `json:"discountAmount"`
 	AdditionalCost  float64 `json:"additionalCost"`
 	RoundTo         float64 `json:"roundTo"`
+	// ApplyVAT records the supplier's PPN on top of the amount after discount
+	// and additional cost. VATRate 0 = statutory rate; VATOtherValueBase
+	// defaults to true; VATCreditable defaults to true (PPN Masukan).
+	ApplyVAT          bool    `json:"applyVat"`
+	VATRate           float64 `json:"vatRate"`
+	VATOtherValueBase *bool   `json:"vatOtherValueBase,omitempty"`
+	VATCreditable     *bool   `json:"vatCreditable,omitempty"`
 }
 
 type RecordInvoicePaymentDTO struct {
@@ -246,6 +253,12 @@ type PurchaseInvoiceResponseDTO struct {
 	DiscountAmount      float64    `json:"discountAmount"`
 	AdditionalCost      float64    `json:"additionalCost"`
 	RoundingAmount      float64    `json:"roundingAmount"`
+	TaxBase             float64    `json:"taxBase"`
+	DPPOtherValue       float64    `json:"dppOtherValue"`
+	VATRate             float64    `json:"vatRate"`
+	VATOtherValueBase   bool       `json:"vatOtherValueBase"`
+	VATAmount           float64    `json:"vatAmount"`
+	VATCreditable       bool       `json:"vatCreditable"`
 	PaidAmount          float64    `json:"paidAmount"`
 	Outstanding         float64    `json:"outstanding"`
 	Status              string     `json:"status"`
@@ -262,6 +275,8 @@ func ToPurchaseInvoiceResponse(inv *domain.PurchaseInvoice, poNumber string) *Pu
 		InvoiceNumber:       inv.InvoiceNumber, InvoiceDate: inv.InvoiceDate, DueDate: inv.DueDate,
 		TotalAmount: inv.TotalAmount, PaidAmount: inv.PaidAmount, Outstanding: inv.TotalAmount - inv.PaidAmount,
 		Subtotal: inv.Subtotal, DiscountAmount: inv.DiscountAmount, AdditionalCost: inv.AdditionalCost, RoundingAmount: inv.RoundingAmount,
+		TaxBase: inv.TaxBase, DPPOtherValue: inv.DPPOtherValue, VATRate: inv.VATRate, VATOtherValueBase: inv.VATOtherValueBase,
+		VATAmount: inv.VATAmount, VATCreditable: inv.VATCreditable,
 		Status: inv.Status, CreatedAt: inv.CreatedAt,
 	}
 }

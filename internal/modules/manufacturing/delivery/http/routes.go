@@ -28,4 +28,11 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	orders.Post("/:id/resume", h.ResumeOrder)
 	orders.Post("/:id/cancel", h.CancelOrder)
 	orders.Post("/:id/complete-batch", h.CompleteBatch)
+	orders.Post("/:id/steps/:stepId/log", h.LogStep)
+
+	reports := manufacturing.Group("/reports")
+	reports.Get("/daily", h.DailyReport)
+	reports.Get("/order-summary", h.OrderSummary)
+	reports.Get("/process-summary", h.ProcessSummary)
+	reports.Get("/wip", h.WIPReport)
 }

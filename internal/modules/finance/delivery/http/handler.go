@@ -705,3 +705,107 @@ func (h *Handler) Insights(c *fiber.Ctx) error {
 	}
 	return response.OK(c, "Financial insights retrieved", out)
 }
+
+// Cash vouchers
+
+func (h *Handler) CreateCashVoucher(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var in application.CashVoucherInput
+	if err := c.BodyParser(&in); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	v, err := uc.CreateCashVoucher(h.ctx(c), in)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Cash voucher recorded", v)
+}
+
+func (h *Handler) GetCashVoucher(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid id format")
+	}
+	v, err := uc.GetCashVoucher(h.ctx(c), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Cash voucher retrieved", v)
+}
+
+func (h *Handler) ListCashVouchers(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	v, err := uc.ListCashVouchers(h.ctx(c), c.Query("type"), c.Query("from"), c.Query("to"))
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Cash vouchers retrieved", v)
+}
+
+// Statutory reports
+
+func (h *Handler) GeneralLedger(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var accountID *uuid.UUID
+	if raw := c.Query("accountId"); raw != "" {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			return apperrors.NewBadRequest("Invalid accountId format")
+		}
+		accountID = &id
+	}
+	report, err := uc.GeneralLedger(h.ctx(c), accountID, c.Query("from"), c.Query("to"))
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "General ledger retrieved successfully", report)
+}
+
+func (h *Handler) CashBook(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	report, err := uc.CashBook(h.ctx(c), c.Query("accountCode"), c.Query("from"), c.Query("to"))
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Cash/bank daily report retrieved successfully", report)
+}
+
+func (h *Handler) ExpenseBreakdown(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	report, err := uc.ExpenseBreakdown(h.ctx(c), c.Query("from"), c.Query("to"))
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Operating expense breakdown retrieved successfully", report)
+}
+
+func (h *Handler) NonOperating(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	report, err := uc.NonOperating(h.ctx(c), c.Query("from"), c.Query("to"))
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Non-operating income and expenses retrieved successfully", report)
+}

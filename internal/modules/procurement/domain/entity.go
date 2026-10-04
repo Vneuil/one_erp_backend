@@ -137,8 +137,17 @@ type PurchaseInvoice struct {
 	DiscountAmount float64 `gorm:"type:decimal(15,2);default:0" json:"discountAmount"`
 	AdditionalCost float64 `gorm:"type:decimal(15,2);default:0" json:"additionalCost"`
 	RoundingAmount float64 `gorm:"type:decimal(15,2);default:0" json:"roundingAmount"`
-	PaidAmount     float64 `gorm:"type:decimal(15,2);default:0" json:"paidAmount"`
-	Status         string  `gorm:"type:varchar(50);default:'unpaid'" json:"status"`
+	// PPN Masukan. TaxBase is the DPP (subtotal - discount + additional cost);
+	// TotalAmount includes VATAmount. A creditable VAT is booked to Input VAT
+	// (1600); otherwise it is part of the inventory cost. All zero without PPN.
+	TaxBase           float64 `gorm:"type:decimal(15,2);default:0" json:"taxBase"`
+	DPPOtherValue     float64 `gorm:"type:decimal(15,2);default:0" json:"dppOtherValue"`
+	VATRate           float64 `gorm:"type:decimal(5,2);default:0" json:"vatRate"`
+	VATOtherValueBase bool    `gorm:"default:false" json:"vatOtherValueBase"`
+	VATAmount         float64 `gorm:"type:decimal(15,2);default:0" json:"vatAmount"`
+	VATCreditable     bool    `gorm:"default:false" json:"vatCreditable"`
+	PaidAmount        float64 `gorm:"type:decimal(15,2);default:0" json:"paidAmount"`
+	Status            string  `gorm:"type:varchar(50);default:'unpaid'" json:"status"`
 }
 
 func (PurchaseInvoice) TableName() string {

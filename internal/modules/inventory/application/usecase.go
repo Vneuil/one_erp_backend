@@ -48,6 +48,12 @@ type InventoryUseCase interface {
 	ListOpnames(ctx context.Context, query types.PaginationQuery) ([]OpnameResponseDTO, types.PaginationMeta, error)
 	CountOpnameLine(ctx context.Context, opnameID uuid.UUID, dto CountOpnameLineDTO) (*OpnameResponseDTO, error)
 	FinalizeOpname(ctx context.Context, id uuid.UUID) (*OpnameResponseDTO, error)
+	ImportOpnameCounts(ctx context.Context, opnameID uuid.UUID, rows []OpnameCountRow) (*OpnameImportResult, error)
+
+	// Stock documents (pengambilan bahan, penerimaan barang jadi, scrap, memo)
+	CreateStockDocument(ctx context.Context, dto CreateStockDocumentDTO) (*StockDocumentResponseDTO, error)
+	GetStockDocument(ctx context.Context, id uuid.UUID) (*StockDocumentResponseDTO, error)
+	ListStockDocuments(ctx context.Context, docType, from, to string) ([]StockDocumentResponseDTO, error)
 
 	SeedInitialData(ctx context.Context) error
 }
@@ -699,6 +705,7 @@ func (uc *inventoryUseCase) FinalizeOpname(ctx context.Context, id uuid.UUID) (*
 	if err != nil {
 		return nil, err
 	}
+	uc.postOpnameVariance(ctx, result)
 	return uc.toOpnameResponse(ctx, result), nil
 }
 
