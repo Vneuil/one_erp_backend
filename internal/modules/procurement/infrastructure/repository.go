@@ -299,3 +299,52 @@ func (r *procurementRepository) CountPurchaseReturns(ctx context.Context) (int64
 	err := r.db.WithContext(ctx).Model(&domain.PurchaseReturn{}).Count(&total).Error
 	return total, err
 }
+
+// Invoice receipts
+
+func (r *procurementRepository) CreateInvoiceReceipt(ctx context.Context, ir *domain.InvoiceReceipt) error {
+	tenantctx.SetTenantID(ctx, &ir.TenantID)
+	return r.db.WithContext(ctx).Create(ir).Error
+}
+
+func (r *procurementRepository) GetInvoiceReceiptByID(ctx context.Context, id uuid.UUID) (*domain.InvoiceReceipt, error) {
+	var ir domain.InvoiceReceipt
+	err := r.db.WithContext(ctx).Preload("Lines").Where("id = ?", id).First(&ir).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &ir, nil
+}
+
+func (r *procurementRepository) ListInvoiceReceipts(ctx context.Context, query types.PaginationQuery) ([]domain.InvoiceReceipt, int64, error) {
+	var items []domain.InvoiceReceipt
+	var total int64
+
+	db := tenantctx.Scope(ctx, r.db.WithContext(ctx).Model(&domain.InvoiceReceipt{}))
+	if query.Search != "" {
+		pattern := fmt.Sprintf("%%%s%%", query.Search)
+		db = db.Where("receipt_no ILIKE ? OR supplier_name ILIKE ?", pattern, pattern)
+	}
+
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (query.Page - 1) * query.PerPage
+	err := db.Preload("Lines").Order("created_at desc").Offset(offset).Limit(query.PerPage).Find(&items).Error
+	return items, total, err
+}
+
+func (r *procurementRepository) UpdateInvoiceReceipt(ctx context.Context, ir *domain.InvoiceReceipt) error {
+	return r.db.WithContext(ctx).Save(ir).Error
+}
+
+func (r *procurementRepository) CountInvoiceReceipts(ctx context.Context) (int64, error) {
+	var total int64
+	err := r.db.WithContext(ctx).Model(&domain.InvoiceReceipt{}).Count(&total).Error
+	return total, err
+}
+

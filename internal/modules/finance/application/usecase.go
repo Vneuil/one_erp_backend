@@ -74,6 +74,7 @@ type FinanceUseCase interface {
 	ProfitAndLoss(ctx context.Context, from, to string) (*ProfitLossDTO, error)
 	BalanceSheet(ctx context.Context, asOf string) (*BalanceSheetDTO, error)
 	CashFlow(ctx context.Context, from, to string) (*CashFlowDTO, error)
+	MemorialJournals(ctx context.Context, from, to string) ([]JournalEntryResponseDTO, error)
 
 	RecordCapital(ctx context.Context, typ string, in CapitalInput) (*domain.CapitalTransaction, error)
 	ListCapital(ctx context.Context, typ, period string) ([]domain.CapitalTransaction, error)
@@ -380,6 +381,27 @@ func (uc *financeUseCase) ReverseJournalEntry(ctx context.Context, id uuid.UUID)
 		return nil, apperrors.NewInternal(err, "Failed to create reversing journal entry")
 	}
 	return ToJournalEntryResponse(reversal), nil
+}
+
+func (uc *financeUseCase) MemorialJournals(ctx context.Context, from, to string) ([]JournalEntryResponseDTO, error) {
+	if err := checkDateRange(from, to); err != nil {
+		return nil, err
+	}
+	entries, err := uc.repo.ListPostedJournalEntries(ctx, from, to)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to load journal entries")
+	}
+
+	var memorials []JournalEntryResponseDTO
+	for _, je := range entries {
+		if !strings.HasPrefix(je.EntryNumber, "AUTO-") {
+			memorials = append(memorials, *ToJournalEntryResponse(&je))
+		}
+	}
+	if memorials == nil {
+		memorials = []JournalEntryResponseDTO{}
+	}
+	return memorials, nil
 }
 
 // Payables
@@ -937,7 +959,7 @@ func (uc *financeUseCase) ProfitAndLoss(ctx context.Context, from, to string) (*
 		sumByID[s.AccountID] = s
 	}
 
-	var revenue, expense float64
+	var revenue, cogs, expense float64
 	for _, a := range accounts {
 		s, ok := sumByID[a.ID]
 		if !ok {
@@ -947,14 +969,19 @@ func (uc *financeUseCase) ProfitAndLoss(ctx context.Context, from, to string) (*
 		case "revenue":
 			revenue += s.TotalCredit - s.TotalDebit
 		case "expense":
-			expense += s.TotalDebit - s.TotalCredit
+			amt := s.TotalDebit - s.TotalCredit
+			if ClassifyAccount(a) == CategoryCOGS {
+				cogs += amt
+			} else {
+				expense += amt
+			}
 		}
 	}
 
 	return &ProfitLossDTO{
 		From: from, To: to,
-		Revenue: revenue, OperatingExpense: expense,
-		GrossProfit: revenue, NetProfit: revenue - expense,
+		Revenue: revenue, CostOfGoodsSold: cogs, OperatingExpense: expense,
+		GrossProfit: revenue - cogs, NetProfit: revenue - cogs - expense,
 	}, nil
 }
 

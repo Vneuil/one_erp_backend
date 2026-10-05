@@ -403,3 +403,64 @@ func ToPurchaseReturnResponseList(items []domain.PurchaseReturn) []PurchaseRetur
 	}
 	return result
 }
+
+// Invoice receipts
+
+type InvoiceReceiptLineDTO struct {
+	PurchaseInvoiceID *uuid.UUID `json:"purchaseInvoiceId,omitempty"`
+	InvoiceNo         string     `json:"invoiceNo"`
+	Amount            float64    `json:"amount"`
+	Remarks           string     `json:"remarks"`
+}
+
+type CreateInvoiceReceiptDTO struct {
+	Date         string                  `json:"date"`
+	SupplierID   uuid.UUID               `json:"supplierId"`
+	SupplierName string                  `json:"supplierName"`
+	Notes        string                  `json:"notes"`
+	Lines        []InvoiceReceiptLineDTO `json:"lines"`
+}
+
+type InvoiceReceiptLineResponseDTO struct {
+	ID                uuid.UUID  `json:"id"`
+	PurchaseInvoiceID *uuid.UUID `json:"purchaseInvoiceId,omitempty"`
+	InvoiceNo         string     `json:"invoiceNo"`
+	Amount            float64    `json:"amount"`
+	Remarks           string     `json:"remarks"`
+}
+
+type InvoiceReceiptResponseDTO struct {
+	ID           uuid.UUID                       `json:"id"`
+	ReceiptNo    string                          `json:"receiptNo"`
+	Date         string                          `json:"date"`
+	SupplierID   uuid.UUID                       `json:"supplierId"`
+	SupplierName string                          `json:"supplierName"`
+	Notes        string                          `json:"notes"`
+	Status       string                          `json:"status"`
+	Lines        []InvoiceReceiptLineResponseDTO `json:"lines,omitempty"`
+	CreatedAt    time.Time                       `json:"createdAt"`
+}
+
+func ToInvoiceReceiptResponse(ir *domain.InvoiceReceipt) *InvoiceReceiptResponseDTO {
+	if ir == nil {
+		return nil
+	}
+	lines := make([]InvoiceReceiptLineResponseDTO, len(ir.Lines))
+	for i, l := range ir.Lines {
+		lines[i] = InvoiceReceiptLineResponseDTO{
+			ID: l.ID, PurchaseInvoiceID: l.PurchaseInvoiceID, InvoiceNo: l.InvoiceNo, Amount: l.Amount, Remarks: l.Remarks,
+		}
+	}
+	return &InvoiceReceiptResponseDTO{
+		ID: ir.ID, ReceiptNo: ir.ReceiptNo, Date: ir.Date, SupplierID: ir.SupplierID,
+		SupplierName: ir.SupplierName, Notes: ir.Notes, Status: ir.Status, Lines: lines, CreatedAt: ir.CreatedAt,
+	}
+}
+
+func ToInvoiceReceiptResponseList(items []domain.InvoiceReceipt) []InvoiceReceiptResponseDTO {
+	result := make([]InvoiceReceiptResponseDTO, len(items))
+	for i, ir := range items {
+		result[i] = *ToInvoiceReceiptResponse(&ir)
+	}
+	return result
+}

@@ -71,6 +71,11 @@ type ProcurementUseCase interface {
 	GetPurchaseReturnByID(ctx context.Context, id uuid.UUID) (*PurchaseReturnResponseDTO, error)
 	ListPurchaseReturns(ctx context.Context, query types.PaginationQuery) ([]PurchaseReturnResponseDTO, types.PaginationMeta, error)
 
+	// Invoice receipts
+	CreateInvoiceReceipt(ctx context.Context, dto CreateInvoiceReceiptDTO) (*InvoiceReceiptResponseDTO, error)
+	GetInvoiceReceiptByID(ctx context.Context, id uuid.UUID) (*InvoiceReceiptResponseDTO, error)
+	ListInvoiceReceipts(ctx context.Context, query types.PaginationQuery) ([]InvoiceReceiptResponseDTO, types.PaginationMeta, error)
+
 	SeedInitialData(ctx context.Context) error
 }
 
@@ -879,6 +884,71 @@ func (uc *procurementUseCase) ListPurchaseReturns(ctx context.Context, query typ
 	}
 	meta := types.NewPaginationMeta(total, query.Page, query.PerPage)
 	return ToPurchaseReturnResponseList(items), meta, nil
+}
+
+// Invoice receipts
+
+func (uc *procurementUseCase) CreateInvoiceReceipt(ctx context.Context, dto CreateInvoiceReceiptDTO) (*InvoiceReceiptResponseDTO, error) {
+	if dto.SupplierID == uuid.Nil {
+		return nil, apperrors.NewBadRequest("supplierId is required")
+	}
+	if len(dto.Lines) == 0 {
+		return nil, apperrors.NewBadRequest("At least one line item is required")
+	}
+
+	date := dto.Date
+	if date == "" {
+		date = time.Now().Format("2006-01-02")
+	}
+
+	lines := make([]domain.InvoiceReceiptLine, len(dto.Lines))
+	for i, l := range dto.Lines {
+		if l.InvoiceNo == "" {
+			return nil, apperrors.NewBadRequest("Each line requires an invoiceNo")
+		}
+		lines[i] = domain.InvoiceReceiptLine{
+			PurchaseInvoiceID: l.PurchaseInvoiceID,
+			InvoiceNo:         l.InvoiceNo,
+			Amount:            l.Amount,
+			Remarks:           l.Remarks,
+		}
+	}
+
+	ir := &domain.InvoiceReceipt{
+		ReceiptNo:    fmt.Sprintf("TTN-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000),
+		Date:         date,
+		SupplierID:   dto.SupplierID,
+		SupplierName: dto.SupplierName,
+		Notes:        dto.Notes,
+		Status:       "completed",
+		Lines:        lines,
+	}
+
+	if err := uc.repo.CreateInvoiceReceipt(ctx, ir); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to create invoice receipt")
+	}
+	return ToInvoiceReceiptResponse(ir), nil
+}
+
+func (uc *procurementUseCase) GetInvoiceReceiptByID(ctx context.Context, id uuid.UUID) (*InvoiceReceiptResponseDTO, error) {
+	ir, err := uc.repo.GetInvoiceReceiptByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get invoice receipt")
+	}
+	if ir == nil {
+		return nil, apperrors.NewNotFound("Invoice receipt not found")
+	}
+	return ToInvoiceReceiptResponse(ir), nil
+}
+
+func (uc *procurementUseCase) ListInvoiceReceipts(ctx context.Context, query types.PaginationQuery) ([]InvoiceReceiptResponseDTO, types.PaginationMeta, error) {
+	query.SetDefaults()
+	items, total, err := uc.repo.ListInvoiceReceipts(ctx, query)
+	if err != nil {
+		return nil, types.PaginationMeta{}, apperrors.NewInternal(err, "Failed to list invoice receipts")
+	}
+	meta := types.NewPaginationMeta(total, query.Page, query.PerPage)
+	return ToInvoiceReceiptResponseList(items), meta, nil
 }
 
 // SeedInitialData populates a couple of sample procurement records on first boot

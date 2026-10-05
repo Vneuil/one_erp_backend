@@ -213,6 +213,37 @@ func (PurchaseReturnLine) TableName() string {
 	return "procurement_purchase_return_lines"
 }
 
+// InvoiceReceipt records the receipt of supplier invoices (Tanda Terima Nota/Faktur)
+type InvoiceReceipt struct {
+	types.BaseEntity
+	CompanyID    *uuid.UUID           `gorm:"type:uuid;index" json:"companyId,omitempty"`
+	TenantID     *uuid.UUID           `gorm:"type:uuid;index" json:"tenantId,omitempty"`
+	ReceiptNo    string               `gorm:"type:varchar(50);not null;index" json:"receiptNo"`
+	Date         string               `gorm:"type:varchar(50)" json:"date"`
+	SupplierID   uuid.UUID            `gorm:"type:uuid;not null;index" json:"supplierId"`
+	SupplierName string               `gorm:"type:varchar(255)" json:"supplierName"`
+	Notes        string               `gorm:"type:varchar(255)" json:"notes"`
+	Status       string               `gorm:"type:varchar(50);default:'draft'" json:"status"`
+	Lines        []InvoiceReceiptLine `gorm:"foreignKey:InvoiceReceiptID" json:"lines,omitempty"`
+}
+
+func (InvoiceReceipt) TableName() string {
+	return "procurement_invoice_receipts"
+}
+
+type InvoiceReceiptLine struct {
+	types.BaseEntity
+	InvoiceReceiptID  uuid.UUID  `gorm:"type:uuid;not null;index" json:"invoiceReceiptId"`
+	PurchaseInvoiceID *uuid.UUID `gorm:"type:uuid;index" json:"purchaseInvoiceId,omitempty"`
+	InvoiceNo         string     `gorm:"type:varchar(50);not null" json:"invoiceNo"`
+	Amount            float64    `gorm:"type:decimal(15,2);not null" json:"amount"`
+	Remarks           string     `gorm:"type:varchar(255)" json:"remarks"`
+}
+
+func (InvoiceReceiptLine) TableName() string {
+	return "procurement_invoice_receipt_lines"
+}
+
 type ProcurementRepository interface {
 	// Purchase requests
 	CreatePurchaseRequest(ctx context.Context, pr *PurchaseRequest) error
@@ -253,4 +284,11 @@ type ProcurementRepository interface {
 	GetPurchaseReturnByID(ctx context.Context, id uuid.UUID) (*PurchaseReturn, error)
 	ListPurchaseReturns(ctx context.Context, query types.PaginationQuery) ([]PurchaseReturn, int64, error)
 	CountPurchaseReturns(ctx context.Context) (int64, error)
+
+	// Invoice receipts (Tanda Terima Nota)
+	CreateInvoiceReceipt(ctx context.Context, ir *InvoiceReceipt) error
+	GetInvoiceReceiptByID(ctx context.Context, id uuid.UUID) (*InvoiceReceipt, error)
+	ListInvoiceReceipts(ctx context.Context, query types.PaginationQuery) ([]InvoiceReceipt, int64, error)
+	UpdateInvoiceReceipt(ctx context.Context, ir *InvoiceReceipt) error
+	CountInvoiceReceipts(ctx context.Context) (int64, error)
 }

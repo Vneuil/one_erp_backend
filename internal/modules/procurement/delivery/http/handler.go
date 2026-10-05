@@ -514,3 +514,56 @@ func (h *Handler) ListPurchaseReturns(c *fiber.Ctx) error {
 	}
 	return response.SuccessWithMeta(c, fiber.StatusOK, "Purchase returns retrieved successfully", items, meta)
 }
+
+// Invoice receipts
+
+func (h *Handler) CreateInvoiceReceipt(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+
+	var dto application.CreateInvoiceReceiptDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	ir, err := uc.CreateInvoiceReceipt(h.ctx(c), dto)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Invoice receipt created successfully", ir)
+}
+
+func (h *Handler) GetInvoiceReceiptByID(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	ir, err := uc.GetInvoiceReceiptByID(h.ctx(c), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Invoice receipt retrieved successfully", ir)
+}
+
+func (h *Handler) ListInvoiceReceipts(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+
+	var query types.PaginationQuery
+	if err := c.QueryParser(&query); err != nil {
+		return apperrors.NewBadRequest("Invalid query parameters")
+	}
+	items, meta, err := uc.ListInvoiceReceipts(h.ctx(c), query)
+	if err != nil {
+		return err
+	}
+	return response.SuccessWithMeta(c, fiber.StatusOK, "Invoice receipts retrieved successfully", items, meta)
+}

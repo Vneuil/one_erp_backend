@@ -77,4 +77,5 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	reports.Get("/profit-loss", h.ProfitAndLoss)
 	reports.Get("/balance-sheet", h.BalanceSheet)
 	reports.Get("/cash-flow", h.CashFlow)
+	reports.Get("/memorial-journals", h.MemorialJournals)
 }

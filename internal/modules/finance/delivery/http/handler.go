@@ -622,6 +622,19 @@ func (h *Handler) CashFlow(c *fiber.Ctx) error {
 	return response.OK(c, "Cash flow statement retrieved successfully", report)
 }
 
+func (h *Handler) MemorialJournals(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+
+	report, err := uc.MemorialJournals(h.ctx(c), c.Query("from"), c.Query("to"))
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Memorial journals retrieved successfully", report)
+}
+
 // ---- owner capital and other income
 
 func (h *Handler) recordCapital(typ string) fiber.Handler {
