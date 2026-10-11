@@ -265,6 +265,72 @@ type TempAdvanceLine struct {
 }
 
 func (TempAdvanceLine) TableName() string { return "finance_temp_advance_lines" }
+// CashAdvance is an operational temporary cash advance (Kas Bon Sementara - KBS)
+type CashAdvance struct {
+	types.BaseEntity
+	CompanyID               *uuid.UUID                  `gorm:"type:uuid;index" json:"companyId,omitempty"`
+	TenantID                *uuid.UUID                  `gorm:"type:uuid;index" json:"tenantId,omitempty"`
+	CRNumber                string                      `gorm:"type:varchar(50);not null;index" json:"crNumber"`
+	KBSNumber               string                      `gorm:"type:varchar(50);index" json:"kbsNumber,omitempty"`
+	EmployeeName            string                      `gorm:"type:varchar(255);not null" json:"employeeName"`
+	Department              string                      `gorm:"type:varchar(150)" json:"department"`
+	Purpose                 string                      `gorm:"type:text;not null" json:"purpose"`
+	CRAmount                float64                     `gorm:"type:decimal(15,2);not null" json:"crAmount"`
+	CRDate                  string                      `gorm:"type:varchar(10);not null" json:"crDate"`
+	CRStatus                string                      `gorm:"type:varchar(30);not null;default:'pending'" json:"crStatus"` // pending | approved | rejected
+	CRRejectReason          string                      `gorm:"type:text" json:"crRejectReason,omitempty"`
+	KBSDate                 string                      `gorm:"type:varchar(10)" json:"kbsDate,omitempty"`
+	KBSDueDate              string                      `gorm:"type:varchar(10)" json:"kbsDueDate,omitempty"`
+	KBSAmount               float64                     `gorm:"type:decimal(15,2);default:0" json:"kbsAmount"`
+	KBSStatus               string                      `gorm:"type:varchar(30);default:'draft'" json:"kbsStatus"` // draft | pending | approved | revision
+	KBSRejectReason         string                      `gorm:"type:text" json:"kbsRejectReason,omitempty"`
+	DisburseDate            string                      `gorm:"type:varchar(10)" json:"disburseDate,omitempty"`
+	DisburseCashAccountCode string                      `gorm:"type:varchar(50)" json:"disburseCashAccountCode,omitempty"`
+	DisbursePaymentMethod   string                      `gorm:"type:varchar(50)" json:"disbursePaymentMethod,omitempty"`
+	DisburseAmount          float64                     `gorm:"type:decimal(15,2);default:0" json:"disburseAmount"`
+	DisburseJournalID       *uuid.UUID                  `gorm:"type:uuid" json:"disburseJournalId,omitempty"`
+	DisbursedByEmail        string                      `gorm:"type:varchar(255)" json:"disbursedByEmail,omitempty"`
+	PJDate                  string                      `gorm:"type:varchar(10)" json:"pjDate,omitempty"`
+	PJTotalRealized         float64                     `gorm:"type:decimal(15,2);default:0" json:"pjTotalRealized"`
+	PJBalanceAmount         float64                     `gorm:"type:decimal(15,2);default:0" json:"pjBalanceAmount"`
+	PJStatus                string                      `gorm:"type:varchar(30);default:'none'" json:"pjStatus"` // none | pending | approved | revision | settled
+	PJRejectReason          string                      `gorm:"type:text" json:"pjRejectReason,omitempty"`
+	SettlementAction        string                      `gorm:"type:varchar(50)" json:"settlementAction,omitempty"` // none | refund_to_company | reimburse_to_employee | exact
+	SettlementAccountCode   string                      `gorm:"type:varchar(50)" json:"settlementAccountCode,omitempty"`
+	SettlementJournalID     *uuid.UUID                  `gorm:"type:uuid" json:"settlementJournalId,omitempty"`
+	BKKNumber               string                      `gorm:"type:varchar(50)" json:"bkkNumber,omitempty"`
+	CreatedByEmail          string                      `gorm:"type:varchar(255)" json:"createdByEmail,omitempty"`
+	ApprovedCRByEmail       string                      `gorm:"type:varchar(255)" json:"approvedCrByEmail,omitempty"`
+	ApprovedKBSByEmail      string                      `gorm:"type:varchar(255)" json:"approvedKbsByEmail,omitempty"`
+	ApprovedPJByEmail       string                      `gorm:"type:varchar(255)" json:"approvedPjByEmail,omitempty"`
+	PlanLines               []CashAdvancePlanLine       `gorm:"foreignKey:CashAdvanceID" json:"planLines,omitempty"`
+	SettlementLines         []CashAdvanceSettlementLine `gorm:"foreignKey:CashAdvanceID" json:"settlementLines,omitempty"`
+}
+
+func (CashAdvance) TableName() string { return "finance_cash_advances" }
+
+type CashAdvancePlanLine struct {
+	types.BaseEntity
+	CashAdvanceID     uuid.UUID `gorm:"type:uuid;not null;index" json:"cashAdvanceId"`
+	Description       string    `gorm:"type:varchar(255);not null" json:"description"`
+	EstimatedAmount   float64   `gorm:"type:decimal(15,2);not null" json:"estimatedAmount"`
+	TargetAccountCode string    `gorm:"type:varchar(50)" json:"targetAccountCode,omitempty"`
+}
+
+func (CashAdvancePlanLine) TableName() string { return "finance_cash_advance_plan_lines" }
+
+type CashAdvanceSettlementLine struct {
+	types.BaseEntity
+	CashAdvanceID uuid.UUID `gorm:"type:uuid;not null;index" json:"cashAdvanceId"`
+	Description   string    `gorm:"type:varchar(255);not null" json:"description"`
+	AccountCode   string    `gorm:"type:varchar(50);not null" json:"accountCode"`
+	Amount        float64   `gorm:"type:decimal(15,2);not null" json:"amount"`
+	ReceiptNo     string    `gorm:"type:varchar(100)" json:"receiptNo,omitempty"`
+	ReceiptDate   string    `gorm:"type:varchar(10)" json:"receiptDate,omitempty"`
+	AttachmentURL string    `gorm:"type:varchar(500)" json:"attachmentUrl,omitempty"`
+}
+
+func (CashAdvanceSettlementLine) TableName() string { return "finance_cash_advance_settlement_lines" }
 
 // JournalLineDetail is a posted journal line joined with its entry header,
 // used by the general ledger and cash book reports.
@@ -280,6 +346,16 @@ type JournalLineDetail struct {
 }
 
 type FinanceRepository interface {
+	// Cash Advances (KBS)
+	CreateCashAdvance(ctx context.Context, ca *CashAdvance) error
+	UpdateCashAdvance(ctx context.Context, ca *CashAdvance) error
+	GetCashAdvanceByID(ctx context.Context, id uuid.UUID) (*CashAdvance, error)
+	ListCashAdvances(ctx context.Context, status, from, to string) ([]CashAdvance, error)
+	CountCashAdvances(ctx context.Context, numberPrefix string) (int64, error)
+	CountCashRequests(ctx context.Context, numberPrefix string) (int64, error)
+	ReplaceCashAdvancePlanLines(ctx context.Context, advanceID uuid.UUID, lines []CashAdvancePlanLine) error
+	ReplaceCashAdvanceSettlementLines(ctx context.Context, advanceID uuid.UUID, lines []CashAdvanceSettlementLine) error
+
 	// Cash vouchers
 	CreateCashVoucher(ctx context.Context, v *CashVoucher) error
 	UpdateCashVoucher(ctx context.Context, v *CashVoucher) error
