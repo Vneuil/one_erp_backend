@@ -81,6 +81,22 @@ type FinanceUseCase interface {
 	RecordOtherIncome(ctx context.Context, in OtherIncomeInput) (*domain.OtherIncome, error)
 	ListOtherIncome(ctx context.Context, category, period string) ([]domain.OtherIncome, error)
 
+	// Cash Advances (KBS)
+	CreateCashRequest(ctx context.Context, in CashRequestInput) (*domain.CashAdvance, error)
+	ApproveCashRequest(ctx context.Context, id uuid.UUID) (*domain.CashAdvance, error)
+	RejectCashRequest(ctx context.Context, id uuid.UUID, reason string) (*domain.CashAdvance, error)
+	FillCashAdvanceForm(ctx context.Context, id uuid.UUID, in CashAdvanceFormInput) (*domain.CashAdvance, error)
+	ApproveCashAdvanceForm(ctx context.Context, id uuid.UUID) (*domain.CashAdvance, error)
+	RejectCashAdvanceForm(ctx context.Context, id uuid.UUID, reason string) (*domain.CashAdvance, error)
+	DisburseCashAdvance(ctx context.Context, id uuid.UUID, in DisburseCashAdvanceInput) (*domain.CashAdvance, error)
+	SubmitSettlement(ctx context.Context, id uuid.UUID, in SubmitSettlementInput) (*domain.CashAdvance, error)
+	ApproveSettlement(ctx context.Context, id uuid.UUID) (*domain.CashAdvance, error)
+	RejectSettlement(ctx context.Context, id uuid.UUID, reason string) (*domain.CashAdvance, error)
+	ListCashAdvances(ctx context.Context, status, from, to string) ([]domain.CashAdvance, error)
+	GetCashAdvance(ctx context.Context, id uuid.UUID) (*domain.CashAdvance, error)
+	GetOutstandingCashAdvancesReport(ctx context.Context) ([]OutstandingCashAdvanceReportItem, error)
+	GetCashAdvanceDifferencesReport(ctx context.Context, from, to string) ([]CashAdvanceDifferenceReportItem, error)
+
 	SeedInitialData(ctx context.Context) error
 }
 

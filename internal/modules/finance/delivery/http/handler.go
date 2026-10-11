@@ -822,3 +822,235 @@ func (h *Handler) NonOperating(c *fiber.Ctx) error {
 	}
 	return response.OK(c, "Non-operating income and expenses retrieved successfully", report)
 }
+
+// Cash Advances (KBS)
+
+func (h *Handler) CreateCashRequest(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var in application.CashRequestInput
+	if err := c.BodyParser(&in); err != nil {
+		return apperrors.NewBadRequest("Format input tidak valid")
+	}
+	ca, err := uc.CreateCashRequest(h.ctx(c), in)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Cash Request berhasil dibuat", ca)
+}
+
+func (h *Handler) ApproveCashRequest(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	ca, err := uc.ApproveCashRequest(h.ctx(c), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Cash Request berhasil disetujui", ca)
+}
+
+func (h *Handler) RejectCashRequest(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var in application.RejectInput
+	_ = c.BodyParser(&in)
+	ca, err := uc.RejectCashRequest(h.ctx(c), id, in.Reason)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Cash Request berhasil ditolak", ca)
+}
+
+func (h *Handler) FillCashAdvanceForm(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var in application.CashAdvanceFormInput
+	if err := c.BodyParser(&in); err != nil {
+		return apperrors.NewBadRequest("Format input tidak valid")
+	}
+	ca, err := uc.FillCashAdvanceForm(h.ctx(c), id, in)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Formulir Kas Bon berhasil disimpan", ca)
+}
+
+func (h *Handler) ApproveCashAdvanceForm(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	ca, err := uc.ApproveCashAdvanceForm(h.ctx(c), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Formulir Kas Bon berhasil disetujui", ca)
+}
+
+func (h *Handler) RejectCashAdvanceForm(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var in application.RejectInput
+	_ = c.BodyParser(&in)
+	ca, err := uc.RejectCashAdvanceForm(h.ctx(c), id, in.Reason)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Formulir Kas Bon ditolak untuk perbaikan", ca)
+}
+
+func (h *Handler) DisburseCashAdvance(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var in application.DisburseCashAdvanceInput
+	if err := c.BodyParser(&in); err != nil {
+		return apperrors.NewBadRequest("Format input tidak valid")
+	}
+	ca, err := uc.DisburseCashAdvance(h.ctx(c), id, in)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Dana Kas Bon berhasil dicairkan", ca)
+}
+
+func (h *Handler) SubmitSettlement(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var in application.SubmitSettlementInput
+	if err := c.BodyParser(&in); err != nil {
+		return apperrors.NewBadRequest("Format input tidak valid")
+	}
+	ca, err := uc.SubmitSettlement(h.ctx(c), id, in)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Pertanggungjawaban Kas Bon berhasil dikirim", ca)
+}
+
+func (h *Handler) ApproveSettlement(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	ca, err := uc.ApproveSettlement(h.ctx(c), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Pertanggungjawaban berhasil disetujui dan dibukukan", ca)
+}
+
+func (h *Handler) RejectSettlement(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var in application.RejectInput
+	_ = c.BodyParser(&in)
+	ca, err := uc.RejectSettlement(h.ctx(c), id, in.Reason)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Pertanggungjawaban ditolak untuk perbaikan bukti", ca)
+}
+
+func (h *Handler) ListCashAdvances(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	items, err := uc.ListCashAdvances(h.ctx(c), c.Query("status"), c.Query("from"), c.Query("to"))
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Daftar Kas Bon berhasil dimuat", items)
+}
+
+func (h *Handler) GetCashAdvance(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	ca, err := uc.GetCashAdvance(h.ctx(c), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Data Kas Bon berhasil dimuat", ca)
+}
+
+func (h *Handler) GetOutstandingCashAdvancesReport(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	items, err := uc.GetOutstandingCashAdvancesReport(h.ctx(c))
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Laporan Kas Bon Terbuka berhasil dimuat", items)
+}
+
+func (h *Handler) GetCashAdvanceDifferencesReport(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	items, err := uc.GetCashAdvanceDifferencesReport(h.ctx(c), c.Query("from"), c.Query("to"))
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Laporan Selisih Kas Bon berhasil dimuat", items)
+}
