@@ -147,7 +147,11 @@ type PurchaseInvoice struct {
 	VATAmount         float64 `gorm:"type:decimal(15,2);default:0" json:"vatAmount"`
 	VATCreditable     bool    `gorm:"default:false" json:"vatCreditable"`
 	PaidAmount        float64 `gorm:"type:decimal(15,2);default:0" json:"paidAmount"`
-	Status            string  `gorm:"type:varchar(50);default:'unpaid'" json:"status"`
+	// CreditedAmount is the value of goods returned to the supplier against
+	// this invoice (purchase returns / nota retur); the amount still owed is
+	// TotalAmount - CreditedAmount - PaidAmount.
+	CreditedAmount float64 `gorm:"type:decimal(15,2);not null;default:0" json:"creditedAmount"`
+	Status         string  `gorm:"type:varchar(50);default:'unpaid'" json:"status"`
 }
 
 func (PurchaseInvoice) TableName() string {
@@ -183,17 +187,23 @@ func (PurchaseDownPayment) TableName() string {
 // back to the supplier - e.g. damaged or wrong items.
 type PurchaseReturn struct {
 	types.BaseEntity
-	CompanyID      *uuid.UUID           `gorm:"type:uuid;index" json:"companyId,omitempty"`
-	TenantID       *uuid.UUID           `gorm:"type:uuid;index" json:"tenantId,omitempty"`
-	ReturnNo       string               `gorm:"type:varchar(50);not null;index" json:"returnNo"`
-	GoodsReceiptID uuid.UUID            `gorm:"type:uuid;not null;index" json:"goodsReceiptId"`
-	SupplierID     uuid.UUID            `gorm:"type:uuid;not null;index" json:"supplierId"`
-	SupplierName   string               `gorm:"type:varchar(255)" json:"supplierName"`
-	ReturnDate     string               `gorm:"type:varchar(50)" json:"returnDate"`
-	Reason         string               `gorm:"type:varchar(255)" json:"reason"`
-	Status         string               `gorm:"type:varchar(50);default:'draft'" json:"status"` // draft | completed
-	TotalAmount    float64              `gorm:"type:decimal(15,2);default:0" json:"totalAmount"`
-	Lines          []PurchaseReturnLine `gorm:"foreignKey:PurchaseReturnID" json:"lines,omitempty"`
+	CompanyID      *uuid.UUID `gorm:"type:uuid;index" json:"companyId,omitempty"`
+	TenantID       *uuid.UUID `gorm:"type:uuid;index" json:"tenantId,omitempty"`
+	ReturnNo       string     `gorm:"type:varchar(50);not null;index" json:"returnNo"`
+	GoodsReceiptID uuid.UUID  `gorm:"type:uuid;not null;index" json:"goodsReceiptId"`
+	SupplierID     uuid.UUID  `gorm:"type:uuid;not null;index" json:"supplierId"`
+	SupplierName   string     `gorm:"type:varchar(255)" json:"supplierName"`
+	ReturnDate     string     `gorm:"type:varchar(50)" json:"returnDate"`
+	Reason         string     `gorm:"type:varchar(255)" json:"reason"`
+	Status         string     `gorm:"type:varchar(50);default:'draft'" json:"status"` // draft | completed
+	TotalAmount    float64    `gorm:"type:decimal(15,2);default:0" json:"totalAmount"`
+	// Debit note (nota retur) against the PO's invoices: the invoiced part of
+	// the return incl. PPN, and the PPN Masukan reversed within it.
+	CreditedAmount float64 `gorm:"type:decimal(15,2);default:0" json:"creditedAmount"`
+	VATAmount      float64 `gorm:"type:decimal(15,2);default:0" json:"vatAmount"`
+	// CreditableVATAmount is the part of VATAmount that was booked as PPN Masukan.
+	CreditableVATAmount float64              `gorm:"type:decimal(15,2);default:0" json:"creditableVatAmount"`
+	Lines               []PurchaseReturnLine `gorm:"foreignKey:PurchaseReturnID" json:"lines,omitempty"`
 }
 
 func (PurchaseReturn) TableName() string {
@@ -284,6 +294,9 @@ type ProcurementRepository interface {
 	GetPurchaseReturnByID(ctx context.Context, id uuid.UUID) (*PurchaseReturn, error)
 	ListPurchaseReturns(ctx context.Context, query types.PaginationQuery) ([]PurchaseReturn, int64, error)
 	CountPurchaseReturns(ctx context.Context) (int64, error)
+	ListPurchaseReturnsByReceipt(ctx context.Context, goodsReceiptID uuid.UUID) ([]PurchaseReturn, error)
+	// ListPurchaseInvoicesByOrder returns the invoices of one PO, oldest first.
+	ListPurchaseInvoicesByOrder(ctx context.Context, orderID uuid.UUID) ([]PurchaseInvoice, error)
 
 	// Invoice receipts (Tanda Terima Nota)
 	CreateInvoiceReceipt(ctx context.Context, ir *InvoiceReceipt) error

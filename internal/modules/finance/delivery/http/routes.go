@@ -66,6 +66,15 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	cashVouchers.Post("/", h.CreateCashVoucher)
 	cashVouchers.Get("/", h.ListCashVouchers)
 	cashVouchers.Get("/:id", h.GetCashVoucher)
+	cashVouchers.Post("/:id/void", h.VoidCashVoucher)
+
+	tempAdvances := finance.Group("/temp-advances")
+	tempAdvances.Post("/", h.IssueTempAdvance)
+	tempAdvances.Get("/", h.ListTempAdvances)
+	tempAdvances.Get("/outstanding", h.OutstandingTempAdvances)
+	tempAdvances.Get("/:id", h.GetTempAdvance)
+	tempAdvances.Post("/:id/settle", h.SettleTempAdvance)
+	tempAdvances.Post("/:id/cancel", h.CancelTempAdvance)
 
 	reports := finance.Group("/reports")
 	reports.Get("/general-ledger", h.GeneralLedger)

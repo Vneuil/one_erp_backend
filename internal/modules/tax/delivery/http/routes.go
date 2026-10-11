@@ -24,6 +24,8 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	invoices.Get("/", h.ListTaxInvoices)
 	invoices.Get("/coretax-export", h.CoretaxExport)
 	invoices.Post("/from-sales-invoice", h.CreateFromSalesInvoice)
+	invoices.Post("/from-pos-transaction", h.CreateFromPOSTransaction)
+	invoices.Get("/pos-candidates", h.POSCandidates)
 	invoices.Post("/from-purchase-invoice", h.CreateFromPurchaseInvoice)
 	invoices.Get("/:id", h.GetTaxInvoice)
 	invoices.Put("/:id", h.UpdateDraft)

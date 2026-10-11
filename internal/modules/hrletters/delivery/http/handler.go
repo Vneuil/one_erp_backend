@@ -33,7 +33,7 @@ func (h *Handler) resolve(c *fiber.Ctx) (application.UseCase, error) {
 	if tenantDB == nil {
 		return nil, apperrors.NewBadRequest("No active company. Please select or provision a company first.")
 	}
-	return application.NewUseCase(infrastructure.NewRepository(tenantDB), hrmInfra.NewHRMRepository(tenantDB)), nil
+	return application.NewUseCase(infrastructure.NewRepository(tenantDB), hrmInfra.NewHRMRepository(tenantDB), application.WithOvertime(infrastructure.NewOvertimeSink(tenantDB))), nil
 }
 
 func (h *Handler) ctx(c *fiber.Ctx) context.Context {

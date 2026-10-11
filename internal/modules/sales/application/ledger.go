@@ -68,7 +68,7 @@ func InvoiceSubledgerDoc(inv *domain.Invoice) financeApp.SubledgerDoc {
 		DocNo:     inv.InvoiceNumber,
 		IssueDate: inv.InvoiceDate,
 		DueDate:   inv.DueDate,
-		Total:     inv.TotalAmount,
+		Total:     inv.TotalAmount - inv.CreditedAmount,
 		Paid:      inv.PaidAmount,
 	}
 }

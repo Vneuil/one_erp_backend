@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"time"
 
 	inventoryDomain "github.com/divinecoid/one-backend/internal/modules/inventory/domain"
 	"github.com/divinecoid/one-backend/internal/shared/types"
@@ -50,7 +51,11 @@ type BOMProcess struct {
 	Sequence        int       `gorm:"not null" json:"sequence"`
 	Name            string    `gorm:"type:varchar(100);not null" json:"name"`
 	StandardMinutes float64   `gorm:"type:decimal(10,2);default:0" json:"standardMinutes"`
-	Notes           string    `gorm:"type:varchar(255)" json:"notes,omitempty"`
+	// Conversion cost rates per standard hour: direct labour and factory
+	// overhead charged to Work in Process as units pass the step.
+	LaborRatePerHour    float64 `gorm:"type:decimal(15,2);default:0" json:"laborRatePerHour"`
+	OverheadRatePerHour float64 `gorm:"type:decimal(15,2);default:0" json:"overheadRatePerHour"`
+	Notes               string  `gorm:"type:varchar(255)" json:"notes,omitempty"`
 }
 
 func (BOMProcess) TableName() string { return "manufacturing_bom_processes" }
@@ -124,13 +129,30 @@ type ProductionStep struct {
 	Sequence        int       `gorm:"not null" json:"sequence"`
 	Name            string    `gorm:"type:varchar(100);not null" json:"name"`
 	StandardMinutes float64   `gorm:"type:decimal(10,2);default:0" json:"standardMinutes"`
-	QuantityDone    int       `gorm:"default:0" json:"quantityDone"`
-	Status          string    `gorm:"type:varchar(20);default:'pending'" json:"status"`
-	StartedDate     string    `gorm:"type:varchar(10)" json:"startedDate,omitempty"`
-	CompletedDate   string    `gorm:"type:varchar(10)" json:"completedDate,omitempty"`
+	// Rates copied from the BOM when the order is created, so later rate changes never rewrite an order's cost.
+	LaborRatePerHour    float64 `gorm:"type:decimal(15,2);default:0" json:"laborRatePerHour"`
+	OverheadRatePerHour float64 `gorm:"type:decimal(15,2);default:0" json:"overheadRatePerHour"`
+	QuantityDone        int     `gorm:"default:0" json:"quantityDone"`
+	Status              string  `gorm:"type:varchar(20);default:'pending'" json:"status"`
+	StartedDate         string  `gorm:"type:varchar(10)" json:"startedDate,omitempty"`
+	CompletedDate       string  `gorm:"type:varchar(10)" json:"completedDate,omitempty"`
 }
 
 func (ProductionStep) TableName() string { return "manufacturing_production_steps" }
+
+// UnitLabor / UnitOverhead are the standard direct labour and overhead cost of
+// taking one unit through this step: standard hours times the hourly rate.
+func (s ProductionStep) UnitLabor() float64    { return s.StandardMinutes / 60 * s.LaborRatePerHour }
+func (s ProductionStep) UnitOverhead() float64 { return s.StandardMinutes / 60 * s.OverheadRatePerHour }
+
+// ConversionPerUnit is the labour and overhead of taking one unit through every step of the order.
+func (o ProductionOrder) ConversionPerUnit() (labor, overhead float64) {
+	for _, s := range o.Steps {
+		labor += s.UnitLabor()
+		overhead += s.UnitOverhead()
+	}
+	return labor, overhead
+}
 
 // ProductionStepLog records units finishing a step on a date.
 type ProductionStepLog struct {
@@ -141,6 +163,11 @@ type ProductionStepLog struct {
 	Date      string    `gorm:"type:varchar(10);not null;index" json:"date"`
 	Notes     string    `gorm:"type:varchar(255)" json:"notes,omitempty"`
 	CreatedBy string    `gorm:"type:varchar(255)" json:"createdBy,omitempty"`
+	// Voided logs are kept for the record but no longer count towards the step, the reports or WIP.
+	Voided     bool       `gorm:"not null;default:false;index" json:"voided"`
+	VoidedAt   *time.Time `json:"voidedAt,omitempty"`
+	VoidedBy   string     `gorm:"type:varchar(255)" json:"voidedBy,omitempty"`
+	VoidReason string     `gorm:"type:varchar(255)" json:"voidReason,omitempty"`
 }
 
 func (ProductionStepLog) TableName() string { return "manufacturing_production_step_logs" }
@@ -152,6 +179,15 @@ type ProductionBatch struct {
 	QuantityCompleted int       `gorm:"not null" json:"quantityCompleted"`
 	CompletionDate    string    `gorm:"type:varchar(50)" json:"completionDate"`
 	Notes             string    `gorm:"type:varchar(255)" json:"notes"`
+	// UnitCost is the full cost per finished unit (material plus conversion) folded into the
+	// product's cost price when this batch was completed; CostApplied says whether it was.
+	UnitCost    float64 `gorm:"type:decimal(15,2);default:0" json:"unitCost"`
+	CostApplied bool    `gorm:"not null;default:false" json:"costApplied"`
+	// Voided batches stay on record; their stock, cost and journal have been reversed.
+	Voided     bool       `gorm:"not null;default:false;index" json:"voided"`
+	VoidedAt   *time.Time `json:"voidedAt,omitempty"`
+	VoidedBy   string     `gorm:"type:varchar(255)" json:"voidedBy,omitempty"`
+	VoidReason string     `gorm:"type:varchar(255)" json:"voidReason,omitempty"`
 }
 
 func (ProductionBatch) TableName() string {
@@ -175,7 +211,12 @@ type ManufacturingRepository interface {
 	// Routing steps and their logs
 	UpdateStep(ctx context.Context, s *ProductionStep) error
 	CreateStepLog(ctx context.Context, l *ProductionStepLog) error
+	// ListStepLogs returns the logs dated in the range that have not been voided.
 	ListStepLogs(ctx context.Context, from, to string) ([]ProductionStepLog, error)
+	// ListOrderStepLogs returns every log of one order, voided ones included, oldest first.
+	ListOrderStepLogs(ctx context.Context, orderID uuid.UUID) ([]ProductionStepLog, error)
+	GetStepLog(ctx context.Context, id uuid.UUID) (*ProductionStepLog, error)
+	VoidStepLog(ctx context.Context, l *ProductionStepLog) error
 	ListBatchesBetween(ctx context.Context, from, to string) ([]ProductionBatch, error)
 	// ListAllOrders returns every production order with its steps, for reports.
 	ListAllOrders(ctx context.Context) ([]ProductionOrder, error)
@@ -184,6 +225,10 @@ type ManufacturingRepository interface {
 	// Production batches
 	CreateBatch(ctx context.Context, b *ProductionBatch) error
 	ListBatchesByOrder(ctx context.Context, orderID uuid.UUID) ([]ProductionBatch, error)
+	GetBatch(ctx context.Context, id uuid.UUID) (*ProductionBatch, error)
+	VoidBatch(ctx context.Context, b *ProductionBatch) error
+	// SetBatchCost records the unit cost folded into the product's cost price.
+	SetBatchCost(ctx context.Context, id uuid.UUID, unitCost float64, applied bool) error
 
 	// Dashboard aggregates
 	CountOrdersByStatus(ctx context.Context) (map[string]int64, error)

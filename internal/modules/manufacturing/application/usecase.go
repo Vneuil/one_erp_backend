@@ -32,7 +32,11 @@ type ManufacturingUseCase interface {
 	ResumeOrder(ctx context.Context, id uuid.UUID) (*ProductionOrderResponseDTO, error)
 	CancelOrder(ctx context.Context, id uuid.UUID) (*ProductionOrderResponseDTO, error)
 	CompleteBatch(ctx context.Context, orderID uuid.UUID, dto CompleteBatchDTO) (*ProductionOrderResponseDTO, error)
+	VoidBatch(ctx context.Context, orderID, batchID uuid.UUID, reason string) (*ProductionOrderResponseDTO, error)
+	ListBatches(ctx context.Context, orderID uuid.UUID) ([]domain.ProductionBatch, error)
 	LogStep(ctx context.Context, orderID, stepID uuid.UUID, dto LogStepDTO) (*ProductionOrderResponseDTO, error)
+	ListStepLogs(ctx context.Context, orderID uuid.UUID) ([]domain.ProductionStepLog, error)
+	VoidStepLog(ctx context.Context, orderID, logID uuid.UUID, reason string) (*ProductionOrderResponseDTO, error)
 
 	// Reports
 	DailyReport(ctx context.Context, from, to string) (*DailyReportDTO, error)
@@ -107,7 +111,7 @@ func (uc *manufacturingUseCase) toBOMResponse(ctx context.Context, b *domain.Bil
 	}
 	processes := make([]BOMProcessResponseDTO, len(b.Processes))
 	for i, p := range b.Processes {
-		processes[i] = BOMProcessResponseDTO{ID: p.ID, Sequence: p.Sequence, Name: p.Name, StandardMinutes: p.StandardMinutes, Notes: p.Notes}
+		processes[i] = BOMProcessResponseDTO{ID: p.ID, Sequence: p.Sequence, Name: p.Name, StandardMinutes: p.StandardMinutes, LaborRatePerHour: p.LaborRatePerHour, OverheadRatePerHour: p.OverheadRatePerHour, Notes: p.Notes}
 	}
 	return &BOMResponseDTO{
 		ID: b.ID, ProductID: b.ProductID, ProductSKU: sku, ProductName: name,
@@ -142,7 +146,13 @@ func (uc *manufacturingUseCase) CreateBOM(ctx context.Context, dto CreateBOMDTO)
 		if name == "" || p.StandardMinutes < 0 {
 			return nil, apperrors.NewBadRequest("Each process step needs a name and a non-negative standard time")
 		}
-		processes = append(processes, domain.BOMProcess{Sequence: i + 1, Name: name, StandardMinutes: p.StandardMinutes, Notes: strings.TrimSpace(p.Notes)})
+		if p.LaborRatePerHour < 0 || p.OverheadRatePerHour < 0 {
+			return nil, apperrors.NewBadRequest("Labour and overhead rates cannot be negative")
+		}
+		if (p.LaborRatePerHour > 0 || p.OverheadRatePerHour > 0) && p.StandardMinutes <= 0 {
+			return nil, apperrors.NewBadRequest("Step " + name + " has a labour/overhead rate but no standard time to apply it to")
+		}
+		processes = append(processes, domain.BOMProcess{Sequence: i + 1, Name: name, StandardMinutes: p.StandardMinutes, LaborRatePerHour: p.LaborRatePerHour, OverheadRatePerHour: p.OverheadRatePerHour, Notes: strings.TrimSpace(p.Notes)})
 	}
 	version := dto.Version
 	if version == "" {
@@ -244,7 +254,7 @@ func (uc *manufacturingUseCase) CreateOrder(ctx context.Context, dto CreateProdu
 	}
 	steps := make([]domain.ProductionStep, len(bom.Processes))
 	for i, p := range bom.Processes {
-		steps[i] = domain.ProductionStep{Sequence: i + 1, Name: p.Name, StandardMinutes: p.StandardMinutes, Status: domain.StepPending}
+		steps[i] = domain.ProductionStep{Sequence: i + 1, Name: p.Name, StandardMinutes: p.StandardMinutes, LaborRatePerHour: p.LaborRatePerHour, OverheadRatePerHour: p.OverheadRatePerHour, Status: domain.StepPending}
 	}
 	o := &domain.ProductionOrder{
 		BOMID:             dto.BOMID,
@@ -539,9 +549,7 @@ func (uc *manufacturingUseCase) CompleteBatch(ctx context.Context, orderID uuid.
 	if err != nil {
 		return nil, err
 	}
-	if issuedMode {
-		uc.postFinishedGoods(ctx, result, bom, batchID, dto.QuantityCompleted, completionDate)
-	}
+	uc.postFinishedGoods(ctx, result, bom, batchID, dto.QuantityCompleted, completionDate, issuedMode)
 	return uc.toOrderResponse(ctx, result), nil
 }
 
@@ -570,12 +578,27 @@ func (uc *manufacturingUseCase) materialCostPerUnit(ctx context.Context, bom *do
 	return cost
 }
 
-// postFinishedGoods books a batch out of WIP. A failure is logged and does not undo the production.
-func (uc *manufacturingUseCase) postFinishedGoods(ctx context.Context, o *domain.ProductionOrder, bom *domain.BillOfMaterial, batchID uuid.UUID, qty int, date string) {
+// postFinishedGoods books a batch out of WIP into Inventory: the issued
+// materials (orders whose materials were issued beforehand) plus the labour and
+// overhead the batch's units collected on their way through the routing. A
+// failure is logged and does not undo the production.
+func (uc *manufacturingUseCase) postFinishedGoods(ctx context.Context, o *domain.ProductionOrder, bom *domain.BillOfMaterial, batchID uuid.UUID, qty int, date string, issuedMode bool) {
+	labor, overhead := o.ConversionPerUnit()
+	conversion := labor + overhead
+	material := uc.materialCostPerUnit(ctx, bom)
+	if conversion > 0 {
+		applied := uc.updateProductCost(ctx, bom.ProductID, qty, material+conversion)
+		if err := uc.repo.SetBatchCost(ctx, batchID, round2(material+conversion), applied); err != nil {
+			slog.Error("manufacturing: failed to record the batch unit cost", "batch", batchID, "error", err)
+		}
+	}
 	if uc.ledger == nil {
 		return
 	}
-	cost := uc.materialCostPerUnit(ctx, bom) * float64(qty)
+	cost := conversion * float64(qty)
+	if issuedMode {
+		cost += material * float64(qty)
+	}
 	if cost <= 0 {
 		return
 	}

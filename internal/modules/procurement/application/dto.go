@@ -260,6 +260,7 @@ type PurchaseInvoiceResponseDTO struct {
 	VATAmount           float64    `json:"vatAmount"`
 	VATCreditable       bool       `json:"vatCreditable"`
 	PaidAmount          float64    `json:"paidAmount"`
+	CreditedAmount      float64    `json:"creditedAmount"`
 	Outstanding         float64    `json:"outstanding"`
 	Status              string     `json:"status"`
 	CreatedAt           time.Time  `json:"createdAt"`
@@ -273,7 +274,7 @@ func ToPurchaseInvoiceResponse(inv *domain.PurchaseInvoice, poNumber string) *Pu
 		ID: inv.ID, SupplierID: inv.SupplierID, SupplierName: inv.SupplierName, PurchaseOrderID: inv.PurchaseOrderID,
 		PurchaseOrderNumber: poNumber,
 		InvoiceNumber:       inv.InvoiceNumber, InvoiceDate: inv.InvoiceDate, DueDate: inv.DueDate,
-		TotalAmount: inv.TotalAmount, PaidAmount: inv.PaidAmount, Outstanding: inv.TotalAmount - inv.PaidAmount,
+		TotalAmount: inv.TotalAmount, PaidAmount: inv.PaidAmount, CreditedAmount: inv.CreditedAmount, Outstanding: inv.TotalAmount - inv.CreditedAmount - inv.PaidAmount,
 		Subtotal: inv.Subtotal, DiscountAmount: inv.DiscountAmount, AdditionalCost: inv.AdditionalCost, RoundingAmount: inv.RoundingAmount,
 		TaxBase: inv.TaxBase, DPPOtherValue: inv.DPPOtherValue, VATRate: inv.VATRate, VATOtherValueBase: inv.VATOtherValueBase,
 		VATAmount: inv.VATAmount, VATCreditable: inv.VATCreditable,
@@ -375,6 +376,8 @@ type PurchaseReturnResponseDTO struct {
 	Reason         string                          `json:"reason"`
 	Status         string                          `json:"status"`
 	TotalAmount    float64                         `json:"totalAmount"`
+	CreditedAmount float64                         `json:"creditedAmount"`
+	VATAmount      float64                         `json:"vatAmount"`
 	Lines          []PurchaseReturnLineResponseDTO `json:"lines,omitempty"`
 	CreatedAt      time.Time                       `json:"createdAt"`
 }
@@ -392,7 +395,7 @@ func ToPurchaseReturnResponse(r *domain.PurchaseReturn) *PurchaseReturnResponseD
 	return &PurchaseReturnResponseDTO{
 		ID: r.ID, ReturnNo: r.ReturnNo, GoodsReceiptID: r.GoodsReceiptID, SupplierID: r.SupplierID,
 		SupplierName: r.SupplierName, ReturnDate: r.ReturnDate, Reason: r.Reason, Status: r.Status,
-		TotalAmount: r.TotalAmount, Lines: lines, CreatedAt: r.CreatedAt,
+		TotalAmount: r.TotalAmount, CreditedAmount: r.CreditedAmount, VATAmount: r.VATAmount, Lines: lines, CreatedAt: r.CreatedAt,
 	}
 }
 

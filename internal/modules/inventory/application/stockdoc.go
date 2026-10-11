@@ -82,6 +82,10 @@ type StockDocumentResponseDTO struct {
 	Notes             string                 `json:"notes"`
 	TotalValue        float64                `json:"totalValue"`
 	Posted            bool                   `json:"posted"`
+	Voided            bool                   `json:"voided"`
+	VoidedAt          *time.Time             `json:"voidedAt,omitempty"`
+	VoidedBy          string                 `json:"voidedBy,omitempty"`
+	VoidReason        string                 `json:"voidReason,omitempty"`
 	CreatedBy         string                 `json:"createdBy,omitempty"`
 	Lines             []StockDocumentLineDTO `json:"lines"`
 	CreatedAt         time.Time              `json:"createdAt"`
@@ -293,7 +297,8 @@ func (uc *inventoryUseCase) toStockDocumentResponse(ctx context.Context, d *doma
 	}
 	return &StockDocumentResponseDTO{ID: d.ID, Number: d.Number, Type: d.Type, TypeLabel: kind.label, Direction: dir, Date: d.Date,
 		WarehouseID: d.WarehouseID, WarehouseName: uc.warehouseName(ctx, d.WarehouseID), Reference: d.Reference, ProductionOrderID: d.ProductionOrderID, Reason: d.Reason, Notes: d.Notes,
-		TotalValue: d.TotalValue, Posted: d.Posted, CreatedBy: d.CreatedBy, Lines: lines, CreatedAt: d.CreatedAt}
+		TotalValue: d.TotalValue, Posted: d.Posted, Voided: d.Voided, VoidedAt: d.VoidedAt, VoidedBy: d.VoidedBy, VoidReason: d.VoidReason,
+		CreatedBy: d.CreatedBy, Lines: lines, CreatedAt: d.CreatedAt}
 }
 
 func (uc *inventoryUseCase) GetStockDocument(ctx context.Context, id uuid.UUID) (*StockDocumentResponseDTO, error) {

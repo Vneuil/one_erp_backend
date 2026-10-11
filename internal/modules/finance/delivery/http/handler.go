@@ -753,6 +753,28 @@ func (h *Handler) GetCashVoucher(c *fiber.Ctx) error {
 	return response.OK(c, "Cash voucher retrieved", v)
 }
 
+func (h *Handler) VoidCashVoucher(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid id format")
+	}
+	var in struct {
+		Reason string `json:"reason"`
+	}
+	if err := c.BodyParser(&in); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	v, err := uc.VoidCashVoucher(h.ctx(c), id, in.Reason)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Cash voucher voided", v)
+}
+
 func (h *Handler) ListCashVouchers(c *fiber.Ctx) error {
 	uc, err := h.resolve(c)
 	if err != nil {
@@ -763,6 +785,100 @@ func (h *Handler) ListCashVouchers(c *fiber.Ctx) error {
 		return err
 	}
 	return response.OK(c, "Cash vouchers retrieved", v)
+}
+
+// Temporary cash advances (KBS)
+
+func (h *Handler) IssueTempAdvance(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var in application.TempAdvanceInput
+	if err := c.BodyParser(&in); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	a, err := uc.IssueTempAdvance(h.ctx(c), in)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Cash advance recorded", a)
+}
+
+func (h *Handler) SettleTempAdvance(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid id format")
+	}
+	var in application.TempAdvanceSettleInput
+	if err := c.BodyParser(&in); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	a, err := uc.SettleTempAdvance(h.ctx(c), id, in)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Cash advance settled", a)
+}
+
+func (h *Handler) CancelTempAdvance(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid id format")
+	}
+	a, err := uc.CancelTempAdvance(h.ctx(c), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Cash advance cancelled", a)
+}
+
+func (h *Handler) GetTempAdvance(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid id format")
+	}
+	a, err := uc.GetTempAdvance(h.ctx(c), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Cash advance retrieved", a)
+}
+
+func (h *Handler) ListTempAdvances(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	out, err := uc.ListTempAdvances(h.ctx(c), c.Query("status"), c.Query("from"), c.Query("to"))
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Cash advances retrieved", out)
+}
+
+func (h *Handler) OutstandingTempAdvances(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	out, err := uc.OutstandingTempAdvances(h.ctx(c), c.Query("asOf"))
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Outstanding cash advances retrieved", out)
 }
 
 // Statutory reports

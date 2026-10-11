@@ -30,6 +30,8 @@ type AssetsUseCase interface {
 	ListAssets(ctx context.Context, query types.PaginationQuery) ([]AssetResponseDTO, types.PaginationMeta, error)
 	UpdateAsset(ctx context.Context, id uuid.UUID, dto UpdateAssetDTO) (*AssetResponseDTO, error)
 	UpdateAssetStatus(ctx context.Context, id uuid.UUID, dto UpdateAssetStatusDTO) (*AssetResponseDTO, error)
+	PostAcquisition(ctx context.Context, id uuid.UUID, dto PostAcquisitionDTO) (*AssetResponseDTO, error)
+	DisposeAsset(ctx context.Context, id uuid.UUID, dto DisposeAssetDTO) (*AssetResponseDTO, error)
 	RecalculateDepreciation(ctx context.Context, id uuid.UUID) (*AssetResponseDTO, error)
 	RecalculateAllDepreciation(ctx context.Context) ([]AssetResponseDTO, error)
 	PostDepreciation(ctx context.Context, period string, catchUp bool) (*DepreciationPostResultDTO, error)
@@ -135,8 +137,21 @@ func (uc *assetsUseCase) CreateAsset(ctx context.Context, dto CreateAssetDTO) (*
 		Status:                  "In Use",
 	}
 
+	if dto.FundingSource != "" {
+		if _, ok := fundingAccounts[dto.FundingSource]; !ok {
+			return nil, apperrors.NewBadRequest("Funding source must be one of cash, payable, equity")
+		}
+		if dto.PurchasePrice <= 0 {
+			return nil, apperrors.NewBadRequest("Purchase price must be positive to post an acquisition")
+		}
+	}
 	if err := uc.repo.CreateAsset(ctx, a); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to create asset")
+	}
+	if dto.FundingSource != "" {
+		if err := uc.postAcquisition(ctx, a, dto.FundingSource, purchaseDate); err != nil {
+			return nil, apperrors.NewInternal(err, "Asset saved but its acquisition journal failed; retry with post-acquisition")
+		}
 	}
 	return ToAssetResponse(a), nil
 }
@@ -189,6 +204,9 @@ func (uc *assetsUseCase) UpdateAsset(ctx context.Context, id uuid.UUID, dto Upda
 		a.PurchaseDate = dto.PurchaseDate
 	}
 	if dto.PurchasePrice != nil {
+		if a.AcquisitionDoc != "" && *dto.PurchasePrice != a.PurchasePrice {
+			return nil, apperrors.NewBadRequest("Purchase price cannot change after the acquisition is posted to the ledger")
+		}
 		a.PurchasePrice = *dto.PurchasePrice
 	}
 	if dto.UsefulLifeYears != nil {
@@ -216,6 +234,9 @@ func (uc *assetsUseCase) UpdateAssetStatus(ctx context.Context, id uuid.UUID, dt
 	}
 	if a == nil {
 		return nil, apperrors.NewNotFound("Asset not found")
+	}
+	if dto.Status == "Disposed" && a.Status != "Disposed" {
+		return nil, apperrors.NewBadRequest("Use the dispose action to sell or write off an asset so it is journalled")
 	}
 	a.Status = dto.Status
 	if err := uc.repo.UpdateAsset(ctx, a); err != nil {

@@ -538,3 +538,25 @@ func (h *Handler) ImportOpnameCounts(c *fiber.Ctx) error {
 	}
 	return response.OK(c, "Opname counts imported", res)
 }
+
+func (h *Handler) VoidStockDocument(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var in struct {
+		Reason string `json:"reason"`
+	}
+	if err := c.BodyParser(&in); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	d, err := uc.VoidStockDocument(h.ctx(c), id, in.Reason)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Stock document voided", d)
+}

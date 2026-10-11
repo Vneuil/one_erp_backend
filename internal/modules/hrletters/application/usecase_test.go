@@ -429,3 +429,57 @@ func TestIndonesianFormatting(t *testing.T) {
 		}
 	}
 }
+
+type memOvertime struct {
+	filed   []OvertimeOrdered
+	revoked []string
+	busy    map[string]bool // nip -> already has overtime that day
+}
+
+func (m *memOvertime) Record(_ context.Context, o OvertimeOrdered) (bool, error) {
+	if m.busy[o.NIP] {
+		return false, nil
+	}
+	m.filed = append(m.filed, o)
+	return true, nil
+}
+func (m *memOvertime) Revoke(_ context.Context, nip, date, ref string) error {
+	m.revoked = append(m.revoked, nip+"|"+date+"|"+ref)
+	return nil
+}
+
+func TestIssuedOvertimeOrderFilesApprovedOvertimeAndCancelWithdrawsIt(t *testing.T) {
+	f := newFixture()
+	sink := &memOvertime{busy: map[string]bool{"EMP-002": true}}
+	f.uc.overtime = sink
+	ctx := context.Background()
+	l, err := f.uc.Create(ctx, LetterInput{Type: domain.TypeOvertimeOrder, Date: "2026-03-20", SignerName: "Kepala Produksi", RecipientIDs: []uuid.UUID{f.emp.ID, f.other.ID},
+		Data: domain.LetterData{WorkDate: "2026-03-21", StartTime: "17:00", EndTime: "21:30", Tasks: "Mengejar order"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sink.filed) != 0 {
+		t.Fatal("a draft files no overtime")
+	}
+	issued, err := f.uc.Issue(ctx, l.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sink.filed) != 1 || sink.filed[0].NIP != "EMP-001" || sink.filed[0].Minutes != 270 || sink.filed[0].Date != "2026-03-21" || sink.filed[0].Reference != issued.Number {
+		t.Fatalf("filed: %+v", sink.filed)
+	}
+	if _, err := f.uc.Cancel(ctx, l.ID, "dibatalkan"); err != nil {
+		t.Fatal(err)
+	}
+	if len(sink.revoked) != 2 || !strings.HasSuffix(sink.revoked[0], issued.Number) {
+		t.Fatalf("revoked: %v", sink.revoked)
+	}
+	// Cancelling a draft withdraws nothing.
+	d, _ := f.uc.Create(ctx, LetterInput{Type: domain.TypeOvertimeOrder, Date: "2026-03-20", SignerName: "X", RecipientIDs: []uuid.UUID{f.emp.ID},
+		Data: domain.LetterData{WorkDate: "2026-03-22", StartTime: "17:00", EndTime: "19:00", Tasks: "t"}})
+	before := len(sink.revoked)
+	f.uc.Cancel(ctx, d.ID, "")
+	if len(sink.revoked) != before {
+		t.Fatal("a draft was never filed, so nothing is withdrawn")
+	}
+}

@@ -120,13 +120,35 @@ func (r *manufacturingRepository) CreateStepLog(ctx context.Context, l *domain.P
 
 func (r *manufacturingRepository) ListStepLogs(ctx context.Context, from, to string) ([]domain.ProductionStepLog, error) {
 	var out []domain.ProductionStepLog
-	err := r.db.WithContext(ctx).Where("date >= ? AND date <= ?", from, to).Order("date asc, created_at asc").Find(&out).Error
+	err := r.db.WithContext(ctx).Where("voided = false AND date >= ? AND date <= ?", from, to).Order("date asc, created_at asc").Find(&out).Error
 	return out, err
+}
+
+func (r *manufacturingRepository) ListOrderStepLogs(ctx context.Context, orderID uuid.UUID) ([]domain.ProductionStepLog, error) {
+	var out []domain.ProductionStepLog
+	err := r.db.WithContext(ctx).Where("order_id = ?", orderID).Order("created_at asc").Find(&out).Error
+	return out, err
+}
+
+func (r *manufacturingRepository) GetStepLog(ctx context.Context, id uuid.UUID) (*domain.ProductionStepLog, error) {
+	var l domain.ProductionStepLog
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&l).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &l, nil
+}
+
+func (r *manufacturingRepository) VoidStepLog(ctx context.Context, l *domain.ProductionStepLog) error {
+	return r.db.WithContext(ctx).Model(&domain.ProductionStepLog{}).Where("id = ?", l.ID).
+		Updates(map[string]any{"voided": true, "voided_at": l.VoidedAt, "voided_by": l.VoidedBy, "void_reason": l.VoidReason}).Error
 }
 
 func (r *manufacturingRepository) ListBatchesBetween(ctx context.Context, from, to string) ([]domain.ProductionBatch, error) {
 	var out []domain.ProductionBatch
-	err := r.db.WithContext(ctx).Where("completion_date >= ? AND completion_date <= ?", from, to).Order("completion_date asc, created_at asc").Find(&out).Error
+	err := r.db.WithContext(ctx).Where("voided = false AND completion_date >= ? AND completion_date <= ?", from, to).Order("completion_date asc, created_at asc").Find(&out).Error
 	return out, err
 }
 
@@ -153,6 +175,27 @@ func (r *manufacturingRepository) ListBatchesByOrder(ctx context.Context, orderI
 	var batches []domain.ProductionBatch
 	err := r.db.WithContext(ctx).Where("production_order_id = ?", orderID).Order("created_at desc").Find(&batches).Error
 	return batches, err
+}
+
+func (r *manufacturingRepository) GetBatch(ctx context.Context, id uuid.UUID) (*domain.ProductionBatch, error) {
+	var b domain.ProductionBatch
+	if err := r.db.WithContext(ctx).Where("id = ?", id).First(&b).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &b, nil
+}
+
+func (r *manufacturingRepository) VoidBatch(ctx context.Context, b *domain.ProductionBatch) error {
+	return r.db.WithContext(ctx).Model(&domain.ProductionBatch{}).Where("id = ?", b.ID).
+		Updates(map[string]any{"voided": true, "voided_at": b.VoidedAt, "voided_by": b.VoidedBy, "void_reason": b.VoidReason}).Error
+}
+
+func (r *manufacturingRepository) SetBatchCost(ctx context.Context, id uuid.UUID, unitCost float64, applied bool) error {
+	return r.db.WithContext(ctx).Model(&domain.ProductionBatch{}).Where("id = ?", id).
+		Updates(map[string]any{"unit_cost": unitCost, "cost_applied": applied}).Error
 }
 
 // Dashboard aggregates
@@ -188,7 +231,7 @@ func (r *manufacturingRepository) CountActiveBOMs(ctx context.Context) (int64, e
 func (r *manufacturingRepository) SumQuantityCompletedSince(ctx context.Context, since string) (int64, error) {
 	var total int64
 	err := r.db.WithContext(ctx).Model(&domain.ProductionBatch{}).
-		Where("completion_date >= ?", since).
+		Where("voided = false AND completion_date >= ?", since).
 		Select("COALESCE(SUM(quantity_completed), 0)").
 		Scan(&total).Error
 	return total, err

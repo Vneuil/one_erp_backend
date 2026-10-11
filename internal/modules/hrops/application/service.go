@@ -457,7 +457,12 @@ func (s *Service) DetectOvertime(ctx context.Context, period string) (int, error
 		if err != nil {
 			return created, apperrors.NewInternal(err, "Failed to check existing overtime")
 		}
-		if exists {
+		// A day covered by an overtime order is already authorised and filed.
+		ordered, err := s.repo.OvertimeExists(ctx, a.NIP, a.Date, "order")
+		if err != nil {
+			return created, apperrors.NewInternal(err, "Failed to check existing overtime")
+		}
+		if exists || ordered {
 			continue
 		}
 		v := &domain.OvertimeRecord{NIP: a.NIP, EmployeeName: a.EmployeeName, Date: a.Date, Minutes: mins, Source: "auto",

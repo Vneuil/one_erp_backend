@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/divinecoid/one-backend/internal/modules/finance/domain"
 	"github.com/divinecoid/one-backend/internal/shared/actor"
@@ -165,4 +166,45 @@ func (uc *financeUseCase) ListCashVouchers(ctx context.Context, typ, from, to st
 		return nil, apperrors.NewInternal(err, "Failed to list cash vouchers")
 	}
 	return out, nil
+}
+
+const CashVoucherVoidSourcePrefix = "cash-voucher-void:"
+
+// CashVoucherVoidEntry is the voucher's journal with debit and credit swapped.
+func CashVoucherVoidEntry(v *domain.CashVoucher) LedgerEntry {
+	e := CashVoucherLedgerEntry(v)
+	lines := make([]LedgerLine, len(e.Lines))
+	for i, l := range e.Lines {
+		lines[i] = LedgerLine{AccountCode: l.AccountCode, Debit: l.Credit, Credit: l.Debit, Description: "Batal " + l.Description}
+	}
+	return LedgerEntry{SourceDoc: CashVoucherVoidSourcePrefix + v.ID.String(), Memo: "Pembatalan " + e.Memo, Lines: lines}
+}
+
+// VoidCashVoucher cancels a voucher: its journal entry is reversed by an
+// entry dated today (closed periods stay untouched) and the voucher stays on
+// record marked void. To correct a voucher, void it and record the right one.
+func (uc *financeUseCase) VoidCashVoucher(ctx context.Context, id uuid.UUID, reason string) (*domain.CashVoucher, error) {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return nil, apperrors.NewBadRequest("A reason is required to void a voucher")
+	}
+	v, err := uc.GetCashVoucher(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if v.Voided {
+		return nil, apperrors.NewConflict("This voucher is already voided")
+	}
+	if v.Posted {
+		e := CashVoucherVoidEntry(v)
+		if err := NewLedgerPoster(uc.repo).PostEntryOn(ctx, time.Now().Format("2006-01-02"), e.SourceDoc, e.Memo, e.Lines); err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to reverse the voucher in the ledger; nothing was changed")
+		}
+	}
+	now := time.Now()
+	v.Voided, v.VoidedAt, v.VoidedBy, v.VoidReason = true, &now, actor.EmailFrom(ctx), reason
+	if err := uc.repo.VoidCashVoucher(ctx, v); err != nil {
+		return v, apperrors.NewInternal(err, "The journal was reversed but the voucher could not be marked void; void it again to finish")
+	}
+	return v, nil
 }

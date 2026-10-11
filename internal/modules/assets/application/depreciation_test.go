@@ -35,7 +35,13 @@ func (r *fakeAssetsRepo) CreateDepreciationPosting(_ context.Context, p *domain.
 
 type fakeLedger struct {
 	financeApp.LedgerPoster
-	docs map[string][]financeApp.LedgerLine
+	docs        map[string][]financeApp.LedgerLine
+	receivables []financeApp.SubledgerDoc
+}
+
+func (l *fakeLedger) UpsertReceivable(_ context.Context, d financeApp.SubledgerDoc) error {
+	l.receivables = append(l.receivables, d)
+	return nil
 }
 
 func (l *fakeLedger) PostEntryOn(_ context.Context, _, doc, _ string, lines []financeApp.LedgerLine) error {

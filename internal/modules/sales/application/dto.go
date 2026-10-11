@@ -218,6 +218,7 @@ type InvoiceResponseDTO struct {
 	VATOtherValueBase bool       `json:"vatOtherValueBase"`
 	VATAmount         float64    `json:"vatAmount"`
 	PaidAmount        float64    `json:"paidAmount"`
+	CreditedAmount    float64    `json:"creditedAmount"`
 	Outstanding       float64    `json:"outstanding"`
 	Status            string     `json:"status"`
 	SalesOrderID      *uuid.UUID `json:"salesOrderId,omitempty"`
@@ -233,7 +234,7 @@ func ToInvoiceResponse(inv *domain.Invoice) *InvoiceResponseDTO {
 		InvoiceDate: inv.InvoiceDate, DueDate: inv.DueDate, TotalAmount: inv.TotalAmount,
 		Subtotal: inv.Subtotal, DiscountAmount: inv.DiscountAmount, AdditionalCost: inv.AdditionalCost, RoundingAmount: inv.RoundingAmount,
 		TaxBase: inv.TaxBase, DPPOtherValue: inv.DPPOtherValue, VATRate: inv.VATRate, VATOtherValueBase: inv.VATOtherValueBase, VATAmount: inv.VATAmount,
-		PaidAmount: inv.PaidAmount, Outstanding: inv.TotalAmount - inv.PaidAmount,
+		PaidAmount: inv.PaidAmount, CreditedAmount: inv.CreditedAmount, Outstanding: inv.TotalAmount - inv.CreditedAmount - inv.PaidAmount,
 		Status: inv.Status, SalesOrderID: inv.SalesOrderID, CreatedAt: inv.CreatedAt,
 	}
 }
@@ -382,16 +383,19 @@ type SalesReturnLineResponseDTO struct {
 }
 
 type SalesReturnResponseDTO struct {
-	ID           uuid.UUID                    `json:"id"`
-	ReturnNo     string                       `json:"returnNo"`
-	DeliveryID   uuid.UUID                    `json:"deliveryId"`
-	CustomerName string                       `json:"customerName"`
-	ReturnDate   string                       `json:"returnDate"`
-	Reason       string                       `json:"reason"`
-	Status       string                       `json:"status"`
-	TotalAmount  float64                      `json:"totalAmount"`
-	Lines        []SalesReturnLineResponseDTO `json:"lines,omitempty"`
-	CreatedAt    time.Time                    `json:"createdAt"`
+	ID             uuid.UUID                    `json:"id"`
+	ReturnNo       string                       `json:"returnNo"`
+	DeliveryID     uuid.UUID                    `json:"deliveryId"`
+	CustomerName   string                       `json:"customerName"`
+	ReturnDate     string                       `json:"returnDate"`
+	Reason         string                       `json:"reason"`
+	Status         string                       `json:"status"`
+	TotalAmount    float64                      `json:"totalAmount"`
+	CreditedAmount float64                      `json:"creditedAmount"`
+	VATAmount      float64                      `json:"vatAmount"`
+	CostAmount     float64                      `json:"costAmount"`
+	Lines          []SalesReturnLineResponseDTO `json:"lines,omitempty"`
+	CreatedAt      time.Time                    `json:"createdAt"`
 }
 
 func ToSalesReturnResponse(r *domain.SalesReturn) *SalesReturnResponseDTO {
@@ -407,7 +411,7 @@ func ToSalesReturnResponse(r *domain.SalesReturn) *SalesReturnResponseDTO {
 	return &SalesReturnResponseDTO{
 		ID: r.ID, ReturnNo: r.ReturnNo, DeliveryID: r.DeliveryID, CustomerName: r.CustomerName,
 		ReturnDate: r.ReturnDate, Reason: r.Reason, Status: r.Status, TotalAmount: r.TotalAmount,
-		Lines: lines, CreatedAt: r.CreatedAt,
+		CreditedAmount: r.CreditedAmount, VATAmount: r.VATAmount, CostAmount: r.CostAmount, Lines: lines, CreatedAt: r.CreatedAt,
 	}
 }
 

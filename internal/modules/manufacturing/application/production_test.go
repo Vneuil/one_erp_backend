@@ -107,6 +107,15 @@ func (m *memInv) CreateMovement(_ context.Context, mv *inventoryDomain.StockMove
 func (m *memInv) GetWarehouseByID(context.Context, uuid.UUID) (*inventoryDomain.Warehouse, error) {
 	return &inventoryDomain.Warehouse{Name: "Pabrik"}, nil
 }
+func (m *memInv) SumQuantityByProduct(_ context.Context, p uuid.UUID) (int, error) {
+	total := 0
+	for k, l := range m.levels {
+		if k[0] == p {
+			total += l.Quantity
+		}
+	}
+	return total, nil
+}
 func (m *memInv) SumIssuedByOrder(_ context.Context, id uuid.UUID) (map[uuid.UUID]int, error) {
 	return m.issued[id], nil
 }
@@ -118,6 +127,10 @@ type memProducts struct {
 
 func (m memProducts) GetByID(_ context.Context, id uuid.UUID) (*productDomain.Product, error) {
 	return m.byID[id], nil
+}
+
+func (m memProducts) Update(_ context.Context, p *productDomain.Product) error {
+	return nil
 }
 
 type memLedger struct {
@@ -431,4 +444,79 @@ func TestReportRange(t *testing.T) {
 		}
 	}
 	_ = fmt.Sprint
+}
+
+func (m *memMfg) GetStepLog(_ context.Context, id uuid.UUID) (*domain.ProductionStepLog, error) {
+	for i := range m.logs {
+		if m.logs[i].ID == id {
+			return &m.logs[i], nil
+		}
+	}
+	return nil, nil
+}
+func (m *memMfg) VoidStepLog(_ context.Context, l *domain.ProductionStepLog) error {
+	for i := range m.logs {
+		if m.logs[i].ID == l.ID {
+			m.logs[i] = *l
+		}
+	}
+	return nil
+}
+func (m *memMfg) ListOrderStepLogs(_ context.Context, orderID uuid.UUID) ([]domain.ProductionStepLog, error) {
+	var out []domain.ProductionStepLog
+	for _, l := range m.logs {
+		if l.OrderID == orderID {
+			out = append(out, l)
+		}
+	}
+	return out, nil
+}
+
+func (m *memMfg) GetBatch(_ context.Context, id uuid.UUID) (*domain.ProductionBatch, error) {
+	for i := range m.batches {
+		if m.batches[i].ID == id {
+			c := m.batches[i]
+			return &c, nil
+		}
+	}
+	return nil, nil
+}
+func (m *memMfg) VoidBatch(_ context.Context, b *domain.ProductionBatch) error {
+	for i := range m.batches {
+		if m.batches[i].ID == b.ID {
+			m.batches[i].Voided, m.batches[i].VoidReason = true, b.VoidReason
+		}
+	}
+	return nil
+}
+func (m *memMfg) SetBatchCost(_ context.Context, id uuid.UUID, unitCost float64, applied bool) error {
+	for i := range m.batches {
+		if m.batches[i].ID == id {
+			m.batches[i].UnitCost, m.batches[i].CostApplied = unitCost, applied
+		}
+	}
+	return nil
+}
+func (m *memMfg) ListBatchesByOrder(_ context.Context, orderID uuid.UUID) ([]domain.ProductionBatch, error) {
+	var out []domain.ProductionBatch
+	for _, b := range m.batches {
+		if b.ProductionOrderID == orderID {
+			out = append(out, b)
+		}
+	}
+	return out, nil
+}
+
+// ReverseEntry mirrors the entry stored under sourceDoc.
+func (l *memLedger) ReverseEntry(_ context.Context, sourceDoc, reversalDoc, _, _ string) (bool, error) {
+	orig, ok := l.entries[sourceDoc]
+	if !ok {
+		return false, nil
+	}
+	rev := make([]financeApp.LedgerLine, len(orig))
+	for i, ln := range orig {
+		rev[i] = financeApp.LedgerLine{AccountCode: ln.AccountCode, Debit: ln.Credit, Credit: ln.Debit}
+	}
+	l.entries[reversalDoc] = rev
+	return true, nil
 }

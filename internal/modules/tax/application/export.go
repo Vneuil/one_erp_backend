@@ -11,7 +11,8 @@ import (
 	"github.com/divinecoid/one-backend/internal/shared/taxid"
 )
 
-// CoretaxHeaders is the column layout of the Faktur Pajak Keluaran export: the
+// CoretaxHeaders is the column layout of the CSV view of the Faktur Pajak Keluaran export (Coretax itself
+// imports the XML built by CoretaxXML; the CSV is for review and spreadsheets): the
 // "Faktur" and "DetailFaktur" sheets of the Coretax import template flattened
 // into one row per goods/services line. The layout follows the published
 // template as best known and has NOT been validated against a live Coretax
@@ -35,6 +36,8 @@ type CoretaxExportDTO struct {
 	Rows     [][]string `json:"rows"`
 	Invoices int        `json:"invoices"`
 	Warnings []string   `json:"warnings"`
+	// XML is the Coretax import file (TaxInvoiceBulk). Unvalidated against a live Coretax.
+	XML string `json:"xml"`
 }
 
 func money(v float64) string { return fmt.Sprintf("%.2f", v) }
@@ -104,6 +107,16 @@ func (uc *taxUseCase) CoretaxExport(ctx context.Context, from, to string) (*Core
 		if strings.TrimSpace(t.CounterpartyAddress) == "" {
 			out.Warnings = append(out.Warnings, t.Number+" ("+t.SourceReference+"): the buyer has no address")
 		}
+	}
+	if len(invoices) > coretaxMaxInvoicesPerFile {
+		out.Warnings = append(out.Warnings, fmt.Sprintf("Coretax accepts at most %d faktur per XML file; narrow the date range and export in parts", coretaxMaxInvoicesPerFile))
+	}
+	if len(invoices) > 0 {
+		x, err := CoretaxXML(settings.NPWP, invoices)
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to build the Coretax XML")
+		}
+		out.XML = string(x)
 	}
 	out.Rows = CoretaxRows(settings.NPWP, invoices)
 	if out.Rows == nil {

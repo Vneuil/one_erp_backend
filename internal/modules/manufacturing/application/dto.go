@@ -18,17 +18,21 @@ type BOMLineDTO struct {
 
 // BOMProcessDTO is one routing step; steps run in the order given.
 type BOMProcessDTO struct {
-	Name            string  `json:"name"`
-	StandardMinutes float64 `json:"standardMinutes"`
-	Notes           string  `json:"notes"`
+	Name                string  `json:"name"`
+	LaborRatePerHour    float64 `json:"laborRatePerHour"`
+	OverheadRatePerHour float64 `json:"overheadRatePerHour"`
+	StandardMinutes     float64 `json:"standardMinutes"`
+	Notes               string  `json:"notes"`
 }
 
 type BOMProcessResponseDTO struct {
-	ID              uuid.UUID `json:"id"`
-	Sequence        int       `json:"sequence"`
-	Name            string    `json:"name"`
-	StandardMinutes float64   `json:"standardMinutes"`
-	Notes           string    `json:"notes,omitempty"`
+	ID                  uuid.UUID `json:"id"`
+	Sequence            int       `json:"sequence"`
+	Name                string    `json:"name"`
+	StandardMinutes     float64   `json:"standardMinutes"`
+	LaborRatePerHour    float64   `json:"laborRatePerHour"`
+	OverheadRatePerHour float64   `json:"overheadRatePerHour"`
+	Notes               string    `json:"notes,omitempty"`
 }
 
 type CreateBOMDTO struct {
@@ -86,11 +90,13 @@ type CreateProductionOrderDTO struct {
 }
 
 type StepResponseDTO struct {
-	ID              uuid.UUID `json:"id"`
-	Sequence        int       `json:"sequence"`
-	Name            string    `json:"name"`
-	StandardMinutes float64   `json:"standardMinutes"`
-	QuantityDone    int       `json:"quantityDone"`
+	ID                  uuid.UUID `json:"id"`
+	Sequence            int       `json:"sequence"`
+	Name                string    `json:"name"`
+	StandardMinutes     float64   `json:"standardMinutes"`
+	LaborRatePerHour    float64   `json:"laborRatePerHour"`
+	OverheadRatePerHour float64   `json:"overheadRatePerHour"`
+	QuantityDone        int       `json:"quantityDone"`
 	// WaitingQuantity is how many units have reached this step but not finished it yet.
 	WaitingQuantity int    `json:"waitingQuantity"`
 	Status          string `json:"status"`
@@ -214,7 +220,7 @@ func stepResponses(o *domain.ProductionOrder) []StepResponseDTO {
 		if waiting < 0 {
 			waiting = 0
 		}
-		out[i] = StepResponseDTO{ID: s.ID, Sequence: s.Sequence, Name: s.Name, StandardMinutes: s.StandardMinutes, QuantityDone: s.QuantityDone,
+		out[i] = StepResponseDTO{ID: s.ID, Sequence: s.Sequence, Name: s.Name, StandardMinutes: s.StandardMinutes, LaborRatePerHour: s.LaborRatePerHour, OverheadRatePerHour: s.OverheadRatePerHour, QuantityDone: s.QuantityDone,
 			WaitingQuantity: waiting, Status: s.Status, StartedDate: s.StartedDate, CompletedDate: s.CompletedDate}
 	}
 	return out

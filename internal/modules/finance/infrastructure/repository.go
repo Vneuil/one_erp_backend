@@ -501,6 +501,11 @@ func (r *financeRepository) UpdateCashVoucher(ctx context.Context, v *domain.Cas
 		Updates(map[string]any{"posted": v.Posted}).Error
 }
 
+func (r *financeRepository) VoidCashVoucher(ctx context.Context, v *domain.CashVoucher) error {
+	return r.db.WithContext(ctx).Model(&domain.CashVoucher{}).Where("id = ?", v.ID).
+		Updates(map[string]any{"voided": true, "voided_at": v.VoidedAt, "voided_by": v.VoidedBy, "void_reason": v.VoidReason}).Error
+}
+
 func (r *financeRepository) GetCashVoucherByID(ctx context.Context, id uuid.UUID) (*domain.CashVoucher, error) {
 	var v domain.CashVoucher
 	err := tenantctx.Scope(ctx, r.db.WithContext(ctx)).Preload("Lines").Where("id = ?", id).First(&v).Error
@@ -535,6 +540,72 @@ func (r *financeRepository) CountCashVouchers(ctx context.Context, typ, numberPr
 	err := r.db.WithContext(ctx).Unscoped().Model(&domain.CashVoucher{}).
 		Where("type = ? AND number LIKE ?", typ, numberPrefix+"%").Count(&n).Error
 	return n, err
+}
+
+// Temporary cash advances (KBS)
+
+func (r *financeRepository) CreateTempAdvance(ctx context.Context, a *domain.TempAdvance) error {
+	tenantctx.SetTenantID(ctx, &a.TenantID)
+	return r.db.WithContext(ctx).Create(a).Error
+}
+
+func (r *financeRepository) GetTempAdvanceByID(ctx context.Context, id uuid.UUID) (*domain.TempAdvance, error) {
+	var a domain.TempAdvance
+	err := tenantctx.Scope(ctx, r.db.WithContext(ctx)).Preload("Lines").Where("id = ?", id).First(&a).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &a, nil
+}
+
+func (r *financeRepository) ListTempAdvances(ctx context.Context, status, from, to string) ([]domain.TempAdvance, error) {
+	var out []domain.TempAdvance
+	db := tenantctx.Scope(ctx, r.db.WithContext(ctx)).Preload("Lines")
+	if status != "" {
+		db = db.Where("status = ?", status)
+	}
+	if from != "" {
+		db = db.Where("date >= ?", from)
+	}
+	if to != "" {
+		db = db.Where("date <= ?", to)
+	}
+	err := db.Order("date desc, created_at desc").Find(&out).Error
+	return out, err
+}
+
+func (r *financeRepository) CountTempAdvances(ctx context.Context, numberPrefix string) (int64, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Unscoped().Model(&domain.TempAdvance{}).
+		Where("number LIKE ?", numberPrefix+"%").Count(&n).Error
+	return n, err
+}
+
+func tempAdvanceState(a *domain.TempAdvance) map[string]any {
+	return map[string]any{
+		"status": a.Status, "posted": a.Posted, "settled_date": a.SettledDate, "spent_total": a.SpentTotal,
+		"returned_amount": a.ReturnedAmount, "extra_paid": a.ExtraPaid, "settlement_posted": a.SettlementPosted,
+		"cancelled_date": a.CancelledDate,
+	}
+}
+
+func (r *financeRepository) SaveTempAdvanceState(ctx context.Context, a *domain.TempAdvance) error {
+	return r.db.WithContext(ctx).Model(&domain.TempAdvance{}).Where("id = ?", a.ID).Updates(tempAdvanceState(a)).Error
+}
+
+func (r *financeRepository) SettleTempAdvance(ctx context.Context, a *domain.TempAdvance) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&domain.TempAdvance{}).Where("id = ?", a.ID).Updates(tempAdvanceState(a)).Error; err != nil {
+			return err
+		}
+		if len(a.Lines) == 0 {
+			return nil
+		}
+		return tx.Create(&a.Lines).Error
+	})
 }
 
 func (r *financeRepository) ListPostedLines(ctx context.Context, from, to string, accountIDs []uuid.UUID) ([]domain.JournalLineDetail, error) {

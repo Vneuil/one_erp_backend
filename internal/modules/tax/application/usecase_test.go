@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/xml"
 	"fmt"
 	"strings"
 	"testing"
@@ -114,11 +115,13 @@ func (r *memRepo) CountTaxInvoices(_ context.Context, dir, prefix string) (int64
 }
 
 type memSource struct {
-	sales     map[uuid.UUID]domain.SalesInvoiceRef
-	purchases map[uuid.UUID]domain.PurchaseInvoiceRef
-	lines     map[uuid.UUID][]domain.SourceLine
-	customers map[string]domain.Party
-	suppliers map[uuid.UUID]domain.Party
+	sales         map[uuid.UUID]domain.SalesInvoiceRef
+	purchases     map[uuid.UUID]domain.PurchaseInvoiceRef
+	lines         map[uuid.UUID][]domain.SourceLine
+	customers     map[string]domain.Party
+	retOut, retIn []domain.ReturnVATRef
+	pos           map[uuid.UUID]domain.POSSaleRef
+	suppliers     map[uuid.UUID]domain.Party
 }
 
 func (s *memSource) SalesInvoice(_ context.Context, id uuid.UUID) (*domain.SalesInvoiceRef, error) {
@@ -153,6 +156,24 @@ func (s *memSource) PurchaseInvoicesBetween(_ context.Context, from, to string) 
 		}
 	}
 	return out, nil
+}
+func (s *memSource) POSSale(_ context.Context, id uuid.UUID) (*domain.POSSaleRef, error) {
+	if v, ok := s.pos[id]; ok {
+		return &v, nil
+	}
+	return nil, nil
+}
+func (s *memSource) POSSalesBetween(_ context.Context, from, to string) ([]domain.POSSaleRef, error) {
+	var out []domain.POSSaleRef
+	for _, v := range s.pos {
+		if v.Date >= from && v.Date <= to {
+			out = append(out, v)
+		}
+	}
+	return out, nil
+}
+func (s *memSource) ReturnVATBetween(context.Context, string, string) (out, in []domain.ReturnVATRef, err error) {
+	return s.retOut, s.retIn, nil
 }
 func (s *memSource) CustomersByName(context.Context) (map[string]domain.Party, error) {
 	return s.customers, nil
@@ -434,8 +455,54 @@ func TestCoretaxExportRows(t *testing.T) {
 		col("Nama Barang/Jasa") != "Barang A" || col("DPP") != "600000.00" || col("Tarif PPN") != "12.00" {
 		t.Fatalf("row: %v", r)
 	}
+	if !strings.Contains(ex.XML, "<TaxInvoiceBulk") || !strings.Contains(ex.XML, "<TIN>0123456789012000</TIN>") {
+		t.Fatalf("xml: %s", ex.XML)
+	}
 	f.repo.settings.IsPKP = false
 	if _, err := f.uc.CoretaxExport(ctx, "", ""); err == nil {
 		t.Fatal("export without PKP settings must be refused")
+	}
+}
+
+func TestVATSummaryDeductsReturns(t *testing.T) {
+	f := newFixture(t)
+	f.src.retOut = []domain.ReturnVATRef{{Number: "SRET-1", Party: "PT A", Date: "2026-03-20", VAT: 40_000}}
+	f.src.retIn = []domain.ReturnVATRef{{Number: "PRET-1", Party: "CV S", Date: "2026-03-22", VAT: 10_000}}
+	sum, err := f.uc.VATSummary(context.Background(), "2026-03-01", "2026-03-31")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(sum.Periods) != 1 {
+		t.Fatalf("periods: %+v", sum.Periods)
+	}
+	p := sum.Periods[0]
+	if p.OutputReturnVAT != 40_000 || p.InputReturnVAT != 10_000 || p.Net != -30_000 || sum.Total.Net != -30_000 {
+		t.Fatalf("summary: %+v total %+v", p, sum.Total)
+	}
+}
+
+func TestCoretaxXMLStructureAndRounding(t *testing.T) {
+	tax := domain.TaxInvoice{Date: "2026-03-10", TransactionCode: "04", VATRate: 12, SourceReference: "INV-1", Notes: "A & B",
+		CounterpartyName: "PT <Pembeli>", CounterpartyNIK: "3171234567890001",
+		Lines: []domain.TaxInvoiceLine{{Description: "Barang", Quantity: 3, UnitPrice: 33.33, TaxBase: 100, DPPOtherValue: 91.67, VATAmount: 11}}}
+	b, err := CoretaxXML("0123456789012000", []domain.TaxInvoice{tax})
+	if err != nil {
+		t.Fatal(err)
+	}
+	x := string(b)
+	order := []string{"<TIN>", "<TaxInvoiceDate>2026-03-10", "<TaxInvoiceOpt>Normal", "<TrxCode>04", "<AddInfo>A &amp; B", "<RefDesc>INV-1", "<SellerIDTKU>0123456789012000000000",
+		"<BuyerTin>0000000000000000", "<BuyerDocument>National ID", "<BuyerCountry>IDN", "<BuyerDocumentNumber>3171234567890001", "<BuyerName>PT &lt;Pembeli&gt;", "<BuyerIDTKU>000000",
+		"<ListOfGoodService>", "<Price>33.34", "<Qty>3.00", "<TotalDiscount>0.02", "<TaxBase>100.00", "<OtherTaxBase>91.67", "<VATRate>12", "<VAT>11.00"}
+	pos := 0
+	for _, want := range order {
+		i := strings.Index(x[pos:], want)
+		if i < 0 {
+			t.Fatalf("%q missing or out of order in:\n%s", want, x)
+		}
+		pos += i
+	}
+	var parsed struct{}
+	if err := xml.Unmarshal(b, &parsed); err != nil {
+		t.Fatalf("not well-formed: %v", err)
 	}
 }

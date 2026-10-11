@@ -47,7 +47,7 @@ func ClassifyAccount(a domain.Account) string {
 			return CategoryCOGS
 		case AccountDeliveryExpense:
 			return CategoryMarketing
-		case AccountRounding:
+		case AccountRounding, AccountDisposalLoss:
 			return CategoryNonOperating
 		default:
 			return CategoryAdminGeneral

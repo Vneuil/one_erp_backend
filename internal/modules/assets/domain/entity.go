@@ -24,6 +24,14 @@ type FixedAsset struct {
 	AccumulatedDepreciation float64    `gorm:"type:decimal(15,2);default:0" json:"accumulatedDepreciation"`
 	CurrentBookValue        float64    `gorm:"type:decimal(15,2);not null" json:"currentBookValue"`
 	Status                  string     `gorm:"type:varchar(50);default:'In Use'" json:"status"`
+	// AcquisitionDoc is the ledger source doc of the Dr Fixed Assets entry;
+	// empty until the acquisition has been posted.
+	AcquisitionDoc string `gorm:"type:varchar(120)" json:"acquisitionDoc,omitempty"`
+	// Disposal (sale / write-off) details, set by DisposeAsset.
+	DisposedAt       string  `gorm:"type:varchar(20)" json:"disposedAt,omitempty"`
+	DisposalProceeds float64 `gorm:"type:decimal(15,2);default:0" json:"disposalProceeds"`
+	DisposalGainLoss float64 `gorm:"type:decimal(15,2);default:0" json:"disposalGainLoss"`
+	DisposalDoc      string  `gorm:"type:varchar(120)" json:"disposalDoc,omitempty"`
 }
 
 func (FixedAsset) TableName() string {

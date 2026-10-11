@@ -16,9 +16,10 @@ import (
 // docRepo adds stock-document and opname storage to the in-memory repo.
 type docRepo struct {
 	*memRepo
-	docs       []*domain.StockDocument
-	opname     *domain.StockOpname
-	failUpsert map[uuid.UUID]bool // product ids whose stock-level update fails
+	docs            []*domain.StockDocument
+	opname          *domain.StockOpname
+	failUpsert      map[uuid.UUID]bool // product ids whose stock-level update fails
+	completedOrders map[uuid.UUID]bool
 }
 
 func (r *docRepo) WithTransaction(_ context.Context, fn func(domain.InventoryRepository) error) error {

@@ -32,6 +32,8 @@ func (uc *manufacturingUseCase) LogStep(ctx context.Context, orderID, stepID uui
 	}
 
 	var result *domain.ProductionOrder
+	var stepSnapshot domain.ProductionStep
+	var stepLog *domain.ProductionStepLog
 	err := uc.repo.WithTransaction(ctx, func(tx domain.ManufacturingRepository) error {
 		o, err := tx.GetOrderByID(ctx, orderID)
 		if err != nil {
@@ -77,10 +79,13 @@ func (uc *manufacturingUseCase) LogStep(ctx context.Context, orderID, stepID uui
 		if err := tx.UpdateStep(ctx, step); err != nil {
 			return apperrors.NewInternal(err, "Failed to update the process step")
 		}
-		if err := tx.CreateStepLog(ctx, &domain.ProductionStepLog{OrderID: o.ID, StepID: step.ID, Quantity: dto.Quantity, Date: date,
-			Notes: strings.TrimSpace(dto.Notes), CreatedBy: actor.EmailFrom(ctx)}); err != nil {
+		stepLog = &domain.ProductionStepLog{OrderID: o.ID, StepID: step.ID, Quantity: dto.Quantity, Date: date,
+			Notes: strings.TrimSpace(dto.Notes), CreatedBy: actor.EmailFrom(ctx)}
+		stepLog.ID = uuid.New()
+		if err := tx.CreateStepLog(ctx, stepLog); err != nil {
 			return apperrors.NewInternal(err, "Failed to record the process log")
 		}
+		stepSnapshot = *step
 		if o.Status == domain.OrderReleased {
 			o.Status = domain.OrderInProgress
 			if err := tx.UpdateOrder(ctx, o); err != nil {
@@ -93,5 +98,6 @@ func (uc *manufacturingUseCase) LogStep(ctx context.Context, orderID, stepID uui
 	if err != nil {
 		return nil, err
 	}
+	uc.postConversion(ctx, result, stepSnapshot, stepLog.ID, dto.Quantity, date)
 	return uc.toOrderResponse(ctx, result), nil
 }

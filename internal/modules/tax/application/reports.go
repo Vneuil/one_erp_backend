@@ -98,6 +98,24 @@ func (uc *taxUseCase) SalesBook(ctx context.Context, from, to string) (*SalesBoo
 	if err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to load customers")
 	}
+	posSales, err := uc.src.POSSalesBetween(ctx, from, to)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to load POS sales")
+	}
+	posIDs := make([]uuid.UUID, len(posSales))
+	for i, s := range posSales {
+		posIDs[i] = s.ID
+	}
+	posFaktur, err := uc.repo.ListBySources(ctx, domain.SourcePOSTransaction, posIDs)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to load Faktur Pajak")
+	}
+	posBySource := map[uuid.UUID]domain.TaxInvoice{}
+	for _, f := range posFaktur {
+		if cur, ok := posBySource[f.SourceID]; !ok || (cur.Status != domain.StatusIssued && f.Status == domain.StatusIssued) {
+			posBySource[f.SourceID] = f
+		}
+	}
 
 	out := &SalesBookDTO{From: from, To: to, Rows: []SalesBookRow{}}
 	for _, inv := range invoices {
@@ -120,6 +138,21 @@ func (uc *taxUseCase) SalesBook(ctx context.Context, from, to string) (*SalesBoo
 		out.Rows = append(out.Rows, row)
 		out.Gross, out.Discount, out.TaxBase, out.VATAmount, out.Total = out.Gross+row.Gross, out.Discount+row.Discount, out.TaxBase+row.TaxBase, out.VATAmount+row.VATAmount, out.Total+row.Total
 	}
+	// POS sales with PPN follow the invoices; most have no Faktur Pajak, which is normal for retail.
+	for i := range posSales {
+		s := &posSales[i]
+		base := posTaxBase(s)
+		row := SalesBookRow{InvoiceID: s.ID, Date: s.Date, InvoiceNumber: s.Number + " (POS)", CustomerName: s.Customer,
+			Gross: round2(base + s.Discount), Discount: s.Discount, TaxBase: base, VATAmount: s.Tax, Total: s.Total}
+		if f, ok := posBySource[s.ID]; ok {
+			id := f.ID
+			row.TaxInvoiceID, row.TaxInvoiceNo, row.TaxNumber, row.TaxInvoiceStat = &id, f.Number, f.TaxNumber, f.Status
+			row.CustomerNPWP, row.CustomerNIK = f.CounterpartyNPWP, f.CounterpartyNIK
+		}
+		out.Rows = append(out.Rows, row)
+		out.Gross, out.Discount, out.TaxBase, out.VATAmount, out.Total = out.Gross+row.Gross, out.Discount+row.Discount, out.TaxBase+row.TaxBase, out.VATAmount+row.VATAmount, out.Total+row.Total
+	}
+	sort.SliceStable(out.Rows, func(i, j int) bool { return out.Rows[i].Date < out.Rows[j].Date })
 	out.Count = len(out.Rows)
 	out.Gross, out.Discount, out.TaxBase, out.VATAmount, out.Total = round2(out.Gross), round2(out.Discount), round2(out.TaxBase), round2(out.VATAmount), round2(out.Total)
 	return out, nil
@@ -129,6 +162,11 @@ type VATPeriodRow struct {
 	Period    string  `json:"period"`
 	OutputVAT float64 `json:"outputVat"`
 	InputVAT  float64 `json:"inputVat"`
+	// OutputReturnVAT / InputReturnVAT are the PPN reversed by sales and
+	// purchase returns (nota retur) in the period; they are deducted from
+	// OutputVAT / InputVAT in Net.
+	OutputReturnVAT float64 `json:"outputReturnVat"`
+	InputReturnVAT  float64 `json:"inputReturnVat"`
 	// Net is output minus input: positive = PPN kurang bayar, negative = lebih bayar.
 	Net float64 `json:"net"`
 	// OutputWithoutFaktur / InputWithoutFaktur are PPN booked on invoices that
@@ -196,6 +234,17 @@ func (uc *taxUseCase) VATSummary(ctx context.Context, from, to string) (*VATSumm
 			row(inv.Date[:7]).OutputWithoutFaktur += inv.VATAmt
 		}
 	}
+	// Retail POS PPN is output VAT too; it only counts once a Faktur Pajak (or
+	// the retail summary) is issued, so un-fakturred POS PPN is listed apart.
+	posSales, err := uc.src.POSSalesBetween(ctx, from, to)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to load POS sales")
+	}
+	for _, s := range posSales {
+		if s.Tax > 0 && !issuedSource[s.ID] && len(s.Date) >= 7 {
+			row(s.Date[:7]).OutputWithoutFaktur += s.Tax
+		}
+	}
 	purchases, err := uc.src.PurchaseInvoicesBetween(ctx, from, to)
 	if err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to load purchase invoices")
@@ -206,20 +255,39 @@ func (uc *taxUseCase) VATSummary(ctx context.Context, from, to string) (*VATSumm
 		}
 	}
 
+	retOut, retIn, err := uc.src.ReturnVATBetween(ctx, from, to)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to load returns")
+	}
+	for _, x := range retOut {
+		if len(x.Date) >= 7 {
+			row(x.Date[:7]).OutputReturnVAT += x.VAT
+		}
+	}
+	for _, x := range retIn {
+		if len(x.Date) >= 7 {
+			row(x.Date[:7]).InputReturnVAT += x.VAT
+		}
+	}
+
 	out := &VATSummaryDTO{From: from, To: to, Periods: []VATPeriodRow{}, Total: VATPeriodRow{Period: "total"}}
 	for _, r := range rows {
+		r.OutputReturnVAT, r.InputReturnVAT = round2(r.OutputReturnVAT), round2(r.InputReturnVAT)
 		r.OutputVAT, r.InputVAT = round2(r.OutputVAT), round2(r.InputVAT)
 		r.OutputWithoutFaktur, r.InputWithoutFaktur = round2(r.OutputWithoutFaktur), round2(r.InputWithoutFaktur)
-		r.Net = round2(r.OutputVAT - r.InputVAT)
+		r.Net = round2(r.OutputVAT - r.OutputReturnVAT - r.InputVAT + r.InputReturnVAT)
 		out.Periods = append(out.Periods, *r)
 		out.Total.OutputVAT += r.OutputVAT
 		out.Total.InputVAT += r.InputVAT
+		out.Total.OutputReturnVAT += r.OutputReturnVAT
+		out.Total.InputReturnVAT += r.InputReturnVAT
 		out.Total.OutputWithoutFaktur += r.OutputWithoutFaktur
 		out.Total.InputWithoutFaktur += r.InputWithoutFaktur
 	}
 	sort.Slice(out.Periods, func(i, j int) bool { return out.Periods[i].Period < out.Periods[j].Period })
 	out.Total.OutputVAT, out.Total.InputVAT = round2(out.Total.OutputVAT), round2(out.Total.InputVAT)
 	out.Total.OutputWithoutFaktur, out.Total.InputWithoutFaktur = round2(out.Total.OutputWithoutFaktur), round2(out.Total.InputWithoutFaktur)
-	out.Total.Net = round2(out.Total.OutputVAT - out.Total.InputVAT)
+	out.Total.OutputReturnVAT, out.Total.InputReturnVAT = round2(out.Total.OutputReturnVAT), round2(out.Total.InputReturnVAT)
+	out.Total.Net = round2(out.Total.OutputVAT - out.Total.OutputReturnVAT - out.Total.InputVAT + out.Total.InputReturnVAT)
 	return out, nil
 }

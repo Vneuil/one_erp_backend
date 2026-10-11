@@ -380,3 +380,15 @@ func (r *salesRepository) UpdateBillingTerm(ctx context.Context, t *domain.Billi
 func (r *salesRepository) UpdateDelivery(ctx context.Context, d *domain.Delivery) error {
 	return r.db.WithContext(ctx).Omit("Lines").Save(d).Error
 }
+
+func (r *salesRepository) ListSalesReturnsByDelivery(ctx context.Context, deliveryID uuid.UUID) ([]domain.SalesReturn, error) {
+	var out []domain.SalesReturn
+	err := r.db.WithContext(ctx).Preload("Lines").Where("delivery_id = ?", deliveryID).Find(&out).Error
+	return out, err
+}
+
+func (r *salesRepository) ListInvoicesByOrder(ctx context.Context, orderID uuid.UUID) ([]domain.Invoice, error) {
+	var out []domain.Invoice
+	err := r.db.WithContext(ctx).Where("sales_order_id = ?", orderID).Order("invoice_date asc, created_at asc").Find(&out).Error
+	return out, err
+}

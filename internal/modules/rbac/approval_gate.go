@@ -47,12 +47,15 @@ var approvalRules = []approvalRule{
 	rule(http.MethodPost, `/api/v1/procurement/(requests|orders)/`+idSeg+`/(approve|reject)`, "procurement"),
 	rule(http.MethodPost, `/api/v1/inventory/batches/`+idSeg+`/write-off`, "inventory"),
 	rule(http.MethodPost, `/api/v1/inventory/opname/`+idSeg+`/finalize`, "inventory"),
+	rule(http.MethodPost, `/api/v1/inventory/documents/`+idSeg+`/void`, "inventory"),
 	rule(http.MethodPost, `/api/v1/finance/journal-entries/`+idSeg+`/(post|reverse)`, "finance"),
 	rule(http.MethodPost, `/api/v1/finance/petty-cash/`+idSeg+`/transactions/`+idSeg+`/(approve|reject)`, "finance"),
 	rule(http.MethodPost, `/api/v1/finance/capital/drawings`, "finance"),
+	rule(http.MethodPost, `/api/v1/finance/cash-vouchers/`+idSeg+`/void`, "finance"),
 	rule(http.MethodPost, `/api/v1/project-work-orders/`+idSeg+`/issue`, "project"),
 	rule(http.MethodPost, `/api/v1/pos/transactions/`+idSeg+`/(void|refund)`, "pos"),
 	rule(http.MethodPost, `/api/v1/manufacturing/production-orders/`+idSeg+`/release`, "manufacturing"),
+	rule(http.MethodPost, `/api/v1/manufacturing/production-orders/`+idSeg+`/(step-logs|batches)/`+idSeg+`/void`, "manufacturing"),
 	rule(http.MethodPost, `/api/v1/recruitment/candidates/`+idSeg+`/hire`, "recruitment"),
 }
 

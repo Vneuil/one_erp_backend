@@ -262,6 +262,15 @@ type stockBatchRow struct {
 	Quantity      int
 }
 
+// stockReceiptRow is one inbound movement without a batch; untracked stock is
+// aged from these (first in, first out).
+type stockReceiptRow struct {
+	ProductID   uuid.UUID
+	WarehouseID uuid.UUID
+	Date        string // YYYY-MM-DD
+	Quantity    int
+}
+
 type stockLevelRow struct {
 	ProductID     uuid.UUID
 	SKU           string
@@ -280,7 +289,10 @@ type StockAgingRow struct {
 	Warehouse string `json:"warehouse"`
 	// Buckets holds the quantity per age range, in AgingBuckets order.
 	Buckets []int `json:"buckets"`
-	// Untracked is stock that has no batch (age unknown).
+	// Estimated is the part of the buckets aged from receipts without a batch
+	// (first in, first out) rather than from a real batch.
+	Estimated int `json:"estimated"`
+	// Untracked is stock whose age cannot be established at all (no batch and no receipt history).
 	Untracked int     `json:"untracked"`
 	Total     int     `json:"total"`
 	Value     float64 `json:"value"`
@@ -296,6 +308,7 @@ type StockAgingDTO struct {
 	Rows          []StockAgingRow `json:"rows"`
 	BucketTotals  []int           `json:"bucketTotals"`
 	BucketValues  []float64       `json:"bucketValues"`
+	EstimatedQty  int             `json:"estimatedQty"`
 	UntrackedQty  int             `json:"untrackedQty"`
 	UntrackedVal  float64         `json:"untrackedValue"`
 	TotalQuantity int             `json:"totalQuantity"`
@@ -328,13 +341,13 @@ func ageDays(receivedAt, asOf string) (int, bool) {
 // buildStockAging ages the batch-tracked part of each stock level by receipt
 // date. Stock a level holds beyond its batches has no age and is reported as
 // untracked rather than guessed.
-func buildStockAging(asOf string, levels []stockLevelRow, batches []stockBatchRow) *StockAgingDTO {
+func buildStockAging(asOf string, levels []stockLevelRow, batches []stockBatchRow, receipts []stockReceiptRow) *StockAgingDTO {
 	labels := make([]string, len(agingBuckets))
 	for i, b := range agingBuckets {
 		labels[i] = b.Label
 	}
 	out := &StockAgingDTO{AsOf: asOf, BucketLabels: labels, Rows: []StockAgingRow{}, BucketTotals: make([]int, len(labels)), BucketValues: make([]float64, len(labels)),
-		Note: "Age is days since the batch was received. Only batch-tracked stock can be aged; the rest is shown as untracked. Value is quantity times current cost price, and quantities are current stock, not as of a past date."}
+		Note: "Age is days since the batch was received. Stock without a batch is aged first in, first out from its receipts (marked estimated); stock with neither a batch nor a receipt history stays untracked. Value is quantity times current cost price, and quantities are current stock, not as of a past date."}
 
 	type key struct{ product, warehouse uuid.UUID }
 	rows := map[key]*StockAgingRow{}
@@ -378,8 +391,39 @@ func buildStockAging(asOf string, levels []stockLevelRow, batches []stockBatchRo
 	for _, l := range levels {
 		levelQty[key{l.ProductID, l.WarehouseID}] += l.Quantity
 	}
+	// Receipts without a batch, newest first: with first-in-first-out
+	// consumption, what is left on the shelf came in most recently.
+	byKey := map[key][]stockReceiptRow{}
+	for _, rc := range receipts {
+		if rc.Quantity > 0 {
+			byKey[key{rc.ProductID, rc.WarehouseID}] = append(byKey[key{rc.ProductID, rc.WarehouseID}], rc)
+		}
+	}
 	for k, r := range rows {
-		if extra := levelQty[k] - batchQty[k]; extra > 0 {
+		extra := levelQty[k] - batchQty[k]
+		if extra > 0 {
+			rc := byKey[k]
+			sort.SliceStable(rc, func(i, j int) bool { return rc[i].Date > rc[j].Date })
+			for _, x := range rc {
+				if extra <= 0 {
+					break
+				}
+				take := x.Quantity
+				if take > extra {
+					take = extra
+				}
+				days, ok := ageDays(x.Date, asOf)
+				if !ok {
+					continue
+				}
+				r.Buckets[bucketIndex(days)] += take
+				r.Estimated += take
+				if days > r.OldestDays {
+					r.OldestDays = days
+				}
+				extra -= take
+			}
+			// The Untracked already counts batches with an unreadable date; add what no receipt explains.
 			r.Untracked += extra
 		}
 		for i, q := range r.Buckets {
@@ -388,6 +432,7 @@ func buildStockAging(asOf string, levels []stockLevelRow, batches []stockBatchRo
 			out.BucketValues[i] += float64(q) * costs[k]
 		}
 		r.Total += r.Untracked
+		out.EstimatedQty += r.Estimated
 		out.UntrackedQty += r.Untracked
 		out.UntrackedVal += float64(r.Untracked) * costs[k]
 		r.Value = round2(float64(r.Total) * costs[k])
@@ -437,5 +482,14 @@ func (q *ReportQuery) StockAging(ctx context.Context, asOf string, warehouseID *
 		b.batch_no, b.received_at, b.expiry_date, b.quantity`).Scan(&batches).Error; err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to load stock batches")
 	}
-	return buildStockAging(asOf, levels, batches), nil
+	var receipts []stockReceiptRow
+	mv := scope(ctx, q.db.WithContext(ctx).Table("inventory_stock_movements m").
+		Where("m.deleted_at IS NULL AND m.quantity > 0 AND m.type IN ('in','transfer_in','adjustment') AND COALESCE(m.batch_no,'') = ''"), "m")
+	if warehouseID != nil {
+		mv = mv.Where("m.warehouse_id = ?", *warehouseID)
+	}
+	if err := mv.Select(`m.product_id, m.warehouse_id, to_char(m.created_at AT TIME ZONE 'Asia/Jakarta', 'YYYY-MM-DD') AS date, m.quantity`).Scan(&receipts).Error; err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to load stock receipts")
+	}
+	return buildStockAging(asOf, levels, batches, receipts), nil
 }

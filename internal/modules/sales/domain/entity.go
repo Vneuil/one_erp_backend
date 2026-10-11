@@ -124,7 +124,11 @@ type Invoice struct {
 	VATOtherValueBase bool    `gorm:"default:false" json:"vatOtherValueBase"`
 	VATAmount         float64 `gorm:"type:decimal(15,2);default:0" json:"vatAmount"`
 	PaidAmount        float64 `gorm:"type:decimal(15,2);not null;default:0" json:"paidAmount"`
-	Status            string  `gorm:"type:varchar(50);default:'pending'" json:"status"`
+	// CreditedAmount is the value of goods returned against this invoice
+	// (sales returns / nota retur); the amount still owed is
+	// TotalAmount - CreditedAmount - PaidAmount.
+	CreditedAmount float64 `gorm:"type:decimal(15,2);not null;default:0" json:"creditedAmount"`
+	Status         string  `gorm:"type:varchar(50);default:'pending'" json:"status"`
 	// SalesOrderID optionally links this invoice back to the Sales Order it
 	// was billed against. Nil for invoices that predate this field or that
 	// were never tied to a specific order - both remain fully valid.
@@ -206,16 +210,22 @@ func (SalesDownPayment) TableName() string {
 // from the customer - damaged, wrong items, etc.
 type SalesReturn struct {
 	types.BaseEntity
-	CompanyID    *uuid.UUID        `gorm:"type:uuid;index" json:"companyId,omitempty"`
-	TenantID     *uuid.UUID        `gorm:"type:uuid;index" json:"tenantId,omitempty"`
-	ReturnNo     string            `gorm:"type:varchar(50);not null;index" json:"returnNo"`
-	DeliveryID   uuid.UUID         `gorm:"type:uuid;not null;index" json:"deliveryId"`
-	CustomerName string            `gorm:"type:varchar(255);not null" json:"customerName"`
-	ReturnDate   string            `gorm:"type:varchar(50)" json:"returnDate"`
-	Reason       string            `gorm:"type:varchar(255)" json:"reason"`
-	Status       string            `gorm:"type:varchar(50);default:'draft'" json:"status"` // draft | completed
-	TotalAmount  float64           `gorm:"type:decimal(15,2);default:0" json:"totalAmount"`
-	Lines        []SalesReturnLine `gorm:"foreignKey:SalesReturnID" json:"lines,omitempty"`
+	CompanyID    *uuid.UUID `gorm:"type:uuid;index" json:"companyId,omitempty"`
+	TenantID     *uuid.UUID `gorm:"type:uuid;index" json:"tenantId,omitempty"`
+	ReturnNo     string     `gorm:"type:varchar(50);not null;index" json:"returnNo"`
+	DeliveryID   uuid.UUID  `gorm:"type:uuid;not null;index" json:"deliveryId"`
+	CustomerName string     `gorm:"type:varchar(255);not null" json:"customerName"`
+	ReturnDate   string     `gorm:"type:varchar(50)" json:"returnDate"`
+	Reason       string     `gorm:"type:varchar(255)" json:"reason"`
+	Status       string     `gorm:"type:varchar(50);default:'draft'" json:"status"` // draft | completed
+	TotalAmount  float64    `gorm:"type:decimal(15,2);default:0" json:"totalAmount"`
+	// Credit note (nota retur) booked against the order's invoices: the part
+	// of the return that was invoiced, split into revenue and PPN, and the
+	// cost of the goods put back in stock.
+	CreditedAmount float64           `gorm:"type:decimal(15,2);default:0" json:"creditedAmount"`
+	VATAmount      float64           `gorm:"type:decimal(15,2);default:0" json:"vatAmount"`
+	CostAmount     float64           `gorm:"type:decimal(15,2);default:0" json:"costAmount"`
+	Lines          []SalesReturnLine `gorm:"foreignKey:SalesReturnID" json:"lines,omitempty"`
 }
 
 func (SalesReturn) TableName() string {
@@ -300,4 +310,7 @@ type SalesRepository interface {
 	CreateSalesReturn(ctx context.Context, r *SalesReturn) error
 	GetSalesReturnByID(ctx context.Context, id uuid.UUID) (*SalesReturn, error)
 	ListSalesReturns(ctx context.Context, query types.PaginationQuery) ([]SalesReturn, int64, error)
+	ListSalesReturnsByDelivery(ctx context.Context, deliveryID uuid.UUID) ([]SalesReturn, error)
+	// ListInvoicesByOrder returns the invoices billed against one order, oldest first.
+	ListInvoicesByOrder(ctx context.Context, orderID uuid.UUID) ([]Invoice, error)
 }

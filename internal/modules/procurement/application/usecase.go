@@ -693,11 +693,11 @@ func (uc *procurementUseCase) RecordInvoicePayment(ctx context.Context, id uuid.
 	if inv == nil {
 		return nil, apperrors.NewNotFound("Purchase invoice not found")
 	}
-	if inv.PaidAmount+dto.Amount > inv.TotalAmount {
-		return nil, apperrors.NewBadRequest("Payment amount would exceed the total invoice amount")
+	if inv.PaidAmount+dto.Amount > inv.TotalAmount-inv.CreditedAmount {
+		return nil, apperrors.NewBadRequest("Payment amount would exceed the amount still owed on the invoice")
 	}
 	inv.PaidAmount += dto.Amount
-	inv.Status = purchaseInvoiceStatus(inv.TotalAmount, inv.PaidAmount, inv.DueDate)
+	inv.Status = purchaseInvoiceStatus(inv.TotalAmount-inv.CreditedAmount, inv.PaidAmount, inv.DueDate)
 	if err := uc.repo.UpdatePurchaseInvoice(ctx, inv); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to record payment")
 	}
@@ -805,65 +805,6 @@ func (uc *procurementUseCase) ListDownPayments(ctx context.Context, query types.
 }
 
 // Purchase returns
-
-func (uc *procurementUseCase) CreatePurchaseReturn(ctx context.Context, dto CreatePurchaseReturnDTO) (*PurchaseReturnResponseDTO, error) {
-	if dto.GoodsReceiptID == uuid.Nil || len(dto.Lines) == 0 {
-		return nil, apperrors.NewBadRequest("goodsReceiptId and at least one line are required")
-	}
-
-	gr, err := uc.repo.GetGoodsReceiptByID(ctx, dto.GoodsReceiptID)
-	if err != nil {
-		return nil, apperrors.NewInternal(err, "Failed to get goods receipt")
-	}
-	if gr == nil {
-		return nil, apperrors.NewNotFound("Goods receipt not found")
-	}
-
-	po, err := uc.repo.GetPurchaseOrderByID(ctx, gr.PurchaseOrderID)
-	if err != nil {
-		return nil, apperrors.NewInternal(err, "Failed to get purchase order")
-	}
-	if po == nil {
-		return nil, apperrors.NewNotFound("Purchase order for this goods receipt not found")
-	}
-
-	returnDate := dto.ReturnDate
-	if returnDate == "" {
-		returnDate = time.Now().Format("2006-01-02")
-	}
-
-	var total float64
-	lines := make([]domain.PurchaseReturnLine, len(dto.Lines))
-	for i, l := range dto.Lines {
-		if l.ProductID == uuid.Nil || l.Quantity <= 0 {
-			return nil, apperrors.NewBadRequest("Each return line needs a productId and a positive quantity")
-		}
-		subtotal := l.Quantity * l.UnitPrice
-		total += subtotal
-		lines[i] = domain.PurchaseReturnLine{
-			ProductID: l.ProductID,
-			Quantity:  l.Quantity,
-			UnitPrice: l.UnitPrice,
-			Subtotal:  subtotal,
-		}
-	}
-
-	ret := &domain.PurchaseReturn{
-		ReturnNo:       fmt.Sprintf("PRET-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000),
-		GoodsReceiptID: dto.GoodsReceiptID,
-		SupplierID:     po.SupplierID,
-		SupplierName:   po.SupplierName,
-		ReturnDate:     returnDate,
-		Reason:         dto.Reason,
-		Status:         "completed",
-		TotalAmount:    total,
-		Lines:          lines,
-	}
-	if err := uc.repo.CreatePurchaseReturn(ctx, ret); err != nil {
-		return nil, apperrors.NewInternal(err, "Failed to create purchase return")
-	}
-	return ToPurchaseReturnResponse(ret), nil
-}
 
 func (uc *procurementUseCase) GetPurchaseReturnByID(ctx context.Context, id uuid.UUID) (*PurchaseReturnResponseDTO, error) {
 	ret, err := uc.repo.GetPurchaseReturnByID(ctx, id)

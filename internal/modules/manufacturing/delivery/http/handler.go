@@ -292,6 +292,90 @@ func (h *Handler) LogStep(c *fiber.Ctx) error {
 	return response.OK(c, "Process output logged", o)
 }
 
+func (h *Handler) ListBatches(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	orderID, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	out, err := uc.ListBatches(h.ctx(c), orderID)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Batches retrieved", out)
+}
+
+func (h *Handler) VoidBatch(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	orderID, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	batchID, err := parseID(c, "batchId")
+	if err != nil {
+		return err
+	}
+	var in struct {
+		Reason string `json:"reason"`
+	}
+	if err := c.BodyParser(&in); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	o, err := uc.VoidBatch(h.ctx(c), orderID, batchID, in.Reason)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Batch voided", o)
+}
+
+func (h *Handler) ListStepLogs(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	orderID, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	logs, err := uc.ListStepLogs(h.ctx(c), orderID)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Process logs retrieved", logs)
+}
+
+func (h *Handler) VoidStepLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	orderID, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	logID, err := parseID(c, "logId")
+	if err != nil {
+		return err
+	}
+	var in struct {
+		Reason string `json:"reason"`
+	}
+	if err := c.BodyParser(&in); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	o, err := uc.VoidStepLog(h.ctx(c), orderID, logID, in.Reason)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Process log voided", o)
+}
+
 // report resolves the use-case, runs fn and wraps the result as 200 OK.
 func report[T any](h *Handler, c *fiber.Ctx, message string, fn func(application.ManufacturingUseCase, context.Context) (T, error)) error {
 	uc, err := h.resolve(c)

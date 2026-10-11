@@ -93,6 +93,12 @@ func (r *inventoryRepository) GetStockLevel(ctx context.Context, productID, ware
 	return &s, nil
 }
 
+func (r *inventoryRepository) SumQuantityByProduct(ctx context.Context, productID uuid.UUID) (int, error) {
+	var total int64
+	err := tenantctx.Scope(ctx, r.db.WithContext(ctx).Model(&domain.StockLevel{})).Where("product_id = ?", productID).Select("COALESCE(SUM(quantity),0)").Scan(&total).Error
+	return int(total), err
+}
+
 // HasAnyStockLevel reports whether a product has been counted into ANY
 // warehouse yet (a StockLevel row exists for at least one warehouse) -
 // used to gate the one-time legacy Product.Stock fallback so it's only
@@ -303,6 +309,25 @@ func (r *inventoryRepository) CountStockDocuments(ctx context.Context, docType, 
 	return n, err
 }
 
+func (r *inventoryRepository) VoidStockDocument(ctx context.Context, d *domain.StockDocument) error {
+	return r.db.WithContext(ctx).Model(&domain.StockDocument{}).Where("id = ?", d.ID).
+		Updates(map[string]any{"voided": true, "voided_at": d.VoidedAt, "voided_by": d.VoidedBy, "void_reason": d.VoidReason}).Error
+}
+
+func (r *inventoryRepository) ListMovementsByReference(ctx context.Context, reference string) ([]domain.StockMovement, error) {
+	var out []domain.StockMovement
+	err := r.db.WithContext(ctx).Where("reference = ?", reference).Order("created_at asc").Find(&out).Error
+	return out, err
+}
+
+// OrderHasCompletedUnits reads the production order directly (inventory cannot import manufacturing).
+func (r *inventoryRepository) OrderHasCompletedUnits(ctx context.Context, orderID uuid.UUID) (bool, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Table("manufacturing_production_orders").
+		Where("id = ? AND quantity_completed > 0 AND deleted_at IS NULL", orderID).Count(&n).Error
+	return n > 0, err
+}
+
 func (r *inventoryRepository) SumIssuedByOrder(ctx context.Context, orderID uuid.UUID) (map[uuid.UUID]int, error) {
 	var rows []struct {
 		ProductID uuid.UUID
@@ -310,7 +335,7 @@ func (r *inventoryRepository) SumIssuedByOrder(ctx context.Context, orderID uuid
 	}
 	err := r.db.WithContext(ctx).Table("inventory_stock_document_lines l").
 		Joins("JOIN inventory_stock_documents d ON d.id = l.document_id AND d.deleted_at IS NULL").
-		Where("l.deleted_at IS NULL AND d.type = ? AND d.production_order_id = ?", domain.DocMaterialIssue, orderID).
+		Where("l.deleted_at IS NULL AND d.voided = false AND d.type = ? AND d.production_order_id = ?", domain.DocMaterialIssue, orderID).
 		Select("l.product_id AS product_id, COALESCE(SUM(l.quantity),0) AS qty").Group("l.product_id").Scan(&rows).Error
 	out := make(map[uuid.UUID]int, len(rows))
 	for _, r := range rows {

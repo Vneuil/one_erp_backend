@@ -754,11 +754,11 @@ func (uc *salesUseCase) RecordInvoicePayment(ctx context.Context, id uuid.UUID, 
 	if inv == nil {
 		return nil, apperrors.NewNotFound("Sales invoice not found")
 	}
-	if inv.PaidAmount+dto.Amount > inv.TotalAmount {
-		return nil, apperrors.NewBadRequest("Payment amount would exceed the total invoice amount")
+	if inv.PaidAmount+dto.Amount > inv.TotalAmount-inv.CreditedAmount {
+		return nil, apperrors.NewBadRequest("Payment amount would exceed the amount still owed on the invoice")
 	}
 	inv.PaidAmount += dto.Amount
-	inv.Status = salesInvoiceStatus(inv.TotalAmount, inv.PaidAmount, inv.DueDate)
+	inv.Status = salesInvoiceStatus(inv.TotalAmount-inv.CreditedAmount, inv.PaidAmount, inv.DueDate)
 	if err := uc.repo.UpdateInvoice(ctx, inv); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to record payment")
 	}
@@ -1026,56 +1026,6 @@ func (uc *salesUseCase) ListDownPayments(ctx context.Context, query types.Pagina
 }
 
 // Sales returns
-
-func (uc *salesUseCase) CreateSalesReturn(ctx context.Context, dto CreateSalesReturnDTO) (*SalesReturnResponseDTO, error) {
-	if dto.DeliveryID == uuid.Nil || len(dto.Lines) == 0 {
-		return nil, apperrors.NewBadRequest("deliveryId and at least one line are required")
-	}
-
-	delivery, err := uc.repo.GetDeliveryByID(ctx, dto.DeliveryID)
-	if err != nil {
-		return nil, apperrors.NewInternal(err, "Failed to get delivery")
-	}
-	if delivery == nil {
-		return nil, apperrors.NewNotFound("Delivery not found")
-	}
-
-	returnDate := dto.ReturnDate
-	if returnDate == "" {
-		returnDate = time.Now().Format("2006-01-02")
-	}
-
-	var total float64
-	lines := make([]domain.SalesReturnLine, len(dto.Lines))
-	for i, l := range dto.Lines {
-		if l.ProductID == uuid.Nil || l.Quantity <= 0 {
-			return nil, apperrors.NewBadRequest("Each return line needs a productId and a positive quantity")
-		}
-		subtotal := l.Quantity * l.UnitPrice
-		total += subtotal
-		lines[i] = domain.SalesReturnLine{
-			ProductID: l.ProductID,
-			Quantity:  l.Quantity,
-			UnitPrice: l.UnitPrice,
-			Subtotal:  subtotal,
-		}
-	}
-
-	ret := &domain.SalesReturn{
-		ReturnNo:     fmt.Sprintf("SRET-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000),
-		DeliveryID:   dto.DeliveryID,
-		CustomerName: delivery.CustomerName,
-		ReturnDate:   returnDate,
-		Reason:       dto.Reason,
-		Status:       "completed",
-		TotalAmount:  total,
-		Lines:        lines,
-	}
-	if err := uc.repo.CreateSalesReturn(ctx, ret); err != nil {
-		return nil, apperrors.NewInternal(err, "Failed to create sales return")
-	}
-	return ToSalesReturnResponse(ret), nil
-}
 
 func (uc *salesUseCase) GetSalesReturnByID(ctx context.Context, id uuid.UUID) (*SalesReturnResponseDTO, error) {
 	ret, err := uc.repo.GetSalesReturnByID(ctx, id)

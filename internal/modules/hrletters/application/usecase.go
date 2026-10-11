@@ -35,11 +35,22 @@ type UseCase interface {
 type useCase struct {
 	repo      domain.Repository
 	employees Employees
+	overtime  OvertimeSink
 	now       func() time.Time
 }
 
-func NewUseCase(repo domain.Repository, employees Employees) UseCase {
-	return &useCase{repo: repo, employees: employees, now: time.Now}
+// Option configures optional collaborators of the letters use case.
+type Option func(*useCase)
+
+// WithOvertime lets an issued overtime order file the overtime it authorises.
+func WithOvertime(s OvertimeSink) Option { return func(uc *useCase) { uc.overtime = s } }
+
+func NewUseCase(repo domain.Repository, employees Employees, opts ...Option) UseCase {
+	uc := &useCase{repo: repo, employees: employees, now: time.Now}
+	for _, o := range opts {
+		o(uc)
+	}
+	return uc
 }
 
 func (uc *useCase) today() string { return uc.now().Format("2006-01-02") }
@@ -371,6 +382,9 @@ func (uc *useCase) Issue(ctx context.Context, id uuid.UUID) (*domain.Letter, err
 			return l, err
 		}
 	}
+	if err := uc.fileOvertime(ctx, l); err != nil {
+		return l, err
+	}
 	return l, nil
 }
 
@@ -476,9 +490,15 @@ func (uc *useCase) Cancel(ctx context.Context, id uuid.UUID, reason string) (*do
 	if l.Status == domain.StatusIssued && reason == "" {
 		return nil, apperrors.NewBadRequest("A reason is required to cancel an issued letter")
 	}
+	wasIssued := l.Status == domain.StatusIssued
 	l.Status, l.CancelReason = domain.StatusCancelled, reason
 	if err := uc.repo.Update(ctx, l, false); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to cancel the letter")
+	}
+	if wasIssued {
+		if err := uc.revokeOvertime(ctx, l); err != nil {
+			return l, err
+		}
 	}
 	return l, nil
 }

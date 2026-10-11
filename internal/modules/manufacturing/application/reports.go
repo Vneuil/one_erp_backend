@@ -445,13 +445,21 @@ type WIPOrderRow struct {
 	MaterialCostPerUnit float64 `json:"materialCostPerUnit"`
 	// IssuedValue is the material issued to the order (issued mode only).
 	IssuedValue float64 `json:"issuedValue"`
-	WIPValue    float64 `json:"wipValue"`
+	// LaborValue / OverheadValue are the standard labour and overhead charged to
+	// units still in process (done at each step, less what finished units took out).
+	LaborValue    float64 `json:"laborValue"`
+	OverheadValue float64 `json:"overheadValue"`
+	MaterialValue float64 `json:"materialValue"`
+	WIPValue      float64 `json:"wipValue"`
 }
 
 type WIPReportDTO struct {
-	Orders     []WIPOrderRow `json:"orders"`
-	TotalUnits int           `json:"totalUnitsInWip"`
-	TotalValue float64       `json:"totalWipValue"`
+	Orders        []WIPOrderRow `json:"orders"`
+	TotalUnits    int           `json:"totalUnitsInWip"`
+	TotalValue    float64       `json:"totalWipValue"`
+	TotalMaterial float64       `json:"totalMaterialValue"`
+	TotalLabor    float64       `json:"totalLaborValue"`
+	TotalOverhead float64       `json:"totalOverheadValue"`
 	// LedgerBalance is the Work in Process account (1250) in the general ledger, when available.
 	LedgerBalance *float64 `json:"ledgerBalance,omitempty"`
 	Note          string   `json:"note"`
@@ -463,7 +471,7 @@ type wipInputs struct {
 }
 
 func buildWIPReport(orders []reportOrder, in wipInputs) *WIPReportDTO {
-	out := &WIPReportDTO{Orders: []WIPOrderRow{}, Note: "Only material cost is valued; labour and overhead are not. For orders whose materials are issued beforehand the value is what was issued minus the material cost of the units already completed. For other orders it is an estimate: units past the first step times the BOM material cost per unit. Orders with no routing steps show no units."}
+	out := &WIPReportDTO{Orders: []WIPOrderRow{}, Note: "WIP is material plus the standard labour and overhead charged as units pass each routing step (standard minutes x the step's hourly rates; steps without rates add nothing). For orders whose materials are issued beforehand the value is what was issued minus the material cost of the units already completed. For other orders it is an estimate: units past the first step times the BOM material cost per unit. Orders with no routing steps show no units."}
 	for _, o := range orders {
 		if !o.active() {
 			continue
@@ -486,18 +494,30 @@ func buildWIPReport(orders []reportOrder, in wipInputs) *WIPReportDTO {
 		}
 		if row.MaterialMode == domain.MaterialIssued {
 			row.IssuedValue = round2(in.issued[o.ID])
-			row.WIPValue = round2(math.Max(row.IssuedValue-float64(o.QuantityCompleted)*cost, 0))
+			row.MaterialValue = round2(math.Max(row.IssuedValue-float64(o.QuantityCompleted)*cost, 0))
 		} else {
-			row.WIPValue = round2(float64(row.UnitsInWIP) * cost)
+			row.MaterialValue = round2(float64(row.UnitsInWIP) * cost)
 		}
+		var labor, overhead float64
+		for _, s := range o.Steps {
+			labor += float64(s.QuantityDone) * s.UnitLabor()
+			overhead += float64(s.QuantityDone) * s.UnitOverhead()
+		}
+		perLabor, perOverhead := o.ConversionPerUnit()
+		row.LaborValue = round2(math.Max(labor-float64(o.QuantityCompleted)*perLabor, 0))
+		row.OverheadValue = round2(math.Max(overhead-float64(o.QuantityCompleted)*perOverhead, 0))
+		row.WIPValue = round2(row.MaterialValue + row.LaborValue + row.OverheadValue)
 		if row.UnitsInWIP == 0 && row.WIPValue == 0 && row.IssuedValue == 0 {
 			continue
 		}
 		out.Orders = append(out.Orders, row)
 		out.TotalUnits += row.UnitsInWIP
 		out.TotalValue += row.WIPValue
+		out.TotalMaterial += row.MaterialValue
+		out.TotalLabor += row.LaborValue
+		out.TotalOverhead += row.OverheadValue
 	}
-	out.TotalValue = round2(out.TotalValue)
+	out.TotalValue, out.TotalMaterial, out.TotalLabor, out.TotalOverhead = round2(out.TotalValue), round2(out.TotalMaterial), round2(out.TotalLabor), round2(out.TotalOverhead)
 	sort.Slice(out.Orders, func(i, j int) bool { return out.Orders[i].WIPValue > out.Orders[j].WIPValue })
 	return out
 }

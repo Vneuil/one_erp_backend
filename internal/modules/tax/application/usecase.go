@@ -27,6 +27,8 @@ type TaxUseCase interface {
 	GetTaxInvoice(ctx context.Context, id uuid.UUID) (*domain.TaxInvoice, error)
 	CreateFromSalesInvoice(ctx context.Context, in FromSalesInput) (*domain.TaxInvoice, error)
 	CreateFromPurchaseInvoice(ctx context.Context, in FromPurchaseInput) (*domain.TaxInvoice, error)
+	CreateFromPOSTransaction(ctx context.Context, in FromPOSInput) (*domain.TaxInvoice, error)
+	POSCandidates(ctx context.Context, from, to string) ([]POSCandidate, error)
 	UpdateDraft(ctx context.Context, id uuid.UUID, in UpdateInput) (*domain.TaxInvoice, error)
 	Issue(ctx context.Context, id uuid.UUID) (*domain.TaxInvoice, error)
 	Cancel(ctx context.Context, id uuid.UUID, reason string) (*domain.TaxInvoice, error)
@@ -605,4 +607,131 @@ func (uc *taxUseCase) SetTaxNumber(ctx context.Context, id uuid.UUID, number str
 		return nil, apperrors.NewInternal(err, "Failed to save the number")
 	}
 	return t, nil
+}
+
+type FromPOSInput struct {
+	TransactionID uuid.UUID `json:"transactionId"`
+	// Buyer identity is optional for retail POS sales; the cashier's customer
+	// name is used when BuyerName is empty.
+	BuyerName       string `json:"buyerName"`
+	BuyerNPWP       string `json:"buyerNpwp"`
+	BuyerNIK        string `json:"buyerNik"`
+	BuyerAddress    string `json:"buyerAddress"`
+	BuyerEmail      string `json:"buyerEmail"`
+	TransactionCode string `json:"transactionCode"`
+	Notes           string `json:"notes"`
+}
+
+// posTaxBase is the DPP of a POS sale: the total less the PPN it contains.
+func posTaxBase(s *domain.POSSaleRef) float64 { return round2(s.Total - s.Tax) }
+
+// posRate is the effective PPN rate of a POS sale (tax over DPP), to 2 decimals.
+func posRate(s *domain.POSSaleRef) float64 {
+	base := posTaxBase(s)
+	if base <= 0 {
+		return 0
+	}
+	return round2(s.Tax / base * 100)
+}
+
+// CreateFromPOSTransaction drafts a Faktur Pajak Keluaran from a POS sale that
+// carried PPN, for a customer who asks for a faktur.
+func (uc *taxUseCase) CreateFromPOSTransaction(ctx context.Context, in FromPOSInput) (*domain.TaxInvoice, error) {
+	sale, err := uc.src.POSSale(ctx, in.TransactionID)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to load the POS transaction")
+	}
+	if sale == nil {
+		return nil, apperrors.NewNotFound("POS transaction with PPN not found (it may be voided or carry no tax)")
+	}
+	if open, err := uc.repo.FindOpenBySource(ctx, domain.SourcePOSTransaction, sale.ID); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to check existing Faktur Pajak")
+	} else if open != nil {
+		return nil, apperrors.NewConflict("This POS sale already has Faktur Pajak " + open.Number)
+	}
+	npwp, err := taxid.NPWP(in.BuyerNPWP)
+	if err != nil {
+		return nil, err
+	}
+	nik, err := taxid.NIK(in.BuyerNIK)
+	if err != nil {
+		return nil, err
+	}
+	name := strings.TrimSpace(in.BuyerName)
+	if name == "" {
+		name = sale.Customer
+	}
+	date := sale.Date
+	if !validDate(date) {
+		date = uc.today()
+	}
+	code := strings.TrimSpace(in.TransactionCode)
+	if code == "" {
+		code = transactionCodeFor(false)
+	}
+	number, err := uc.nextNumber(ctx, domain.DirectionOutput, date)
+	if err != nil {
+		return nil, err
+	}
+	base := posTaxBase(sale)
+	t := &domain.TaxInvoice{
+		Direction: domain.DirectionOutput, Number: number, Status: domain.StatusDraft, TransactionCode: code, Date: date, Period: date[:7],
+		CounterpartyName: name, CounterpartyNPWP: npwp, CounterpartyNIK: nik, CounterpartyAddress: strings.TrimSpace(in.BuyerAddress), CounterpartyEmail: strings.TrimSpace(in.BuyerEmail),
+		SourceType: domain.SourcePOSTransaction, SourceID: sale.ID, SourceReference: sale.Number,
+		TaxBase: base, VATRate: posRate(sale), VATAmount: sale.Tax,
+		Notes: strings.TrimSpace(in.Notes), CreatedBy: actor.EmailFrom(ctx),
+		Lines: allocateLines(sale.Lines, "Penjualan kasir "+sale.Number, base, 0, sale.Tax),
+	}
+	return uc.save(ctx, t)
+}
+
+type POSCandidate struct {
+	ID       uuid.UUID `json:"id"`
+	Number   string    `json:"number"`
+	Date     string    `json:"date"`
+	Customer string    `json:"customer"`
+	TaxBase  float64   `json:"taxBase"`
+	VAT      float64   `json:"vatAmount"`
+	Total    float64   `json:"total"`
+}
+
+// POSCandidates lists PPN-bearing POS sales of the range (default: the current
+// month) that have no live Faktur Pajak yet.
+func (uc *taxUseCase) POSCandidates(ctx context.Context, from, to string) ([]POSCandidate, error) {
+	if err := checkRange(from, to); err != nil {
+		return nil, err
+	}
+	if from == "" && to == "" {
+		from, to = monthStart(uc.now()), uc.today()
+	}
+	if from == "" {
+		from = "0000-01-01"
+	}
+	if to == "" {
+		to = "9999-12-31"
+	}
+	sales, err := uc.src.POSSalesBetween(ctx, from, to)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to load POS sales")
+	}
+	ids := make([]uuid.UUID, len(sales))
+	for i, s := range sales {
+		ids[i] = s.ID
+	}
+	taken, err := uc.repo.ListBySources(ctx, domain.SourcePOSTransaction, ids)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to load Faktur Pajak")
+	}
+	has := map[uuid.UUID]bool{}
+	for _, f := range taken {
+		has[f.SourceID] = true
+	}
+	out := []POSCandidate{}
+	for i := range sales {
+		s := &sales[i]
+		if !has[s.ID] {
+			out = append(out, POSCandidate{ID: s.ID, Number: s.Number, Date: s.Date, Customer: s.Customer, TaxBase: posTaxBase(s), VAT: s.Tax, Total: s.Total})
+		}
+	}
+	return out, nil
 }

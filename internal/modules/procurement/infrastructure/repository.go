@@ -348,3 +348,14 @@ func (r *procurementRepository) CountInvoiceReceipts(ctx context.Context) (int64
 	return total, err
 }
 
+func (r *procurementRepository) ListPurchaseReturnsByReceipt(ctx context.Context, goodsReceiptID uuid.UUID) ([]domain.PurchaseReturn, error) {
+	var out []domain.PurchaseReturn
+	err := r.db.WithContext(ctx).Preload("Lines").Where("goods_receipt_id = ?", goodsReceiptID).Find(&out).Error
+	return out, err
+}
+
+func (r *procurementRepository) ListPurchaseInvoicesByOrder(ctx context.Context, orderID uuid.UUID) ([]domain.PurchaseInvoice, error) {
+	var out []domain.PurchaseInvoice
+	err := r.db.WithContext(ctx).Where("purchase_order_id = ?", orderID).Order("invoice_date asc, created_at asc").Find(&out).Error
+	return out, err
+}

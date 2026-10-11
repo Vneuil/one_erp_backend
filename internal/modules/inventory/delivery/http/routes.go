@@ -51,4 +51,5 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	documents.Post("/", h.CreateStockDocument)
 	documents.Get("/", h.ListStockDocuments)
 	documents.Get("/:id", h.GetStockDocument)
+	documents.Post("/:id/void", h.VoidStockDocument)
 }

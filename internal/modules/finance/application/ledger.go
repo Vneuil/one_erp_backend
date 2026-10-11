@@ -42,6 +42,12 @@ const (
 	AccountFixedAssets          = "1500"
 	AccountAccumDepreciation    = "1590"
 	AccountDepreciationExpense  = "5400"
+	AccountDisposalLoss         = "5600"
+	AccountTempAdvance          = "1410"
+	AccountSalesReturns         = "4150"
+	AccountLaborApplied         = "5410"
+	AccountOverheadApplied      = "5420"
+	AccountPurchaseReturns      = "5250"
 )
 
 // defaultAccounts are created on demand when an automatic posting needs a
@@ -76,6 +82,11 @@ var defaultAccounts = map[string]struct{ Name, Type string }{
 	AccountFixedAssets:          {"Fixed Assets", "asset"},
 	AccountAccumDepreciation:    {"Accumulated Depreciation", "asset"},
 	AccountDepreciationExpense:  {"Depreciation Expense", "expense"},
+	AccountDisposalLoss:         {"Loss on Asset Disposal", "expense"},
+	AccountTempAdvance:          {"Temporary Cash Advances (KBS)", "asset"},
+	AccountSalesReturns:         {"Sales Returns", "revenue"},
+	AccountLaborApplied:         {"Direct Labor Applied", "expense"},
+	AccountOverheadApplied:      {"Manufacturing Overhead Applied", "expense"},
 }
 
 // LedgerLine is one side of an automatic posting, addressed by account code so
@@ -104,6 +115,10 @@ type LedgerPoster interface {
 	// so the aging reports include invoices raised in other modules.
 	UpsertReceivable(ctx context.Context, d SubledgerDoc) error
 	UpsertPayable(ctx context.Context, d SubledgerDoc) error
+	// ReverseEntry posts the mirror image of the entry booked under sourceDoc,
+	// as reversalDoc dated date (empty = today). It reports false when there
+	// was no such entry (nothing was posted), and is idempotent on reversalDoc.
+	ReverseEntry(ctx context.Context, sourceDoc, reversalDoc, date, memo string) (bool, error)
 }
 
 // SubledgerDoc describes an invoice to mirror into the AR/AP sub-ledger.
@@ -214,6 +229,45 @@ func (p *ledgerPoster) PostEntryOn(ctx context.Context, date, sourceDoc, memo st
 		Lines:       jl,
 	}
 	return p.repo.CreateJournalEntry(ctx, je)
+}
+
+func (p *ledgerPoster) ReverseEntry(ctx context.Context, sourceDoc, reversalDoc, date, memo string) (bool, error) {
+	if done, err := p.repo.GetJournalEntryBySourceDoc(ctx, reversalDoc); err != nil {
+		return false, err
+	} else if done != nil {
+		return true, nil
+	}
+	head, err := p.repo.GetJournalEntryBySourceDoc(ctx, sourceDoc)
+	if err != nil {
+		return false, err
+	}
+	if head == nil {
+		return false, nil
+	}
+	orig, err := p.repo.GetJournalEntryByID(ctx, head.ID)
+	if err != nil {
+		return false, err
+	}
+	if orig == nil || len(orig.Lines) == 0 {
+		return false, nil
+	}
+	now := time.Now()
+	if date == "" {
+		date = now.Format("2006-01-02")
+	}
+	lines := make([]domain.JournalLine, len(orig.Lines))
+	for i, l := range orig.Lines {
+		lines[i] = domain.JournalLine{AccountID: l.AccountID, Debit: l.Credit, Credit: l.Debit, Description: "Batal " + l.Description}
+	}
+	je := &domain.JournalEntry{
+		EntryNumber: fmt.Sprintf("AUTO-%s-%06d", now.Format("200601"), now.Nanosecond()/1000%1000000),
+		Date:        date,
+		Memo:        memo,
+		SourceDoc:   reversalDoc,
+		Status:      "posted",
+		Lines:       lines,
+	}
+	return true, p.repo.CreateJournalEntry(ctx, je)
 }
 
 func (p *ledgerPoster) UpsertReceivable(ctx context.Context, d SubledgerDoc) error {

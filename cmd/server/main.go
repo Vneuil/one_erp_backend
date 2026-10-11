@@ -32,6 +32,7 @@ import (
 	"github.com/divinecoid/one-backend/internal/modules/device"
 	"github.com/divinecoid/one-backend/internal/modules/docflow"
 	"github.com/divinecoid/one-backend/internal/modules/finance"
+	"github.com/divinecoid/one-backend/internal/modules/fingerprint"
 	"github.com/divinecoid/one-backend/internal/modules/goal"
 	"github.com/divinecoid/one-backend/internal/modules/hrletters"
 	"github.com/divinecoid/one-backend/internal/modules/hrm"
@@ -177,6 +178,7 @@ func main() {
 	hrops.NewModule(server.V1, cfg.JWT.Secret, tenantManager, objectStore)
 	leave.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	hrletters.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
+	fingerprint.NewModule(server.V1, server.App, cfg.JWT.Secret, tenantManager, db)
 	kpi.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	cooperative.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	reimbursement.NewModule(server.V1, cfg.JWT.Secret, tenantManager)

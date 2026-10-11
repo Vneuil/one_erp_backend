@@ -54,6 +54,7 @@ type InventoryUseCase interface {
 	CreateStockDocument(ctx context.Context, dto CreateStockDocumentDTO) (*StockDocumentResponseDTO, error)
 	GetStockDocument(ctx context.Context, id uuid.UUID) (*StockDocumentResponseDTO, error)
 	ListStockDocuments(ctx context.Context, docType, from, to string) ([]StockDocumentResponseDTO, error)
+	VoidStockDocument(ctx context.Context, id uuid.UUID, reason string) (*StockDocumentResponseDTO, error)
 
 	SeedInitialData(ctx context.Context) error
 }

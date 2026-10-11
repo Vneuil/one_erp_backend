@@ -188,7 +188,7 @@ func TestStockAgingBucketsUntrackedAndExpired(t *testing.T) {
 		{ProductID: p, SKU: "A", ProductName: "Alpha", CostPrice: 10, WarehouseID: w, WarehouseName: "Main", BatchNo: "B2", ReceivedAt: "2026-02-01", ExpiryDate: "2026-03-01", Quantity: 20},
 		{ProductID: p, SKU: "A", ProductName: "Alpha", CostPrice: 10, WarehouseID: w, WarehouseName: "Main", BatchNo: "B3", ReceivedAt: "2025-10-01", Quantity: 30},
 	}
-	out := buildStockAging("2026-03-31", levels, batches)
+	out := buildStockAging("2026-03-31", levels, batches, nil)
 	if len(out.Rows) != 1 {
 		t.Fatalf("rows: %+v", out.Rows)
 	}
@@ -199,6 +199,31 @@ func TestStockAgingBucketsUntrackedAndExpired(t *testing.T) {
 	}
 	if out.TotalQuantity != 100 || out.TotalValue != 1000 || out.UntrackedQty != 40 || out.BucketTotals[3] != 30 || out.BucketValues[3] != 300 {
 		t.Fatalf("totals: %+v", out)
+	}
+}
+
+func TestStockAgingEstimatesUntrackedStockFirstInFirstOut(t *testing.T) {
+	p, w := uuid.New(), uuid.New()
+	levels := []stockLevelRow{{ProductID: p, SKU: "A", ProductName: "Alpha", CostPrice: 10, WarehouseID: w, WarehouseName: "Main", Quantity: 60}}
+	// 100 received in January (60 days... 80 days before), 30 received in March; 70 already sold
+	// first-in-first-out, so the 60 on hand are 30 from March and 30 from January.
+	receipts := []stockReceiptRow{
+		{ProductID: p, WarehouseID: w, Date: "2026-01-10", Quantity: 100},
+		{ProductID: p, WarehouseID: w, Date: "2026-03-20", Quantity: 30},
+	}
+	out := buildStockAging("2026-03-31", levels, nil, receipts)
+	r := out.Rows[0]
+	// March: 11 days (0-30) x30; January: 80 days (61-90) x30.
+	if r.Buckets[0] != 30 || r.Buckets[2] != 30 || r.Estimated != 60 || r.Untracked != 0 || r.Total != 60 || r.OldestDays != 80 || out.EstimatedQty != 60 {
+		t.Fatalf("estimated aging: %+v", r)
+	}
+	// Without receipt history nothing is guessed.
+	if o := buildStockAging("2026-03-31", levels, nil, nil); o.Rows[0].Untracked != 60 || o.Rows[0].Estimated != 0 {
+		t.Fatalf("no history: %+v", o.Rows[0])
+	}
+	// Receipts that explain only part of the stock leave the rest untracked.
+	if o := buildStockAging("2026-03-31", levels, nil, receipts[1:]); o.Rows[0].Estimated != 30 || o.Rows[0].Untracked != 30 {
+		t.Fatalf("partial history: %+v", o.Rows[0])
 	}
 }
 

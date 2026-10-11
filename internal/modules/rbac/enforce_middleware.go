@@ -100,7 +100,7 @@ func Enforce(db *gorm.DB) fiber.Handler {
 // restrictedForPlainStaff are areas an account with no custom role and the
 // plain staff role cannot reach, even though RBAC is otherwise opt-in.
 // Other people's warnings, terminations and mutations are as sensitive as payroll.
-var restrictedForPlainStaff = []string{"/api/v1/payroll", "/api/v1/hr-letters"}
+var restrictedForPlainStaff = []string{"/api/v1/payroll", "/api/v1/hr-letters", "/api/v1/fingerprint"}
 
 // staffBlockedFromPath reports whether a legacy account (no custom role) with
 // the given account role is kept out of path.
@@ -137,6 +137,7 @@ var moduleAliases = map[string]string{
 	"devices":               "device",
 	"tax":                   "finance",
 	"hr-letters":            "hrm",
+	"fingerprint":           "hrm",
 	"currencies":            "finance",
 	"exchange-rates":        "finance",
 	"commission":            "commission",

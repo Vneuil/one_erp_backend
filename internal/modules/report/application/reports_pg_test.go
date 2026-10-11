@@ -235,7 +235,7 @@ func TestReportsAgainstPostgres(t *testing.T) {
 	create(&b1)
 	ag, err := q.StockAging(ctx, "2026-03-31", nil)
 	must(err)
-	if len(ag.Rows) != 1 || ag.Rows[0].Buckets[1] != 40 || ag.Rows[0].Untracked != 25 || ag.TotalQuantity != 65 || ag.TotalValue != 3900 {
+	if len(ag.Rows) != 1 || ag.Rows[0].Buckets[1] != 65 || ag.Rows[0].Estimated != 25 || ag.Rows[0].Untracked != 0 || ag.TotalQuantity != 65 || ag.TotalValue != 3900 {
 		t.Fatalf("stock aging: %+v", ag)
 	}
 	if _, err := q.StockCard(ctx, uuid.New(), nil, "", ""); err == nil {

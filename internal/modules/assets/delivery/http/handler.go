@@ -204,3 +204,43 @@ func (h *Handler) DepreciationReport(c *fiber.Ctx) error {
 	}
 	return response.OK(c, "Depreciation report retrieved successfully", res)
 }
+
+func (h *Handler) PostAcquisition(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var dto application.PostAcquisitionDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	a, err := uc.PostAcquisition(h.ctx(c), id, dto)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Asset acquisition posted", a)
+}
+
+func (h *Handler) DisposeAsset(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var dto application.DisposeAssetDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	a, err := uc.DisposeAsset(h.ctx(c), id, dto)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Asset disposed", a)
+}

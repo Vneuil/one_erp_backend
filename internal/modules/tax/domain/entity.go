@@ -20,6 +20,7 @@ const (
 
 	SourceSalesInvoice    = "sales_invoice"
 	SourcePurchaseInvoice = "purchase_invoice"
+	SourcePOSTransaction  = "pos_transaction"
 )
 
 // TaxSettings holds the taxpayer (seller) identity printed on every Faktur
@@ -187,6 +188,23 @@ type PurchaseInvoiceRef struct {
 	VATOtherValueBase, VATCreditable        bool
 }
 
+// ReturnVATRef is the PPN reversed by a sales return (nota retur, reduces PPN
+// Keluaran) or a purchase return (reduces creditable PPN Masukan).
+type ReturnVATRef struct {
+	Number, Party, Date string
+	VAT                 float64
+}
+
+// POSSaleRef is a completed point-of-sale transaction that carried PPN.
+// Total includes the tax; TaxBase (DPP) is Total minus Tax.
+type POSSaleRef struct {
+	ID                   uuid.UUID
+	Number, Customer     string
+	Date                 string
+	Total, Tax, Discount float64
+	Lines                []SourceLine
+}
+
 // SourceReader reads the documents Faktur Pajak are raised from. Implemented
 // against the sales, procurement, customer and supplier tables.
 type SourceReader interface {
@@ -197,6 +215,13 @@ type SourceReader interface {
 	SalesInvoiceLines(ctx context.Context, id uuid.UUID) ([]SourceLine, error)
 	PurchaseInvoice(ctx context.Context, id uuid.UUID) (*PurchaseInvoiceRef, error)
 	PurchaseInvoicesBetween(ctx context.Context, from, to string) ([]PurchaseInvoiceRef, error)
+	// POSSale returns one PPN-bearing POS transaction (with lines), or nil.
+	POSSale(ctx context.Context, id uuid.UUID) (*POSSaleRef, error)
+	// POSSalesBetween lists the PPN-bearing POS transactions in the range (voided ones excluded).
+	POSSalesBetween(ctx context.Context, from, to string) ([]POSSaleRef, error)
+	// ReturnVATBetween returns the PPN reversed by sales returns (output) and
+	// purchase returns (input) dated within the range.
+	ReturnVATBetween(ctx context.Context, from, to string) (output, input []ReturnVATRef, err error)
 	// CustomersByName returns every customer keyed by lower-cased name.
 	CustomersByName(ctx context.Context) (map[string]Party, error)
 	Supplier(ctx context.Context, id uuid.UUID) (*Party, error)

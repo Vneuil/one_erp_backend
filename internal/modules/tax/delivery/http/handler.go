@@ -258,3 +258,31 @@ func (h *Handler) CoretaxExport(c *fiber.Ctx) error {
 		return uc.CoretaxExport(ctx, c.Query("from"), c.Query("to"))
 	})
 }
+
+func (h *Handler) CreateFromPOSTransaction(c *fiber.Ctx) error {
+	in, err := body[application.FromPOSInput](c)
+	if err != nil {
+		return err
+	}
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	v, err := uc.CreateFromPOSTransaction(h.ctx(c), in)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Faktur Pajak Keluaran drafted from POS sale", v)
+}
+
+func (h *Handler) POSCandidates(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	v, err := uc.POSCandidates(h.ctx(c), c.Query("from"), c.Query("to"))
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "POS sales without Faktur Pajak retrieved", v)
+}

@@ -205,9 +205,14 @@ type StockDocument struct {
 	Notes             string     `gorm:"type:varchar(500)" json:"notes"`
 	TotalValue        float64    `gorm:"type:decimal(15,2);default:0" json:"totalValue"`
 	// Posted is set once the journal entry exists; false means the stock moved but the posting failed.
-	Posted    bool                `gorm:"not null;default:false" json:"posted"`
-	CreatedBy string              `gorm:"type:varchar(255)" json:"createdBy,omitempty"`
-	Lines     []StockDocumentLine `gorm:"foreignKey:DocumentID" json:"lines,omitempty"`
+	Posted    bool   `gorm:"not null;default:false" json:"posted"`
+	CreatedBy string `gorm:"type:varchar(255)" json:"createdBy,omitempty"`
+	// Voided documents keep their record but their stock movements and journal have been reversed.
+	Voided     bool                `gorm:"not null;default:false;index" json:"voided"`
+	VoidedAt   *time.Time          `json:"voidedAt,omitempty"`
+	VoidedBy   string              `gorm:"type:varchar(255)" json:"voidedBy,omitempty"`
+	VoidReason string              `gorm:"type:varchar(255)" json:"voidReason,omitempty"`
+	Lines      []StockDocumentLine `gorm:"foreignKey:DocumentID" json:"lines,omitempty"`
 }
 
 func (StockDocument) TableName() string { return "inventory_stock_documents" }
@@ -239,6 +244,12 @@ type InventoryRepository interface {
 	GetStockDocument(ctx context.Context, id uuid.UUID) (*StockDocument, error)
 	ListStockDocuments(ctx context.Context, f StockDocumentFilter) ([]StockDocument, error)
 	CountStockDocuments(ctx context.Context, docType, numberPrefix string) (int64, error)
+	// VoidStockDocument records that a document was voided.
+	VoidStockDocument(ctx context.Context, d *StockDocument) error
+	// ListMovementsByReference returns the movements recorded under a reference (a document number), oldest first.
+	ListMovementsByReference(ctx context.Context, reference string) ([]StockMovement, error)
+	// OrderHasCompletedUnits reports whether a production order has already completed units.
+	OrderHasCompletedUnits(ctx context.Context, orderID uuid.UUID) (bool, error)
 	// SumIssuedByOrder totals the quantity of every product issued to a production order by material issue documents.
 	SumIssuedByOrder(ctx context.Context, orderID uuid.UUID) (map[uuid.UUID]int, error)
 
@@ -254,6 +265,8 @@ type InventoryRepository interface {
 	// Stock levels
 	GetStockLevel(ctx context.Context, productID, warehouseID uuid.UUID) (*StockLevel, error)
 	HasAnyStockLevel(ctx context.Context, productID uuid.UUID) (bool, error)
+	// SumQuantityByProduct is the quantity on hand of a product across all warehouses.
+	SumQuantityByProduct(ctx context.Context, productID uuid.UUID) (int, error)
 	ListStockLevels(ctx context.Context, query types.PaginationQuery) ([]StockLevel, int64, error)
 	ListStockLevelsByWarehouse(ctx context.Context, warehouseID uuid.UUID) ([]StockLevel, error)
 	UpsertStockLevel(ctx context.Context, s *StockLevel) error
