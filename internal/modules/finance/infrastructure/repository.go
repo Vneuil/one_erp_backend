@@ -628,3 +628,90 @@ func (r *financeRepository) ListPostedLines(ctx context.Context, from, to string
 	err := db.Order("e.date asc, e.created_at asc, l.created_at asc").Scan(&out).Error
 	return out, err
 }
+
+// Cash Advances (KBS)
+
+func (r *financeRepository) CreateCashAdvance(ctx context.Context, ca *domain.CashAdvance) error {
+	tenantctx.SetTenantID(ctx, &ca.TenantID)
+	return r.db.WithContext(ctx).Create(ca).Error
+}
+
+func (r *financeRepository) UpdateCashAdvance(ctx context.Context, ca *domain.CashAdvance) error {
+	return r.db.WithContext(ctx).Save(ca).Error
+}
+
+func (r *financeRepository) GetCashAdvanceByID(ctx context.Context, id uuid.UUID) (*domain.CashAdvance, error) {
+	var ca domain.CashAdvance
+	err := tenantctx.Scope(ctx, r.db.WithContext(ctx)).
+		Preload("PlanLines").
+		Preload("SettlementLines").
+		Where("id = ?", id).
+		First(&ca).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &ca, nil
+}
+
+func (r *financeRepository) ListCashAdvances(ctx context.Context, status, from, to string) ([]domain.CashAdvance, error) {
+	var out []domain.CashAdvance
+	db := tenantctx.Scope(ctx, r.db.WithContext(ctx)).
+		Preload("PlanLines").
+		Preload("SettlementLines")
+	if status != "" {
+		db = db.Where("cr_status = ? OR kbs_status = ? OR pj_status = ?", status, status, status)
+	}
+	if from != "" {
+		db = db.Where("cr_date >= ?", from)
+	}
+	if to != "" {
+		db = db.Where("cr_date <= ?", to)
+	}
+	err := db.Order("created_at desc").Find(&out).Error
+	return out, err
+}
+
+func (r *financeRepository) CountCashAdvances(ctx context.Context, numberPrefix string) (int64, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Unscoped().Model(&domain.CashAdvance{}).
+		Where("kbs_number LIKE ?", numberPrefix+"%").Count(&n).Error
+	return n, err
+}
+
+func (r *financeRepository) CountCashRequests(ctx context.Context, numberPrefix string) (int64, error) {
+	var n int64
+	err := r.db.WithContext(ctx).Unscoped().Model(&domain.CashAdvance{}).
+		Where("cr_number LIKE ?", numberPrefix+"%").Count(&n).Error
+	return n, err
+}
+
+func (r *financeRepository) ReplaceCashAdvancePlanLines(ctx context.Context, advanceID uuid.UUID, lines []domain.CashAdvancePlanLine) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("cash_advance_id = ?", advanceID).Delete(&domain.CashAdvancePlanLine{}).Error; err != nil {
+			return err
+		}
+		if len(lines) > 0 {
+			if err := tx.Create(&lines).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func (r *financeRepository) ReplaceCashAdvanceSettlementLines(ctx context.Context, advanceID uuid.UUID, lines []domain.CashAdvanceSettlementLine) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("cash_advance_id = ?", advanceID).Delete(&domain.CashAdvanceSettlementLine{}).Error; err != nil {
+			return err
+		}
+		if len(lines) > 0 {
+			if err := tx.Create(&lines).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}

@@ -35,6 +35,9 @@ func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager
 				&domain.Budget{},
 				&domain.CashVoucher{},
 				&domain.CashVoucherLine{},
+				&domain.CashAdvance{},
+				&domain.CashAdvancePlanLine{},
+				&domain.CashAdvanceSettlementLine{},
 				&domain.TempAdvance{},
 				&domain.TempAdvanceLine{},
 			)
