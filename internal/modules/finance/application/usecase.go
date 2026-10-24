@@ -63,14 +63,6 @@ type FinanceUseCase interface {
 	VoidCashVoucher(ctx context.Context, id uuid.UUID, reason string) (*domain.CashVoucher, error)
 	ListCashVouchers(ctx context.Context, typ, from, to string) ([]domain.CashVoucher, error)
 
-	// Temporary cash advances (Kas Bon Sementara)
-	IssueTempAdvance(ctx context.Context, in TempAdvanceInput) (*domain.TempAdvance, error)
-	SettleTempAdvance(ctx context.Context, id uuid.UUID, in TempAdvanceSettleInput) (*domain.TempAdvance, error)
-	CancelTempAdvance(ctx context.Context, id uuid.UUID) (*domain.TempAdvance, error)
-	GetTempAdvance(ctx context.Context, id uuid.UUID) (*domain.TempAdvance, error)
-	ListTempAdvances(ctx context.Context, status, from, to string) ([]domain.TempAdvance, error)
-	OutstandingTempAdvances(ctx context.Context, asOf string) (*OutstandingTempAdvancesDTO, error)
-
 	// Statutory reports
 	GeneralLedger(ctx context.Context, accountID *uuid.UUID, from, to string) (*GeneralLedgerDTO, error)
 	CashBook(ctx context.Context, accountCode, from, to string) (*GeneralLedgerDTO, error)

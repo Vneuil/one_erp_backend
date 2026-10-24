@@ -43,7 +43,6 @@ const (
 	AccountAccumDepreciation    = "1590"
 	AccountDepreciationExpense  = "5400"
 	AccountDisposalLoss         = "5600"
-	AccountTempAdvance          = "1410"
 	AccountSalesReturns         = "4150"
 	AccountLaborApplied         = "5410"
 	AccountOverheadApplied      = "5420"
@@ -83,7 +82,6 @@ var defaultAccounts = map[string]struct{ Name, Type string }{
 	AccountAccumDepreciation:    {"Accumulated Depreciation", "asset"},
 	AccountDepreciationExpense:  {"Depreciation Expense", "expense"},
 	AccountDisposalLoss:         {"Loss on Asset Disposal", "expense"},
-	AccountTempAdvance:          {"Temporary Cash Advances (KBS)", "asset"},
 	AccountSalesReturns:         {"Sales Returns", "revenue"},
 	AccountLaborApplied:         {"Direct Labor Applied", "expense"},
 	AccountOverheadApplied:      {"Manufacturing Overhead Applied", "expense"},

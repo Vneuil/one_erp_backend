@@ -226,45 +226,6 @@ type CashVoucherLine struct {
 
 func (CashVoucherLine) TableName() string { return "finance_cash_voucher_lines" }
 
-// TempAdvance is a Kas Bon Sementara (KBS): cash handed out against a
-// purpose and later accounted for with receipts. Open until settled; settling
-// books the actual expenses and returns (or tops up) the difference in cash.
-type TempAdvance struct {
-	types.BaseEntity
-	CompanyID        *uuid.UUID        `gorm:"type:uuid;index" json:"companyId,omitempty"`
-	TenantID         *uuid.UUID        `gorm:"type:uuid;index" json:"tenantId,omitempty"`
-	Number           string            `gorm:"type:varchar(50);not null;index" json:"number"`
-	Date             string            `gorm:"type:varchar(10);not null;index" json:"date"`
-	DueDate          string            `gorm:"type:varchar(10)" json:"dueDate,omitempty"`
-	RecipientName    string            `gorm:"type:varchar(255);not null" json:"recipientName"`
-	EmployeeID       *uuid.UUID        `gorm:"type:uuid" json:"employeeId,omitempty"`
-	Purpose          string            `gorm:"type:varchar(500)" json:"purpose"`
-	Amount           float64           `gorm:"type:decimal(15,2);not null" json:"amount"`
-	CashAccountCode  string            `gorm:"type:varchar(50);not null" json:"cashAccountCode"`
-	Status           string            `gorm:"type:varchar(20);not null;default:'open';index" json:"status"` // open | settled | cancelled
-	Posted           bool              `gorm:"not null;default:false" json:"posted"`
-	SettledDate      string            `gorm:"type:varchar(10)" json:"settledDate,omitempty"`
-	SpentTotal       float64           `gorm:"type:decimal(15,2);default:0" json:"spentTotal"`
-	ReturnedAmount   float64           `gorm:"type:decimal(15,2);default:0" json:"returnedAmount"`
-	ExtraPaid        float64           `gorm:"type:decimal(15,2);default:0" json:"extraPaid"`
-	SettlementPosted bool              `gorm:"not null;default:false" json:"settlementPosted"`
-	CancelledDate    string            `gorm:"type:varchar(10)" json:"cancelledDate,omitempty"`
-	CreatedByEmail   string            `gorm:"type:varchar(255)" json:"createdByEmail,omitempty"`
-	Lines            []TempAdvanceLine `gorm:"foreignKey:AdvanceID" json:"lines,omitempty"`
-}
-
-func (TempAdvance) TableName() string { return "finance_temp_advances" }
-
-// TempAdvanceLine is one accounted expense of a settled KBS.
-type TempAdvanceLine struct {
-	types.BaseEntity
-	AdvanceID   uuid.UUID `gorm:"type:uuid;not null;index" json:"advanceId"`
-	AccountCode string    `gorm:"type:varchar(50);not null" json:"accountCode"`
-	Description string    `gorm:"type:varchar(255)" json:"description"`
-	Amount      float64   `gorm:"type:decimal(15,2);not null" json:"amount"`
-}
-
-func (TempAdvanceLine) TableName() string { return "finance_temp_advance_lines" }
 // CashAdvance is an operational temporary cash advance (Kas Bon Sementara - KBS)
 type CashAdvance struct {
 	types.BaseEntity
@@ -363,16 +324,6 @@ type FinanceRepository interface {
 	GetCashVoucherByID(ctx context.Context, id uuid.UUID) (*CashVoucher, error)
 	ListCashVouchers(ctx context.Context, typ, from, to string) ([]CashVoucher, error)
 	CountCashVouchers(ctx context.Context, typ, numberPrefix string) (int64, error)
-
-	// Temporary cash advances (KBS)
-	CreateTempAdvance(ctx context.Context, a *TempAdvance) error
-	GetTempAdvanceByID(ctx context.Context, id uuid.UUID) (*TempAdvance, error)
-	ListTempAdvances(ctx context.Context, status, from, to string) ([]TempAdvance, error)
-	CountTempAdvances(ctx context.Context, numberPrefix string) (int64, error)
-	// SaveTempAdvanceState persists status/posting fields only.
-	SaveTempAdvanceState(ctx context.Context, a *TempAdvance) error
-	// SettleTempAdvance stores the settlement lines and state in one transaction.
-	SettleTempAdvance(ctx context.Context, a *TempAdvance) error
 
 	// ListPostedLines returns posted journal lines in date order. A nil
 	// accountIDs filter means every account.
