@@ -162,7 +162,7 @@ func main() {
 	activitylog.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	approval.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	currency.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
-	aiassistant.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
+	aiassistant.NewModule(server.V1, cfg.JWT.Secret, tenantManager, db)
 	shipping.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	supplier.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	sales.NewModule(server.V1, cfg.JWT.Secret, tenantManager)

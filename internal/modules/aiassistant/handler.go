@@ -7,12 +7,16 @@ import (
 	"github.com/divinecoid/one-backend/internal/foundation/crypto"
 	"github.com/divinecoid/one-backend/internal/foundation/middleware"
 	"github.com/divinecoid/one-backend/internal/foundation/response"
+	tenantMgr "github.com/divinecoid/one-backend/internal/foundation/tenant"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
 )
 
-type Handler struct{}
+type Handler struct {
+	manager *tenantMgr.Manager
+	central *gorm.DB
+}
 
 type settingsView struct {
 	Provider  string         `json:"provider"`
