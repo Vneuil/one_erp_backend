@@ -116,6 +116,9 @@ func (h *Handler) authenticate(c *fiber.Ctx) (*MCPToken, error) {
 	if err != nil {
 		return nil, apperrors.NewUnauthorized("Invalid MCP token")
 	}
+	if err := ensureSchema(db); err != nil {
+		return nil, apperrors.NewInternal(err)
+	}
 	var t MCPToken
 	if err := db.Where("token_hash = ?", hashToken(raw)).First(&t).Error; err != nil {
 		return nil, apperrors.NewUnauthorized("Invalid MCP token")

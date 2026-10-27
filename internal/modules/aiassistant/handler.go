@@ -3,6 +3,7 @@ package aiassistant
 import (
 	"errors"
 	"strings"
+	"sync"
 
 	"github.com/divinecoid/one-backend/internal/foundation/crypto"
 	"github.com/divinecoid/one-backend/internal/foundation/middleware"
@@ -26,10 +27,28 @@ type settingsView struct {
 	Providers []ProviderInfo `json:"providers"`
 }
 
+// migrated remembers tenant DBs whose tables were verified, since existing
+// companies are only backfilled when an admin runs the schema backfill.
+var migrated sync.Map
+
+func ensureSchema(db *gorm.DB) error {
+	if _, ok := migrated.Load(db); ok {
+		return nil
+	}
+	if err := db.AutoMigrate(&Settings{}, &MCPToken{}); err != nil {
+		return err
+	}
+	migrated.Store(db, true)
+	return nil
+}
+
 func (h *Handler) db(c *fiber.Ctx) (*gorm.DB, error) {
 	db := middleware.TenantDB(c)
 	if db == nil {
 		return nil, apperrors.NewBadRequest("No active company. Please select or provision a company first.")
+	}
+	if err := ensureSchema(db); err != nil {
+		return nil, apperrors.NewInternal(err)
 	}
 	return db, nil
 }
