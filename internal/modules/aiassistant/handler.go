@@ -1,7 +1,10 @@
 package aiassistant
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 
@@ -9,6 +12,7 @@ import (
 	"github.com/divinecoid/one-backend/internal/foundation/middleware"
 	"github.com/divinecoid/one-backend/internal/foundation/response"
 	tenantMgr "github.com/divinecoid/one-backend/internal/foundation/tenant"
+	"github.com/divinecoid/one-backend/internal/modules/report/application"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
@@ -159,12 +163,27 @@ func (h *Handler) Chat(c *fiber.Ctx) error {
 	if err != nil {
 		return apperrors.NewInternal(err)
 	}
-	system := "Anda adalah Asisten AI untuk sistem ERP perusahaan. Jawab dalam bahasa pengguna, ringkas dan jelas. " +
-		"Gunakan hanya data ERP yang diberikan pada bagian KONTEKS; jika data tidak ada, katakan tidak tahu dan jangan mengarang angka."
+	system := "Anda adalah Asisten AI untuk sistem ERP perusahaan (Manna ERP). Jawab dalam bahasa pengguna, ringkas dan jelas. " +
+		"Untuk pertanyaan tentang data perusahaan (stok, penjualan, piutang, hutang, pembelian, ringkasan eksekutif), WAJIB panggil tool yang tersedia dan jawab hanya dari hasilnya; jangan mengarang angka. " +
+		"Jika pengguna bertanya tool apa yang tersedia, sebutkan nama dan fungsi tool tersebut. Tanggal hari ini: " + today() + " (WIB). " +
+		"Format jawaban: gunakan **tebal** untuk angka penting dan daftar berawalan \"- \" bila perlu; jangan memakai tabel atau heading."
 	if ctxText := strings.TrimSpace(in.Context); ctxText != "" {
-		system += "\n\nKONTEKS DATA ERP:\n" + truncate(ctxText, 8000)
+		system += "\n\nKONTEKS TAMBAHAN:\n" + truncate(ctxText, 8000)
 	}
-	reply, err := Complete(c.UserContext(), s.Provider, s.Model, key, system, in.Messages)
+	exec := func(ctx context.Context, name string, args map[string]any) (string, error) {
+		for _, t := range tools {
+			if t.Name == name {
+				out, err := t.run(ctx, application.NewReportQuery(db), args)
+				if err != nil {
+					return "", err
+				}
+				body, err := json.Marshal(out)
+				return string(body), err
+			}
+		}
+		return "", fmt.Errorf("tool tidak dikenal: %s", name)
+	}
+	reply, err := Complete(c.UserContext(), s.Provider, s.Model, key, system, in.Messages, tools, exec)
 	if err != nil {
 		return apperrors.NewBadRequest(err.Error())
 	}
