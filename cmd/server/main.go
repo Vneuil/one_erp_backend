@@ -15,6 +15,7 @@ import (
 	"github.com/divinecoid/one-backend/internal/foundation/storage"
 	tenantMgr "github.com/divinecoid/one-backend/internal/foundation/tenant"
 	"github.com/divinecoid/one-backend/internal/modules/activitylog"
+	"github.com/divinecoid/one-backend/internal/modules/aiassistant"
 	"github.com/divinecoid/one-backend/internal/modules/approval"
 	"github.com/divinecoid/one-backend/internal/modules/assets"
 	"github.com/divinecoid/one-backend/internal/modules/auth"
@@ -161,6 +162,7 @@ func main() {
 	activitylog.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	approval.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	currency.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
+	aiassistant.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	shipping.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	supplier.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	sales.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
