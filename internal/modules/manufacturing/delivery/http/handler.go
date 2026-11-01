@@ -412,3 +412,85 @@ func (h *Handler) WIPReport(c *fiber.Ctx) error {
 		return uc.WIPReport(ctx)
 	})
 }
+
+type EvaluateConditionsRequest struct {
+	ConditionField string  `json:"conditionField"`
+	Value          float64 `json:"value"`
+}
+
+func (h *Handler) EvaluateConditions(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var req EvaluateConditionsRequest
+	if err := c.BodyParser(&req); err != nil {
+		return apperrors.NewBadRequest("Format payload kondisi tidak valid")
+	}
+	res, err := uc.EvaluateOrderRouting(h.ctx(c), id, req.ConditionField, req.Value)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Kondisi routing berhasil dievaluasi", res)
+}
+
+type SetStepQCPassRequest struct {
+	QCInspectionID uuid.UUID `json:"qcInspectionId"`
+	IsPassed       bool      `json:"isPassed"`
+}
+
+func (h *Handler) SetStepQCPass(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	stepID, err := parseID(c, "stepId")
+	if err != nil {
+		return err
+	}
+	var req SetStepQCPassRequest
+	if err := c.BodyParser(&req); err != nil {
+		return apperrors.NewBadRequest("Format payload status QC tidak valid")
+	}
+	res, err := uc.SetStepQCPass(h.ctx(c), id, stepID, req.QCInspectionID, req.IsPassed)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Status QC tahap produksi berhasil diperbarui", res)
+}
+
+func (h *Handler) GetBackwardTraceability(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	fgBatchNo := c.Params("fgBatchNo")
+	records, err := uc.GetBackwardTraceability(h.ctx(c), fgBatchNo)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Data ketertelusuran batch (backward) berhasil dimuat", records)
+}
+
+func (h *Handler) GetForwardTraceability(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	materialBatchNo := c.Params("materialBatchNo")
+	records, err := uc.GetForwardTraceability(h.ctx(c), materialBatchNo)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Data ketertelusuran batch (forward) berhasil dimuat", records)
+}
+
+

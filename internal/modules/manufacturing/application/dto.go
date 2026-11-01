@@ -23,6 +23,13 @@ type BOMProcessDTO struct {
 	OverheadRatePerHour float64 `json:"overheadRatePerHour"`
 	StandardMinutes     float64 `json:"standardMinutes"`
 	Notes               string  `json:"notes"`
+	IsConditional       bool    `json:"isConditional"`
+	ConditionField      string  `json:"conditionField,omitempty"`
+	ConditionOperator   string  `json:"conditionOperator,omitempty"`
+	ConditionValue      float64 `json:"conditionValue,omitempty"`
+	ActionOnCondition   string  `json:"actionOnCondition,omitempty"`
+	RequiresQCPass      bool    `json:"requiresQcPass"`
+	QCProcessCode       string  `json:"qcProcessCode,omitempty"`
 }
 
 type BOMProcessResponseDTO struct {
@@ -33,6 +40,13 @@ type BOMProcessResponseDTO struct {
 	LaborRatePerHour    float64   `json:"laborRatePerHour"`
 	OverheadRatePerHour float64   `json:"overheadRatePerHour"`
 	Notes               string    `json:"notes,omitempty"`
+	IsConditional       bool      `json:"isConditional"`
+	ConditionField      string    `json:"conditionField,omitempty"`
+	ConditionOperator   string    `json:"conditionOperator,omitempty"`
+	ConditionValue      float64   `json:"conditionValue,omitempty"`
+	ActionOnCondition   string    `json:"actionOnCondition,omitempty"`
+	RequiresQCPass      bool      `json:"requiresQcPass"`
+	QCProcessCode       string    `json:"qcProcessCode,omitempty"`
 }
 
 type CreateBOMDTO struct {
@@ -90,18 +104,24 @@ type CreateProductionOrderDTO struct {
 }
 
 type StepResponseDTO struct {
-	ID                  uuid.UUID `json:"id"`
-	Sequence            int       `json:"sequence"`
-	Name                string    `json:"name"`
-	StandardMinutes     float64   `json:"standardMinutes"`
-	LaborRatePerHour    float64   `json:"laborRatePerHour"`
-	OverheadRatePerHour float64   `json:"overheadRatePerHour"`
-	QuantityDone        int       `json:"quantityDone"`
+	ID                  uuid.UUID  `json:"id"`
+	Sequence            int        `json:"sequence"`
+	Name                string     `json:"name"`
+	StandardMinutes     float64    `json:"standardMinutes"`
+	LaborRatePerHour    float64    `json:"laborRatePerHour"`
+	OverheadRatePerHour float64    `json:"overheadRatePerHour"`
+	QuantityDone        int        `json:"quantityDone"`
 	// WaitingQuantity is how many units have reached this step but not finished it yet.
-	WaitingQuantity int    `json:"waitingQuantity"`
-	Status          string `json:"status"`
-	StartedDate     string `json:"startedDate,omitempty"`
-	CompletedDate   string `json:"completedDate,omitempty"`
+	WaitingQuantity int        `json:"waitingQuantity"`
+	Status          string     `json:"status"`
+	StartedDate     string     `json:"startedDate,omitempty"`
+	CompletedDate   string     `json:"completedDate,omitempty"`
+	IsSkipped       bool       `json:"isSkipped"`
+	SkipReason      string     `json:"skipReason,omitempty"`
+	RequiresQCPass  bool       `json:"requiresQcPass"`
+	QCProcessCode   string     `json:"qcProcessCode,omitempty"`
+	QCPassed        bool       `json:"qcPassed"`
+	QCInspectionID  *uuid.UUID `json:"qcInspectionId,omitempty"`
 }
 
 type LogStepDTO struct {
@@ -213,15 +233,35 @@ func stepResponses(o *domain.ProductionOrder) []StepResponseDTO {
 	out := make([]StepResponseDTO, len(o.Steps))
 	for i, s := range o.Steps {
 		prev := o.QuantityToProduce
-		if i > 0 {
-			prev = o.Steps[i-1].QuantityDone
+		for prevIdx := i - 1; prevIdx >= 0; prevIdx-- {
+			if !o.Steps[prevIdx].IsSkipped && o.Steps[prevIdx].Status != domain.StepSkipped {
+				prev = o.Steps[prevIdx].QuantityDone
+				break
+			}
 		}
 		waiting := prev - s.QuantityDone
-		if waiting < 0 {
+		if waiting < 0 || s.IsSkipped {
 			waiting = 0
 		}
-		out[i] = StepResponseDTO{ID: s.ID, Sequence: s.Sequence, Name: s.Name, StandardMinutes: s.StandardMinutes, LaborRatePerHour: s.LaborRatePerHour, OverheadRatePerHour: s.OverheadRatePerHour, QuantityDone: s.QuantityDone,
-			WaitingQuantity: waiting, Status: s.Status, StartedDate: s.StartedDate, CompletedDate: s.CompletedDate}
+		out[i] = StepResponseDTO{
+			ID:                  s.ID,
+			Sequence:            s.Sequence,
+			Name:                s.Name,
+			StandardMinutes:     s.StandardMinutes,
+			LaborRatePerHour:    s.LaborRatePerHour,
+			OverheadRatePerHour: s.OverheadRatePerHour,
+			QuantityDone:        s.QuantityDone,
+			WaitingQuantity:     waiting,
+			Status:              s.Status,
+			StartedDate:         s.StartedDate,
+			CompletedDate:       s.CompletedDate,
+			IsSkipped:           s.IsSkipped,
+			SkipReason:          s.SkipReason,
+			RequiresQCPass:      s.RequiresQCPass,
+			QCProcessCode:       s.QCProcessCode,
+			QCPassed:            s.QCPassed,
+			QCInspectionID:      s.QCInspectionID,
+		}
 	}
 	return out
 }

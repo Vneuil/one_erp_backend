@@ -265,3 +265,20 @@ func (r *manufacturingRepository) WithTransactionAndInventory(ctx context.Contex
 		return fn(txMfg, txInv)
 	})
 }
+
+func (r *manufacturingRepository) CreateGenealogy(ctx context.Context, g *domain.BatchGenealogy) error {
+	return r.db.WithContext(ctx).Create(g).Error
+}
+
+func (r *manufacturingRepository) GetBackwardTraceability(ctx context.Context, childBatchNo string) ([]domain.BatchGenealogy, error) {
+	var records []domain.BatchGenealogy
+	err := r.db.WithContext(ctx).Where("child_batch_no = ?", childBatchNo).Order("recorded_at desc").Find(&records).Error
+	return records, err
+}
+
+func (r *manufacturingRepository) GetForwardTraceability(ctx context.Context, parentBatchNo string) ([]domain.BatchGenealogy, error) {
+	var records []domain.BatchGenealogy
+	err := r.db.WithContext(ctx).Where("parent_batch_no = ?", parentBatchNo).Order("recorded_at desc").Find(&records).Error
+	return records, err
+}
+

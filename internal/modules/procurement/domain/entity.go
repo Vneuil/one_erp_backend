@@ -111,6 +111,11 @@ type GoodsReceiptLine struct {
 	ProductID          uuid.UUID `gorm:"type:uuid;not null;index" json:"productId"`
 	QuantityReceived   float64   `gorm:"type:decimal(15,2);not null" json:"quantityReceived"`
 	QuantityOrderedRef float64   `gorm:"type:decimal(15,2);default:0" json:"quantityOrderedReference"`
+	// Timbang terima aktual (BR-10, BR-12, Q5)
+	WeightGross  *float64 `gorm:"type:decimal(15,3)" json:"weightGross,omitempty"`
+	WeightTare   *float64 `gorm:"type:decimal(15,3)" json:"weightTare,omitempty"`
+	WeightNet    *float64 `gorm:"type:decimal(15,3)" json:"weightNet,omitempty"`
+	WeightDiffPO *float64 `gorm:"type:decimal(15,3)" json:"weightDiffPo,omitempty"`
 }
 
 func (GoodsReceiptLine) TableName() string {

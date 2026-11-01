@@ -55,15 +55,24 @@ func (uc *manufacturingUseCase) LogStep(ctx context.Context, orderID, stepID uui
 			return apperrors.NewNotFound("Process step not found on this order")
 		}
 		step := &o.Steps[idx]
+		if step.IsSkipped || step.Status == domain.StepSkipped {
+			return apperrors.NewBadRequest(fmt.Sprintf("Tahap '%s' telah dilewati (skipped) dan tidak dapat dicatat outputnya", step.Name))
+		}
+
 		upstream := o.QuantityToProduce
-		if idx > 0 {
-			upstream = o.Steps[idx-1].QuantityDone
+		where := "the order quantity"
+		for prevIdx := idx - 1; prevIdx >= 0; prevIdx-- {
+			prevStep := &o.Steps[prevIdx]
+			if !prevStep.IsSkipped && prevStep.Status != domain.StepSkipped {
+				upstream = prevStep.QuantityDone
+				where = fmt.Sprintf("what step %d (%s) has finished", prevIdx+1, prevStep.Name)
+				if prevStep.RequiresQCPass && !prevStep.QCPassed {
+					return apperrors.NewBadRequest(fmt.Sprintf("Tahap ini diblokir: Tahap '%s' memerlukan uji QC LULUS terlebih dahulu (BRL-03).", prevStep.Name))
+				}
+				break
+			}
 		}
 		if allowed := upstream - step.QuantityDone; dto.Quantity > allowed {
-			where := "the order quantity"
-			if idx > 0 {
-				where = fmt.Sprintf("what step %d (%s) has finished", idx, o.Steps[idx-1].Name)
-			}
 			return apperrors.NewBadRequest(fmt.Sprintf("Only %d units can still be logged on %s: that is limited by %s", max(allowed, 0), step.Name, where))
 		}
 

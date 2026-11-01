@@ -508,10 +508,29 @@ func (uc *procurementUseCase) CreateGoodsReceipt(ctx context.Context, dto Create
 		if l.QuantityReceived > remaining {
 			return nil, apperrors.NewBadRequest(fmt.Sprintf("Received quantity exceeds remaining ordered quantity (%.2f) for product", remaining))
 		}
-		lines[i] = domain.GoodsReceiptLine{
-			ProductID: l.ProductID, QuantityReceived: l.QuantityReceived, QuantityOrderedRef: poLine.Quantity,
+		net := l.QuantityReceived
+		if l.WeightNet != nil && *l.WeightNet > 0 {
+			net = *l.WeightNet
+		} else if l.WeightGross != nil && l.WeightTare != nil {
+			calcNet := *l.WeightGross - *l.WeightTare
+			net = calcNet
+			l.WeightNet = &calcNet
 		}
-		poLine.QuantityReceived += l.QuantityReceived
+		var diffPO *float64
+		if poLine.Quantity > 0 {
+			diff := net - poLine.Quantity
+			diffPO = &diff
+		}
+		lines[i] = domain.GoodsReceiptLine{
+			ProductID:          l.ProductID,
+			QuantityReceived:   net,
+			QuantityOrderedRef: poLine.Quantity,
+			WeightGross:        l.WeightGross,
+			WeightTare:         l.WeightTare,
+			WeightNet:          l.WeightNet,
+			WeightDiffPO:       diffPO,
+		}
+		poLine.QuantityReceived += net
 	}
 
 	receivedDate := dto.ReceivedDate

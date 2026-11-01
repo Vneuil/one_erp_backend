@@ -33,10 +33,16 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	orders.Post("/:id/steps/:stepId/log", h.LogStep)
 	orders.Get("/:id/step-logs", h.ListStepLogs)
 	orders.Post("/:id/step-logs/:logId/void", h.VoidStepLog)
+	orders.Post("/:id/evaluate-conditions", h.EvaluateConditions)
+	orders.Post("/:id/steps/:stepId/qc-pass", h.SetStepQCPass)
 
 	reports := manufacturing.Group("/reports")
 	reports.Get("/daily", h.DailyReport)
 	reports.Get("/order-summary", h.OrderSummary)
 	reports.Get("/process-summary", h.ProcessSummary)
 	reports.Get("/wip", h.WIPReport)
+
+	traceability := manufacturing.Group("/traceability")
+	traceability.Get("/backward/:fgBatchNo", h.GetBackwardTraceability)
+	traceability.Get("/forward/:materialBatchNo", h.GetForwardTraceability)
 }

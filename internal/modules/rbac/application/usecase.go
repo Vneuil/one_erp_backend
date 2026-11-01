@@ -16,7 +16,7 @@ import (
 // this package's own Enforce middleware.
 var allModules = []string{
 	"sales", "pos", "procurement", "loyalty", "crm", "omnichannel", "marketplace",
-	"inventory", "warehouse", "manufacturing", "product", "customers", "suppliers",
+	"inventory", "warehouse", "manufacturing", "qc", "product", "customers", "suppliers",
 	"salesmen", "shipping-methods", "product-categories", "units-of-measure",
 	"payment-terms", "customer-types", "tax-rates",
 	"finance", "banking", "assets", "commission", "contracts",

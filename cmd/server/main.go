@@ -57,6 +57,7 @@ import (
 	"github.com/divinecoid/one-backend/internal/modules/projecttask"
 	"github.com/divinecoid/one-backend/internal/modules/projectticket"
 	"github.com/divinecoid/one-backend/internal/modules/provisioning"
+	"github.com/divinecoid/one-backend/internal/modules/qc"
 	"github.com/divinecoid/one-backend/internal/modules/rbac"
 	"github.com/divinecoid/one-backend/internal/modules/recruitment"
 	"github.com/divinecoid/one-backend/internal/modules/reimbursement"
@@ -193,6 +194,7 @@ func main() {
 	procurement.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	banking.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	manufacturing.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
+	qc.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	warehouse.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	assets.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	contracts.NewModule(server.V1, cfg.JWT.Secret, tenantManager)

@@ -56,6 +56,14 @@ type BOMProcess struct {
 	LaborRatePerHour    float64 `gorm:"type:decimal(15,2);default:0" json:"laborRatePerHour"`
 	OverheadRatePerHour float64 `gorm:"type:decimal(15,2);default:0" json:"overheadRatePerHour"`
 	Notes               string  `gorm:"type:varchar(255)" json:"notes,omitempty"`
+	// Conditional routing & QC gate
+	IsConditional     bool    `gorm:"default:false;not null" json:"isConditional"`
+	ConditionField    string  `gorm:"type:varchar(50)" json:"conditionField,omitempty"`
+	ConditionOperator string  `gorm:"type:varchar(10)" json:"conditionOperator,omitempty"`
+	ConditionValue    float64 `gorm:"type:decimal(10,2);default:0" json:"conditionValue"`
+	ActionOnCondition string  `gorm:"type:varchar(20)" json:"actionOnCondition,omitempty"`
+	RequiresQCPass    bool    `gorm:"default:false;not null" json:"requiresQcPass"`
+	QCProcessCode     string  `gorm:"type:varchar(50)" json:"qcProcessCode,omitempty"`
 }
 
 func (BOMProcess) TableName() string { return "manufacturing_bom_processes" }
@@ -118,6 +126,7 @@ const (
 	StepPending    = "pending"
 	StepInProgress = "in_progress"
 	StepDone       = "done"
+	StepSkipped    = "skipped"
 )
 
 // ProductionStep is one routing step of a production order. QuantityDone counts
@@ -136,6 +145,14 @@ type ProductionStep struct {
 	Status              string  `gorm:"type:varchar(20);default:'pending'" json:"status"`
 	StartedDate         string  `gorm:"type:varchar(10)" json:"startedDate,omitempty"`
 	CompletedDate       string  `gorm:"type:varchar(10)" json:"completedDate,omitempty"`
+	// Conditional routing & QC gate
+	IsSkipped      bool       `gorm:"default:false;not null" json:"isSkipped"`
+	SkipReason     string     `gorm:"type:varchar(255)" json:"skipReason,omitempty"`
+	SkippedAt      *time.Time `json:"skippedAt,omitempty"`
+	RequiresQCPass bool       `gorm:"default:false;not null" json:"requiresQcPass"`
+	QCProcessCode  string     `gorm:"type:varchar(50)" json:"qcProcessCode,omitempty"`
+	QCPassed       bool       `gorm:"default:false;not null" json:"qcPassed"`
+	QCInspectionID *uuid.UUID `gorm:"type:uuid" json:"qcInspectionId,omitempty"`
 }
 
 func (ProductionStep) TableName() string { return "manufacturing_production_steps" }
@@ -245,4 +262,27 @@ type ManufacturingRepository interface {
 	// transaction, so a mid-operation failure can never leave inventory
 	// adjusted without the order reflecting completion (or vice versa).
 	WithTransactionAndInventory(ctx context.Context, fn func(txRepo ManufacturingRepository, txInv inventoryDomain.InventoryRepository) error) error
+
+	// Batch genealogy & traceability
+	CreateGenealogy(ctx context.Context, g *BatchGenealogy) error
+	GetBackwardTraceability(ctx context.Context, childBatchNo string) ([]BatchGenealogy, error)
+	GetForwardTraceability(ctx context.Context, parentBatchNo string) ([]BatchGenealogy, error)
 }
+
+// BatchGenealogy tracks relationship between raw material / input batches and FG output batch
+type BatchGenealogy struct {
+	types.BaseEntity
+	ParentBatchNo     string    `gorm:"type:varchar(50);not null;index" json:"parentBatchNo"`
+	ParentProductID   uuid.UUID `gorm:"type:uuid;not null;index" json:"parentProductId"`
+	ParentProductName string    `gorm:"type:varchar(255)" json:"parentProductName,omitempty"`
+	ChildBatchNo      string    `gorm:"type:varchar(50);not null;index" json:"childBatchNo"`
+	ChildProductID    uuid.UUID `gorm:"type:uuid;not null;index" json:"childProductId"`
+	ChildProductName  string    `gorm:"type:varchar(255)" json:"childProductName,omitempty"`
+	ProductionOrderID uuid.UUID `gorm:"type:uuid;not null;index" json:"productionOrderId"`
+	OrderNumber       string    `gorm:"type:varchar(50)" json:"orderNumber,omitempty"`
+	QuantityUsed      float64   `gorm:"type:decimal(15,3);not null" json:"quantityUsed"`
+	UoM               string    `gorm:"type:varchar(20)" json:"uom,omitempty"`
+	RecordedAt        time.Time `gorm:"not null" json:"recordedAt"`
+}
+
+func (BatchGenealogy) TableName() string { return "manufacturing_batch_genealogy" }

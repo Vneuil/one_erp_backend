@@ -37,6 +37,10 @@ type ManufacturingUseCase interface {
 	LogStep(ctx context.Context, orderID, stepID uuid.UUID, dto LogStepDTO) (*ProductionOrderResponseDTO, error)
 	ListStepLogs(ctx context.Context, orderID uuid.UUID) ([]domain.ProductionStepLog, error)
 	VoidStepLog(ctx context.Context, orderID, logID uuid.UUID, reason string) (*ProductionOrderResponseDTO, error)
+	EvaluateOrderRouting(ctx context.Context, orderID uuid.UUID, conditionField string, value float64) (*ProductionOrderResponseDTO, error)
+	SetStepQCPass(ctx context.Context, orderID, stepID, qcInspectionID uuid.UUID, isPassed bool) (*ProductionOrderResponseDTO, error)
+	GetBackwardTraceability(ctx context.Context, fgBatchNo string) ([]domain.BatchGenealogy, error)
+	GetForwardTraceability(ctx context.Context, materialBatchNo string) ([]domain.BatchGenealogy, error)
 
 	// Reports
 	DailyReport(ctx context.Context, from, to string) (*DailyReportDTO, error)
@@ -111,7 +115,22 @@ func (uc *manufacturingUseCase) toBOMResponse(ctx context.Context, b *domain.Bil
 	}
 	processes := make([]BOMProcessResponseDTO, len(b.Processes))
 	for i, p := range b.Processes {
-		processes[i] = BOMProcessResponseDTO{ID: p.ID, Sequence: p.Sequence, Name: p.Name, StandardMinutes: p.StandardMinutes, LaborRatePerHour: p.LaborRatePerHour, OverheadRatePerHour: p.OverheadRatePerHour, Notes: p.Notes}
+		processes[i] = BOMProcessResponseDTO{
+			ID:                  p.ID,
+			Sequence:            p.Sequence,
+			Name:                p.Name,
+			StandardMinutes:     p.StandardMinutes,
+			LaborRatePerHour:    p.LaborRatePerHour,
+			OverheadRatePerHour: p.OverheadRatePerHour,
+			Notes:               p.Notes,
+			IsConditional:       p.IsConditional,
+			ConditionField:      p.ConditionField,
+			ConditionOperator:   p.ConditionOperator,
+			ConditionValue:      p.ConditionValue,
+			ActionOnCondition:   p.ActionOnCondition,
+			RequiresQCPass:      p.RequiresQCPass,
+			QCProcessCode:       p.QCProcessCode,
+		}
 	}
 	return &BOMResponseDTO{
 		ID: b.ID, ProductID: b.ProductID, ProductSKU: sku, ProductName: name,
@@ -152,7 +171,21 @@ func (uc *manufacturingUseCase) CreateBOM(ctx context.Context, dto CreateBOMDTO)
 		if (p.LaborRatePerHour > 0 || p.OverheadRatePerHour > 0) && p.StandardMinutes <= 0 {
 			return nil, apperrors.NewBadRequest("Step " + name + " has a labour/overhead rate but no standard time to apply it to")
 		}
-		processes = append(processes, domain.BOMProcess{Sequence: i + 1, Name: name, StandardMinutes: p.StandardMinutes, LaborRatePerHour: p.LaborRatePerHour, OverheadRatePerHour: p.OverheadRatePerHour, Notes: strings.TrimSpace(p.Notes)})
+		processes = append(processes, domain.BOMProcess{
+			Sequence:            i + 1,
+			Name:                name,
+			StandardMinutes:     p.StandardMinutes,
+			LaborRatePerHour:    p.LaborRatePerHour,
+			OverheadRatePerHour: p.OverheadRatePerHour,
+			Notes:               strings.TrimSpace(p.Notes),
+			IsConditional:       p.IsConditional,
+			ConditionField:      strings.TrimSpace(p.ConditionField),
+			ConditionOperator:   strings.TrimSpace(p.ConditionOperator),
+			ConditionValue:      p.ConditionValue,
+			ActionOnCondition:   strings.TrimSpace(p.ActionOnCondition),
+			RequiresQCPass:      p.RequiresQCPass,
+			QCProcessCode:       strings.ToUpper(strings.TrimSpace(p.QCProcessCode)),
+		})
 	}
 	version := dto.Version
 	if version == "" {
@@ -254,7 +287,16 @@ func (uc *manufacturingUseCase) CreateOrder(ctx context.Context, dto CreateProdu
 	}
 	steps := make([]domain.ProductionStep, len(bom.Processes))
 	for i, p := range bom.Processes {
-		steps[i] = domain.ProductionStep{Sequence: i + 1, Name: p.Name, StandardMinutes: p.StandardMinutes, LaborRatePerHour: p.LaborRatePerHour, OverheadRatePerHour: p.OverheadRatePerHour, Status: domain.StepPending}
+		steps[i] = domain.ProductionStep{
+			Sequence:            i + 1,
+			Name:                p.Name,
+			StandardMinutes:     p.StandardMinutes,
+			LaborRatePerHour:    p.LaborRatePerHour,
+			OverheadRatePerHour: p.OverheadRatePerHour,
+			Status:              domain.StepPending,
+			RequiresQCPass:      p.RequiresQCPass,
+			QCProcessCode:       p.QCProcessCode,
+		}
 	}
 	o := &domain.ProductionOrder{
 		BOMID:             dto.BOMID,
@@ -399,12 +441,28 @@ func (uc *manufacturingUseCase) CompleteBatch(ctx context.Context, orderID uuid.
 	}
 
 	if len(o.Steps) > 0 {
-		passed := o.Steps[len(o.Steps)-1].QuantityDone - o.QuantityCompleted
-		if passed < 0 {
-			passed = 0
+		lastNonSkippedIdx := -1
+		for i := len(o.Steps) - 1; i >= 0; i-- {
+			if !o.Steps[i].IsSkipped && o.Steps[i].Status != domain.StepSkipped {
+				lastNonSkippedIdx = i
+				break
+			}
 		}
-		if dto.QuantityCompleted > passed {
-			return nil, apperrors.NewBadRequest(fmt.Sprintf("Only %d units have passed all production steps; log the remaining steps before completing them", passed))
+		if lastNonSkippedIdx >= 0 {
+			passed := o.Steps[lastNonSkippedIdx].QuantityDone - o.QuantityCompleted
+			if passed < 0 {
+				passed = 0
+			}
+			if dto.QuantityCompleted > passed {
+				return nil, apperrors.NewBadRequest(fmt.Sprintf("Hanya %d unit yang telah melewati seluruh proses aktif; selesaikan proses sebelum menyelesaikan batch", passed))
+			}
+		}
+	}
+
+	// QC Gate Enforcement (BRL-03, BRL-04)
+	for _, s := range o.Steps {
+		if s.RequiresQCPass && !s.IsSkipped && !s.QCPassed {
+			return nil, apperrors.NewBadRequest(fmt.Sprintf("Batch tidak boleh masuk FG: Tahap '%s' memerlukan hasil uji QC LULUS (BRL-03)", s.Name))
 		}
 	}
 
@@ -532,6 +590,27 @@ func (uc *manufacturingUseCase) CompleteBatch(ctx context.Context, orderID uuid.
 			return apperrors.NewInternal(err, "Failed to record production batch")
 		}
 		batchID = batch.ID
+
+		// Record batch genealogy (BR-62)
+		fgBatchNo := OrderLabel(o) + "-" + completionDate
+		_, prodName := uc.productInfo(ctx, bom.ProductID)
+		for _, line := range bom.Lines {
+			csku, cname := uc.productInfo(ctx, line.ComponentProductID)
+			rawBatchNo := "RAW-" + csku + "-" + completionDate
+			_ = txRepo.CreateGenealogy(ctx, &domain.BatchGenealogy{
+				ParentBatchNo:     rawBatchNo,
+				ParentProductID:   line.ComponentProductID,
+				ParentProductName: cname,
+				ChildBatchNo:      fgBatchNo,
+				ChildProductID:    bom.ProductID,
+				ChildProductName:  prodName,
+				ProductionOrderID: o.ID,
+				OrderNumber:       OrderLabel(o),
+				QuantityUsed:      line.QuantityRequired * float64(dto.QuantityCompleted),
+				UoM:               line.Unit,
+				RecordedAt:        time.Now(),
+			})
+		}
 
 		o.QuantityCompleted += dto.QuantityCompleted
 		if o.QuantityCompleted >= o.QuantityToProduce {
@@ -672,3 +751,100 @@ func (uc *manufacturingUseCase) SeedInitialData(ctx context.Context) error {
 	}
 	return uc.repo.CreateBOM(ctx, b)
 }
+
+func (uc *manufacturingUseCase) EvaluateOrderRouting(ctx context.Context, orderID uuid.UUID, conditionField string, value float64) (*ProductionOrderResponseDTO, error) {
+	o, err := uc.repo.GetOrderByID(ctx, orderID)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get production order")
+	}
+	if o == nil {
+		return nil, apperrors.NewNotFound("Production order not found")
+	}
+
+	now := time.Now()
+	isMoisture := strings.EqualFold(conditionField, "moisture_content") || strings.EqualFold(conditionField, "kadar_air") || strings.EqualFold(conditionField, "air")
+
+	for i := range o.Steps {
+		s := &o.Steps[i]
+		stepNameLower := strings.ToLower(s.Name)
+
+		// Rule BRL-01: Kadar Air <= 2.0% -> skip Ayak 1, Oven, Pendinginan; > 2.0% -> required
+		if isMoisture {
+			if strings.Contains(stepNameLower, "ayak 1") || strings.Contains(stepNameLower, "oven") || strings.Contains(stepNameLower, "pendinginan") {
+				if value <= 2.0 {
+					s.IsSkipped = true
+					s.Status = domain.StepSkipped
+					s.SkipReason = fmt.Sprintf("Dilewati otomatis karena kadar air %.2f%% <= 2.0%% (BRL-01)", value)
+					s.SkippedAt = &now
+				} else {
+					if s.IsSkipped || s.Status == domain.StepSkipped {
+						s.IsSkipped = false
+						s.Status = domain.StepPending
+						s.SkipReason = ""
+						s.SkippedAt = nil
+					}
+				}
+				if err := uc.repo.UpdateStep(ctx, s); err != nil {
+					return nil, apperrors.NewInternal(err, "Failed to update process step")
+				}
+			}
+		}
+	}
+
+	updated, err := uc.repo.GetOrderByID(ctx, orderID)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to reload production order")
+	}
+	return uc.toOrderResponse(ctx, updated), nil
+}
+
+func (uc *manufacturingUseCase) SetStepQCPass(ctx context.Context, orderID, stepID, qcInspectionID uuid.UUID, isPassed bool) (*ProductionOrderResponseDTO, error) {
+	o, err := uc.repo.GetOrderByID(ctx, orderID)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get production order")
+	}
+	if o == nil {
+		return nil, apperrors.NewNotFound("Production order not found")
+	}
+
+	for i := range o.Steps {
+		s := &o.Steps[i]
+		if s.ID == stepID {
+			s.RequiresQCPass = true
+			s.QCPassed = isPassed
+			s.QCInspectionID = &qcInspectionID
+			if isPassed && s.QuantityDone == 0 {
+				s.QuantityDone = o.QuantityToProduce
+				s.Status = domain.StepDone
+				s.CompletedDate = time.Now().Format("2006-01-02")
+			}
+			if err := uc.repo.UpdateStep(ctx, s); err != nil {
+				return nil, apperrors.NewInternal(err, "Failed to update process step")
+			}
+			break
+		}
+	}
+
+	updated, err := uc.repo.GetOrderByID(ctx, orderID)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to reload production order")
+	}
+	return uc.toOrderResponse(ctx, updated), nil
+}
+
+func (uc *manufacturingUseCase) GetBackwardTraceability(ctx context.Context, fgBatchNo string) ([]domain.BatchGenealogy, error) {
+	records, err := uc.repo.GetBackwardTraceability(ctx, strings.TrimSpace(fgBatchNo))
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to load backward traceability")
+	}
+	return records, nil
+}
+
+func (uc *manufacturingUseCase) GetForwardTraceability(ctx context.Context, materialBatchNo string) ([]domain.BatchGenealogy, error) {
+	records, err := uc.repo.GetForwardTraceability(ctx, strings.TrimSpace(materialBatchNo))
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to load forward traceability")
+	}
+	return records, nil
+}
+

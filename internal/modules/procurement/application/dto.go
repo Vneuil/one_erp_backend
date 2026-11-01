@@ -153,6 +153,10 @@ func ToPurchaseOrderResponseList(items []domain.PurchaseOrder) []PurchaseOrderRe
 type GoodsReceiptLineDTO struct {
 	ProductID        uuid.UUID `json:"productId"`
 	QuantityReceived float64   `json:"quantityReceived"`
+	WeightGross      *float64  `json:"weightGross,omitempty"`
+	WeightTare       *float64  `json:"weightTare,omitempty"`
+	WeightNet        *float64  `json:"weightNet,omitempty"`
+	WeightDiffPO     *float64  `json:"weightDiffPo,omitempty"`
 }
 
 type CreateGoodsReceiptDTO struct {
@@ -171,6 +175,10 @@ type GoodsReceiptLineResponseDTO struct {
 	ProductID                uuid.UUID `json:"productId"`
 	QuantityReceived         float64   `json:"quantityReceived"`
 	QuantityOrderedReference float64   `json:"quantityOrderedReference"`
+	WeightGross              *float64  `json:"weightGross,omitempty"`
+	WeightTare               *float64  `json:"weightTare,omitempty"`
+	WeightNet                *float64  `json:"weightNet,omitempty"`
+	WeightDiffPO             *float64  `json:"weightDiffPo,omitempty"`
 }
 
 type GoodsReceiptResponseDTO struct {
@@ -194,6 +202,10 @@ func ToGoodsReceiptResponse(gr *domain.GoodsReceipt) *GoodsReceiptResponseDTO {
 		lines[i] = GoodsReceiptLineResponseDTO{
 			ID: l.ID, ProductID: l.ProductID, QuantityReceived: l.QuantityReceived,
 			QuantityOrderedReference: l.QuantityOrderedRef,
+			WeightGross:              l.WeightGross,
+			WeightTare:               l.WeightTare,
+			WeightNet:                l.WeightNet,
+			WeightDiffPO:             l.WeightDiffPO,
 		}
 	}
 	return &GoodsReceiptResponseDTO{
