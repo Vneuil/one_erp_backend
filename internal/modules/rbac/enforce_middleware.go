@@ -27,6 +27,7 @@ var pathsExemptFromEnforcement = []string{
 	"/api/v1/hr-self",
 }
 
+
 // Enforce is a generic, opt-in permission gate: mounted globally (see
 // cmd/server/main.go), it runs AFTER modules/activitylog.Logger in the
 // middleware chain conceptually but must itself run BEFORE the route
