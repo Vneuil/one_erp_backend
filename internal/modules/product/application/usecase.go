@@ -81,6 +81,9 @@ func (uc *productUseCase) Create(ctx context.Context, dto CreateProductDTO) (*Pr
 		CostPrice:    dto.CostPrice,
 		SellingPrice: dto.SellingPrice,
 		Status:       status,
+		Grade:        strings.TrimSpace(dto.Grade),
+		SafetyStock:  dto.SafetyStock,
+		OrganicType:  strings.TrimSpace(dto.OrganicType),
 	}
 
 	if err := uc.repo.Create(ctx, product); err != nil {
@@ -162,6 +165,15 @@ func (uc *productUseCase) Update(ctx context.Context, id uuid.UUID, dto UpdatePr
 	}
 	if dto.Status != nil {
 		product.Status = *dto.Status
+	}
+	if dto.Grade != nil {
+		product.Grade = strings.TrimSpace(*dto.Grade)
+	}
+	if dto.SafetyStock != nil {
+		product.SafetyStock = *dto.SafetyStock
+	}
+	if dto.OrganicType != nil {
+		product.OrganicType = strings.TrimSpace(*dto.OrganicType)
 	}
 	if dto.VariantOf != nil || dto.VariantLabel != nil {
 		of, label := product.VariantOf, product.VariantLabel

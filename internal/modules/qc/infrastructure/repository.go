@@ -182,3 +182,45 @@ func (r *qcRepository) GetInspectionStats(ctx context.Context) (total int64, pas
 	_ = r.db.WithContext(ctx).Model(&domain.QCInspection{}).Where("is_voided = true", true).Count(&voided)
 	return
 }
+
+func (r *qcRepository) CreateHygieneCheck(ctx context.Context, check *domain.PersonalHygieneCheck) error {
+	return r.db.WithContext(ctx).Create(check).Error
+}
+
+func (r *qcRepository) ListHygieneChecks(ctx context.Context, date string, line string) ([]domain.PersonalHygieneCheck, error) {
+	var checks []domain.PersonalHygieneCheck
+	q := r.db.WithContext(ctx).Model(&domain.PersonalHygieneCheck{})
+	if date != "" {
+		q = q.Where("check_date = ?", date)
+	}
+	if line != "" {
+		q = q.Where("line = ?", line)
+	}
+	err := q.Order("check_date DESC, created_at DESC").Find(&checks).Error
+	return checks, err
+}
+
+func (r *qcRepository) DeleteHygieneCheck(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.PersonalHygieneCheck{}, "id = ?", id).Error
+}
+
+func (r *qcRepository) CreatePreOpCheck(ctx context.Context, check *domain.PreOpSanitationCheck) error {
+	return r.db.WithContext(ctx).Create(check).Error
+}
+
+func (r *qcRepository) ListPreOpChecks(ctx context.Context, date string, room string) ([]domain.PreOpSanitationCheck, error) {
+	var checks []domain.PreOpSanitationCheck
+	q := r.db.WithContext(ctx).Model(&domain.PreOpSanitationCheck{})
+	if date != "" {
+		q = q.Where("check_date = ?", date)
+	}
+	if room != "" {
+		q = q.Where("room = ?", room)
+	}
+	err := q.Order("check_date DESC, check_time DESC, created_at DESC").Find(&checks).Error
+	return checks, err
+}
+
+func (r *qcRepository) DeletePreOpCheck(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.PreOpSanitationCheck{}, "id = ?", id).Error
+}

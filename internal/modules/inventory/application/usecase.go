@@ -245,6 +245,9 @@ func (uc *inventoryUseCase) AdjustStock(ctx context.Context, dto AdjustStockDTO)
 		if dto.Reason != "" {
 			movementType = domain.MovementAdjustment
 		}
+		if dto.Type != "" {
+			movementType = dto.Type
+		}
 		movement := &domain.StockMovement{
 			ProductID:   dto.ProductID,
 			WarehouseID: dto.WarehouseID,

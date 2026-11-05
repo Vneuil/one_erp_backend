@@ -97,6 +97,7 @@ type AdjustStockDTO struct {
 	ProductID   uuid.UUID `json:"productId"`
 	WarehouseID uuid.UUID `json:"warehouseId"`
 	Quantity    int       `json:"quantity"` // positive = increase, negative = decrease
+	Type        string    `json:"type,omitempty"`
 	Reason      string    `json:"reason"`
 	Reference   string    `json:"reference"`
 	CreatedBy   string    `json:"createdBy"`
@@ -122,6 +123,7 @@ type MovementResponseDTO struct {
 	Balance       int       `json:"balance"`
 	Reference     string    `json:"reference"`
 	Reason        string    `json:"reason"`
+	BatchNo       string    `json:"batchNo,omitempty"`
 	CreatedBy     string    `json:"createdBy"`
 	CreatedAt     time.Time `json:"createdAt"`
 }
@@ -142,6 +144,7 @@ func ToMovementResponse(m *domain.StockMovement, productSKU, productName, wareho
 		Balance:       m.Balance,
 		Reference:     m.Reference,
 		Reason:        m.Reason,
+		BatchNo:       m.BatchNo,
 		CreatedBy:     m.CreatedBy,
 		CreatedAt:     m.CreatedAt,
 	}

@@ -17,6 +17,9 @@ type CreateProductDTO struct {
 	CostPrice    float64 `json:"costPrice"`
 	SellingPrice float64 `json:"sellingPrice"`
 	Status       string  `json:"status"`
+	Grade        string  `json:"grade,omitempty"`
+	SafetyStock  int     `json:"safetyStock"`
+	OrganicType  string  `json:"organicType,omitempty"`
 	// VariantOf/VariantLabel make this product a variant of another.
 	VariantOf    *uuid.UUID `json:"variantOf,omitempty"`
 	VariantLabel string     `json:"variantLabel,omitempty"`
@@ -32,6 +35,9 @@ type UpdateProductDTO struct {
 	CostPrice    *float64 `json:"costPrice,omitempty"`
 	SellingPrice *float64 `json:"sellingPrice,omitempty"`
 	Status       *string  `json:"status,omitempty"`
+	Grade        *string  `json:"grade,omitempty"`
+	SafetyStock  *int     `json:"safetyStock,omitempty"`
+	OrganicType  *string  `json:"organicType,omitempty"`
 	// VariantOf: send the base product id to make this a variant; send the nil
 	// uuid (all zeros) to turn a variant back into an ordinary product.
 	VariantOf    *uuid.UUID `json:"variantOf,omitempty"`
@@ -49,6 +55,10 @@ type ProductResponseDTO struct {
 	CostPrice            float64    `json:"costPrice"`
 	SellingPrice         float64    `json:"sellingPrice"`
 	Status               string     `json:"status"`
+	Grade                string     `json:"grade,omitempty"`
+	SafetyStock          int        `json:"safetyStock"`
+	OrganicType          string     `json:"organicType,omitempty"`
+	IsBelowSafetyStock   bool       `json:"isBelowSafetyStock"`
 	VariantOf            *uuid.UUID `json:"variantOf,omitempty"`
 	VariantLabel         string     `json:"variantLabel,omitempty"`
 	MarketplacePlatform  string     `json:"marketplacePlatform,omitempty"`
@@ -72,6 +82,10 @@ func ToProductResponse(p *domain.Product) *ProductResponseDTO {
 		CostPrice:            p.CostPrice,
 		SellingPrice:         p.SellingPrice,
 		Status:               p.Status,
+		Grade:                p.Grade,
+		SafetyStock:          p.SafetyStock,
+		OrganicType:          p.OrganicType,
+		IsBelowSafetyStock:   p.SafetyStock > 0 && p.Stock <= p.SafetyStock,
 		VariantOf:            p.VariantOf,
 		VariantLabel:         p.VariantLabel,
 		MarketplacePlatform:  p.MarketplacePlatform,

@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"time"
 
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/google/uuid"
@@ -17,7 +18,13 @@ type PurchaseRequest struct {
 	RequestedBy  string                `gorm:"type:varchar(150);not null" json:"requestedBy"`
 	Department   string                `gorm:"type:varchar(150)" json:"department"`
 	NeededByDate string                `gorm:"type:varchar(50)" json:"neededByDate"`
-	Status       string                `gorm:"type:varchar(50);default:'draft'" json:"status"`
+	Status               string                `gorm:"type:varchar(50);default:'draft'" json:"status"`
+	Category             string                `gorm:"type:varchar(50);default:'inventory'" json:"category"` // inventory | non_inventory | fixed_asset
+	SupervisorApprovedBy string                `gorm:"type:varchar(150)" json:"supervisorApprovedBy,omitempty"`
+	SupervisorApprovedAt *time.Time            `json:"supervisorApprovedAt,omitempty"`
+	OwnerApprovedBy      string                `gorm:"type:varchar(150)" json:"ownerApprovedBy,omitempty"`
+	OwnerApprovedAt      *time.Time            `json:"ownerApprovedAt,omitempty"`
+	RejectionReason      string                `gorm:"type:varchar(255)" json:"rejectionReason,omitempty"`
 	Lines        []PurchaseRequestLine `gorm:"foreignKey:PurchaseRequestID" json:"lines,omitempty"`
 }
 
@@ -51,6 +58,9 @@ type PurchaseOrder struct {
 	ExpectedDate      string     `gorm:"type:varchar(50)" json:"expectedDate"`
 	Status            string     `gorm:"type:varchar(50);default:'draft'" json:"status"`
 	TotalAmount       float64    `gorm:"type:decimal(15,2);default:0" json:"totalAmount"`
+	FreightScheme     string     `gorm:"type:varchar(50);default:'franco'" json:"freightScheme"` // franco | loco
+	FreightCost       float64    `gorm:"type:decimal(15,2);default:0" json:"freightCost"`
+	QualityNotes      string     `gorm:"type:text" json:"qualityNotes,omitempty"`
 	// Currency/BaseAmount support multi-currency purchase orders (see
 	// modules/currency): Currency is the code TotalAmount is denominated
 	// in, BaseAmount is TotalAmount converted to the company's base
@@ -90,6 +100,7 @@ type GoodsReceipt struct {
 	// TenantID scopes this receipt to one business unit within the company
 	TenantID        *uuid.UUID `gorm:"type:uuid;index" json:"tenantId,omitempty"`
 	ReceiptNo       string     `gorm:"type:varchar(50);not null;index" json:"receiptNo"`
+	DocumentCode    string     `gorm:"type:varchar(50);default:'GD-007-LBM'" json:"documentCode"`
 	PurchaseOrderID uuid.UUID  `gorm:"type:uuid;not null;index" json:"purchaseOrderId"`
 	ReceivedDate    string     `gorm:"type:varchar(50)" json:"receivedDate"`
 	WarehouseID     *uuid.UUID `gorm:"type:uuid;index" json:"warehouseId,omitempty"`
@@ -97,7 +108,12 @@ type GoodsReceipt struct {
 	// (see handler.CreateGoodsReceipt) - never trust a client-supplied
 	// value for who received a shipment.
 	ReceivedBy string             `gorm:"type:varchar(255)" json:"receivedBy"`
-	Status     string             `gorm:"type:varchar(50);default:'draft'" json:"status"`
+	Status           string             `gorm:"type:varchar(50);default:'draft'" json:"status"`
+	DeliveryNoteNo   string             `gorm:"type:varchar(100)" json:"deliveryNoteNo,omitempty"`
+	SugarCondition   string             `gorm:"type:varchar(100)" json:"sugarCondition,omitempty"`
+	PackageCondition string             `gorm:"type:varchar(100)" json:"packageCondition,omitempty"`
+	PlasticTare      float64            `gorm:"type:decimal(10,3);default:0" json:"plasticTare,omitempty"`
+	Notes            string             `gorm:"type:varchar(500)" json:"notes,omitempty"`
 	Lines      []GoodsReceiptLine `gorm:"foreignKey:GoodsReceiptID" json:"lines,omitempty"`
 }
 
@@ -116,6 +132,7 @@ type GoodsReceiptLine struct {
 	WeightTare   *float64 `gorm:"type:decimal(15,3)" json:"weightTare,omitempty"`
 	WeightNet    *float64 `gorm:"type:decimal(15,3)" json:"weightNet,omitempty"`
 	WeightDiffPO *float64 `gorm:"type:decimal(15,3)" json:"weightDiffPo,omitempty"`
+	BagWeights   string   `gorm:"type:text" json:"bagWeights,omitempty"`
 }
 
 func (GoodsReceiptLine) TableName() string {
@@ -273,6 +290,7 @@ type ProcurementRepository interface {
 	ListPurchaseOrders(ctx context.Context, query types.PaginationQuery) ([]PurchaseOrder, int64, error)
 	UpdatePurchaseOrder(ctx context.Context, po *PurchaseOrder) error
 	CountPurchaseOrders(ctx context.Context) (int64, error)
+	GetLastPOPrice(ctx context.Context, supplierID, productID uuid.UUID) (float64, error)
 
 	// Goods receipts
 	CreateGoodsReceipt(ctx context.Context, gr *GoodsReceipt) error

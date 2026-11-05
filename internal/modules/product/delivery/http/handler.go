@@ -2,16 +2,19 @@ package http
 
 import (
 	"context"
+	"sync"
 
 	"github.com/divinecoid/one-backend/internal/foundation/middleware"
 	"github.com/divinecoid/one-backend/internal/foundation/response"
 	"github.com/divinecoid/one-backend/internal/foundation/tenantctx"
 	"github.com/divinecoid/one-backend/internal/modules/product/application"
+	"github.com/divinecoid/one-backend/internal/modules/product/domain"
 	"github.com/divinecoid/one-backend/internal/modules/product/infrastructure"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type Handler struct{}
@@ -20,13 +23,29 @@ func NewHandler() *Handler {
 	return &Handler{}
 }
 
-// resolve builds a use-case bound to the caller's own tenant database. The
-// schema is migrated and seeded once, at tenant-provision time (see
-// module.go's registration with foundation/tenant.RegisterSchema).
+// migrated remembers tenant DBs whose tables were verified, ensuring any newly
+// added columns (e.g. grade, safety_stock, organic_type) are automatically created.
+var migrated sync.Map
+
+func ensureSchema(db *gorm.DB) error {
+	if _, ok := migrated.Load(db); ok {
+		return nil
+	}
+	if err := db.AutoMigrate(&domain.Product{}, &domain.ProductCategory{}, &domain.UnitOfMeasure{}); err != nil {
+		return err
+	}
+	migrated.Store(db, true)
+	return nil
+}
+
+// resolve builds a use-case bound to the caller's own tenant database.
 func (h *Handler) resolve(c *fiber.Ctx) (application.ProductUseCase, error) {
 	tenantDB := middleware.TenantDB(c)
 	if tenantDB == nil {
 		return nil, apperrors.NewBadRequest("No active company. Please select or provision a company first.")
+	}
+	if err := ensureSchema(tenantDB); err != nil {
+		return nil, apperrors.NewInternal(err)
 	}
 	repo := infrastructure.NewProductRepository(tenantDB)
 	return application.NewProductUseCase(repo), nil

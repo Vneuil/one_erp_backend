@@ -45,4 +45,15 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	traceability := manufacturing.Group("/traceability")
 	traceability.Get("/backward/:fgBatchNo", h.GetBackwardTraceability)
 	traceability.Get("/forward/:materialBatchNo", h.GetForwardTraceability)
+
+	requisitions := manufacturing.Group("/requisitions")
+	requisitions.Get("/", h.ListRequisitions)
+	requisitions.Post("/", h.CreateRequisition)
+	requisitions.Get("/:id", h.GetRequisitionByID)
+	requisitions.Put("/:id/status", h.UpdateRequisitionStatus)
+
+	oven := manufacturing.Group("/oven-logs")
+	oven.Get("/", h.ListOvenLogs)
+	oven.Post("/", h.CreateOvenLog)
+	oven.Get("/:id", h.GetOvenLogByID)
 }

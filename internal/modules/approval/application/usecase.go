@@ -14,6 +14,7 @@ import (
 type ApprovalUseCase interface {
 	CreateWorkflow(ctx context.Context, dto CreateWorkflowDTO) (*WorkflowResponseDTO, error)
 	ListWorkflows(ctx context.Context, documentType string) ([]WorkflowResponseDTO, error)
+	UpdateWorkflow(ctx context.Context, id uuid.UUID, dto UpdateWorkflowDTO) (*WorkflowResponseDTO, error)
 	DeleteWorkflow(ctx context.Context, id uuid.UUID) error
 
 	// SubmitDocument is called by other modules (e.g. procurement) when a
@@ -99,6 +100,57 @@ func (uc *approvalUseCase) ListWorkflows(ctx context.Context, documentType strin
 	return ToWorkflowResponseList(items), nil
 }
 
+func (uc *approvalUseCase) UpdateWorkflow(ctx context.Context, id uuid.UUID, dto UpdateWorkflowDTO) (*WorkflowResponseDTO, error) {
+	w, err := uc.repo.GetWorkflowByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get approval workflow")
+	}
+	if w == nil {
+		return nil, apperrors.NewNotFound("Approval workflow not found")
+	}
+
+	docType := strings.TrimSpace(dto.DocumentType)
+	name := strings.TrimSpace(dto.Name)
+	if docType == "" || name == "" {
+		return nil, apperrors.NewBadRequest("documentType and name are required")
+	}
+	if len(dto.Levels) == 0 {
+		return nil, apperrors.NewBadRequest("At least one approval level is required")
+	}
+	if dto.MinAmount < 0 {
+		return nil, apperrors.NewBadRequest("minAmount cannot be negative")
+	}
+
+	levels := make([]domain.ApprovalWorkflowLevel, len(dto.Levels))
+	for i, l := range dto.Levels {
+		role := strings.TrimSpace(l.ApproverRole)
+		if role == "" {
+			return nil, apperrors.NewBadRequest("Each level requires an approverRole")
+		}
+		levels[i] = domain.ApprovalWorkflowLevel{WorkflowID: w.ID, LevelOrder: i + 1, ApproverRole: role}
+	}
+
+	w.DocumentType = docType
+	w.Name = name
+	w.MinAmount = dto.MinAmount
+	if dto.IsActive != nil {
+		w.IsActive = *dto.IsActive
+	}
+	w.Levels = levels
+
+	if err := uc.repo.UpdateWorkflow(ctx, w); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to update approval workflow")
+	}
+
+	updated, err := uc.repo.GetWorkflowByID(ctx, id)
+	if err != nil || updated == nil {
+		res := ToWorkflowResponse(w)
+		return &res, nil
+	}
+	res := ToWorkflowResponse(updated)
+	return &res, nil
+}
+
 func (uc *approvalUseCase) DeleteWorkflow(ctx context.Context, id uuid.UUID) error {
 	if err := uc.repo.DeleteWorkflow(ctx, id); err != nil {
 		return apperrors.NewInternal(err, "Failed to delete approval workflow")
@@ -165,7 +217,7 @@ func (uc *approvalUseCase) currentStep(req *domain.ApprovalRequest) *domain.Appr
 }
 
 func roleMatches(actorRole, requiredRole string) bool {
-	return strings.EqualFold(actorRole, requiredRole) || strings.EqualFold(actorRole, "admin")
+	return strings.EqualFold(actorRole, requiredRole)
 }
 
 func (uc *approvalUseCase) ApproveStep(ctx context.Context, requestID uuid.UUID, dto ActOnStepDTO) (*RequestResponseDTO, error) {

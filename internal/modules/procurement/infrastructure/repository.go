@@ -59,7 +59,21 @@ func (r *procurementRepository) ListPurchaseRequests(ctx context.Context, query 
 }
 
 func (r *procurementRepository) UpdatePurchaseRequest(ctx context.Context, pr *domain.PurchaseRequest) error {
-	return r.db.WithContext(ctx).Save(pr).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if len(pr.Lines) > 0 {
+			if err := tx.Where("purchase_request_id = ?", pr.ID).Delete(&domain.PurchaseRequestLine{}).Error; err != nil {
+				return err
+			}
+			for i := range pr.Lines {
+				pr.Lines[i].PurchaseRequestID = pr.ID
+				pr.Lines[i].ID = uuid.Nil
+			}
+			if err := tx.Create(&pr.Lines).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Save(pr).Error
+	})
 }
 
 func (r *procurementRepository) CountPurchaseRequests(ctx context.Context) (int64, error) {
@@ -107,7 +121,37 @@ func (r *procurementRepository) ListPurchaseOrders(ctx context.Context, query ty
 }
 
 func (r *procurementRepository) UpdatePurchaseOrder(ctx context.Context, po *domain.PurchaseOrder) error {
-	return r.db.WithContext(ctx).Session(&gorm.Session{FullSaveAssociations: true}).Save(po).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if len(po.Lines) > 0 {
+			if err := tx.Where("purchase_order_id = ?", po.ID).Delete(&domain.PurchaseOrderLine{}).Error; err != nil {
+				return err
+			}
+			for i := range po.Lines {
+				po.Lines[i].PurchaseOrderID = po.ID
+				po.Lines[i].ID = uuid.Nil
+			}
+			if err := tx.Create(&po.Lines).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Save(po).Error
+	})
+}
+
+func (r *procurementRepository) GetLastPOPrice(ctx context.Context, supplierID, productID uuid.UUID) (float64, error) {
+	var line domain.PurchaseOrderLine
+	err := r.db.WithContext(ctx).
+		Table("procurement_purchase_order_lines").
+		Joins("JOIN procurement_purchase_orders ON procurement_purchase_orders.id = procurement_purchase_order_lines.purchase_order_id").
+		Where("procurement_purchase_orders.supplier_id = ? AND procurement_purchase_order_lines.product_id = ? AND procurement_purchase_orders.status != 'cancelled'", supplierID, productID).
+		Order("procurement_purchase_orders.created_at DESC").
+		Select("procurement_purchase_order_lines.unit_price").
+		Limit(1).
+		Scan(&line.UnitPrice).Error
+	if err != nil {
+		return 0, err
+	}
+	return line.UnitPrice, nil
 }
 
 func (r *procurementRepository) CountPurchaseOrders(ctx context.Context) (int64, error) {

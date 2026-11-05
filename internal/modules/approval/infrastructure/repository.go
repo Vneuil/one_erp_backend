@@ -3,6 +3,7 @@ package infrastructure
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/divinecoid/one-backend/internal/foundation/tenantctx"
 	"github.com/divinecoid/one-backend/internal/modules/approval/domain"
@@ -60,6 +61,32 @@ func (r *approvalRepository) ListMatchingWorkflows(ctx context.Context, document
 		Order("min_amount desc").
 		Find(&items).Error
 	return items, err
+}
+
+func (r *approvalRepository) UpdateWorkflow(ctx context.Context, w *domain.ApprovalWorkflow) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(w).Updates(map[string]interface{}{
+			"document_type": w.DocumentType,
+			"name":          w.Name,
+			"min_amount":    w.MinAmount,
+			"is_active":     w.IsActive,
+		}).Error; err != nil {
+			return err
+		}
+		if len(w.Levels) > 0 {
+			if err := tx.Where("workflow_id = ?", w.ID).Delete(&domain.ApprovalWorkflowLevel{}).Error; err != nil {
+				return err
+			}
+			for i := range w.Levels {
+				w.Levels[i].WorkflowID = w.ID
+				w.Levels[i].ID = uuid.Nil
+			}
+			if err := tx.Create(&w.Levels).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 func (r *approvalRepository) DeleteWorkflow(ctx context.Context, id uuid.UUID) error {
@@ -136,12 +163,16 @@ func (r *approvalRepository) ListPendingStepsForRole(ctx context.Context, role s
 	var steps []domain.ApprovalStep
 	// A step is actionable only when it's pending AND its parent request's
 	// CurrentLevel matches this step's LevelOrder (earlier/later levels
-	// aren't up for action yet).
-	err := r.db.WithContext(ctx).
+	// aren't up for action yet). Admin can act on all pending steps.
+	query := r.db.WithContext(ctx).
 		Joins("JOIN approval_requests ON approval_requests.id = approval_steps.request_id").
-		Where("approval_steps.status = ? AND approval_steps.approver_role = ? AND approval_requests.current_level = approval_steps.level_order AND approval_requests.status = ?",
-			domain.StatusPending, role, domain.StatusPending).
-		Order("approval_steps.created_at asc").
-		Find(&steps).Error
+		Where("approval_steps.status = ? AND approval_requests.current_level = approval_steps.level_order AND approval_requests.status = ?",
+			domain.StatusPending, domain.StatusPending)
+
+	if !strings.EqualFold(role, "admin") {
+		query = query.Where("LOWER(approval_steps.approver_role) = ?", strings.ToLower(role))
+	}
+
+	err := query.Order("approval_steps.created_at asc").Find(&steps).Error
 	return steps, err
 }

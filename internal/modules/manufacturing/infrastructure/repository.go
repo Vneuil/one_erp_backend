@@ -271,14 +271,82 @@ func (r *manufacturingRepository) CreateGenealogy(ctx context.Context, g *domain
 }
 
 func (r *manufacturingRepository) GetBackwardTraceability(ctx context.Context, childBatchNo string) ([]domain.BatchGenealogy, error) {
+
 	var records []domain.BatchGenealogy
 	err := r.db.WithContext(ctx).Where("child_batch_no = ?", childBatchNo).Order("recorded_at desc").Find(&records).Error
 	return records, err
 }
 
 func (r *manufacturingRepository) GetForwardTraceability(ctx context.Context, parentBatchNo string) ([]domain.BatchGenealogy, error) {
+
 	var records []domain.BatchGenealogy
 	err := r.db.WithContext(ctx).Where("parent_batch_no = ?", parentBatchNo).Order("recorded_at desc").Find(&records).Error
 	return records, err
 }
 
+func (r *manufacturingRepository) CreateRequisition(ctx context.Context, req *domain.MaterialRequisition) error {
+	return r.db.WithContext(ctx).Create(req).Error
+}
+
+func (r *manufacturingRepository) GetRequisitionByID(ctx context.Context, id uuid.UUID) (*domain.MaterialRequisition, error) {
+	var req domain.MaterialRequisition
+	err := r.db.WithContext(ctx).
+		Preload("Lines").
+		Preload("DispensingItems").
+		First(&req, "id = ?", id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &req, nil
+}
+
+func (r *manufacturingRepository) ListRequisitions(ctx context.Context, reqType string, status string) ([]domain.MaterialRequisition, error) {
+	var list []domain.MaterialRequisition
+	q := r.db.WithContext(ctx).Model(&domain.MaterialRequisition{}).
+		Preload("Lines").
+		Preload("DispensingItems")
+	if reqType != "" {
+		q = q.Where("requisition_type = ?", reqType)
+	}
+	if status != "" {
+		q = q.Where("status = ?", status)
+	}
+	err := q.Order("request_date DESC, created_at DESC").Find(&list).Error
+	return list, err
+}
+
+func (r *manufacturingRepository) UpdateRequisitionStatus(ctx context.Context, id uuid.UUID, status string, issuedBy string) error {
+	updates := map[string]interface{}{"status": status}
+	if issuedBy != "" {
+		updates["issued_by"] = issuedBy
+	}
+	return r.db.WithContext(ctx).Model(&domain.MaterialRequisition{}).Where("id = ?", id).Updates(updates).Error
+}
+
+func (r *manufacturingRepository) CreateOvenLog(ctx context.Context, log *domain.OvenProductionLog) error {
+	return r.db.WithContext(ctx).Create(log).Error
+}
+
+func (r *manufacturingRepository) GetOvenLogByID(ctx context.Context, id uuid.UUID) (*domain.OvenProductionLog, error) {
+	var log domain.OvenProductionLog
+	err := r.db.WithContext(ctx).
+		Preload("Cycles").
+		First(&log, "id = ?", id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &log, nil
+}
+
+func (r *manufacturingRepository) ListOvenLogs(ctx context.Context, date string, ovenNumber string) ([]domain.OvenProductionLog, error) {
+	var logs []domain.OvenProductionLog
+	q := r.db.WithContext(ctx).Model(&domain.OvenProductionLog{}).Preload("Cycles")
+	if date != "" {
+		q = q.Where("date = ?", date)
+	}
+	if ovenNumber != "" {
+		q = q.Where("oven_number = ?", ovenNumber)
+	}
+	err := q.Order("date DESC, created_at DESC").Find(&logs).Error
+	return logs, err
+}

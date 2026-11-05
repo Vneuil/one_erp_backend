@@ -72,6 +72,18 @@ func ProvisionAll(tenantDB *gorm.DB) error {
 	return nil
 }
 
+// MigrateAll runs every registered module's Migrate against the given
+// tenant database, in registration order. Idempotent: it only creates
+// tables/columns that do not exist yet, without running seeders.
+func MigrateAll(tenantDB *gorm.DB) error {
+	for _, m := range registry {
+		if err := m.Migrate(tenantDB); err != nil {
+			return fmt.Errorf("failed to migrate %s schema: %w", m.Name, err)
+		}
+	}
+	return nil
+}
+
 // OnboardingUser is a company member as seen by onboarding hooks.
 type OnboardingUser struct {
 	UserID    uuid.UUID

@@ -31,7 +31,11 @@ type SalesOrder struct {
 	Status         string  `gorm:"type:varchar(50);default:'Confirmed'" json:"status"`
 	PaymentStatus  string  `gorm:"type:varchar(50);default:'Unpaid'" json:"paymentStatus"`
 	Channel        string  `gorm:"type:varchar(50);default:'Direct B2B'" json:"channel"`
-	OrderDate      string  `gorm:"type:varchar(50)" json:"orderDate"`
+	OrderDate            string  `gorm:"type:varchar(50)" json:"orderDate"`
+	CustomerPONumber     string  `gorm:"type:varchar(100)" json:"customerPoNumber,omitempty"`
+	CustomerPOAttachment string  `gorm:"type:text" json:"customerPoAttachment,omitempty"`
+	DPPaid               bool    `gorm:"default:false" json:"dpPaid"`
+	DPAmount             float64 `gorm:"type:decimal(15,2);default:0" json:"dpAmount"`
 
 	// MarketplacePlatform/MarketplaceOrderID identify the source marketplace
 	// order when this Sales Order was created by the marketplace sync (see

@@ -35,6 +35,7 @@ type SalesUseCase interface {
 	CreateOrder(ctx context.Context, dto CreateSalesOrderDTO) (*SalesOrderResponseDTO, error)
 	GetOrderByID(ctx context.Context, id uuid.UUID) (*SalesOrderResponseDTO, error)
 	ListOrders(ctx context.Context, query types.PaginationQuery) ([]SalesOrderResponseDTO, types.PaginationMeta, error)
+	SubmitOrder(ctx context.Context, id uuid.UUID) (*SalesOrderResponseDTO, error)
 	ApproveOrder(ctx context.Context, id uuid.UUID, dto SalesApprovalActionDTO) (*SalesOrderResponseDTO, error)
 	RejectOrder(ctx context.Context, id uuid.UUID, dto SalesApprovalActionDTO) (*SalesOrderResponseDTO, error)
 	UpdateOrder(ctx context.Context, id uuid.UUID, dto UpdateSalesOrderDTO) (*SalesOrderResponseDTO, error)
@@ -195,7 +196,11 @@ func (uc *salesUseCase) CreateOrder(ctx context.Context, dto CreateSalesOrderDTO
 		WarehouseID:         dto.WarehouseID,
 		Lines:               lines,
 		MarketplacePlatform: dto.MarketplacePlatform,
-		MarketplaceOrderID:  dto.MarketplaceOrderID,
+		MarketplaceOrderID:   dto.MarketplaceOrderID,
+		CustomerPONumber:     dto.CustomerPONumber,
+		CustomerPOAttachment: dto.CustomerPOAttachment,
+		DPPaid:               dto.DPPaid,
+		DPAmount:             dto.DPAmount,
 	}
 
 	if err := uc.repo.CreateOrder(ctx, order); err != nil {
@@ -248,6 +253,36 @@ func (uc *salesUseCase) CreateOrder(ctx context.Context, dto CreateSalesOrderDTO
 	return ToSalesOrderResponse(order), nil
 }
 
+func (uc *salesUseCase) SubmitOrder(ctx context.Context, id uuid.UUID) (*SalesOrderResponseDTO, error) {
+	order, err := uc.repo.GetOrderByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get sales order")
+	}
+	if order == nil {
+		return nil, apperrors.NewNotFound("Sales order not found")
+	}
+	if !strings.EqualFold(order.Status, "draft") {
+		return nil, apperrors.NewConflict(fmt.Sprintf("Sales order in status %s cannot be submitted", order.Status))
+	}
+	order.Status = "pending_approval"
+	if uc.approvalUC != nil {
+		_, err := uc.approvalUC.SubmitDocument(ctx, approvalApp.SubmitDocumentDTO{
+			DocumentType:   salesOrderDocumentType,
+			DocumentID:     order.ID,
+			DocumentNumber: order.OrderNumber,
+			Amount:         order.TotalAmount,
+			RequesterName:  order.CustomerName,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := uc.repo.UpdateOrder(ctx, order); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to update sales order")
+	}
+	return ToSalesOrderResponse(order), nil
+}
+
 // ApproveOrder advances a Sales Order routed through modules/approval
 // (Status == "pending_approval") to its next approval step, mirroring
 // procurement's ApprovePurchaseOrder. Once the workflow's final step
@@ -262,37 +297,63 @@ func (uc *salesUseCase) ApproveOrder(ctx context.Context, id uuid.UUID, dto Sale
 	if order == nil {
 		return nil, apperrors.NewNotFound("Sales order not found")
 	}
-	if order.Status != "pending_approval" || uc.approvalUC == nil {
-		return nil, apperrors.NewConflict("This sales order is not awaiting approval")
-	}
 	if err := sod.ForbidSelfApproval(ctx, order.CreatedByEmail); err != nil {
 		return nil, err
 	}
 
-	activeReq, err := uc.approvalUC.GetActiveRequestForDocument(ctx, salesOrderDocumentType, order.ID)
-	if err != nil {
-		return nil, apperrors.NewInternal(err, "Failed to check approval status")
+	if uc.approvalUC != nil {
+		activeReq, err := uc.approvalUC.GetActiveRequestForDocument(ctx, salesOrderDocumentType, order.ID)
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to check approval status")
+		}
+		if activeReq == nil && (order.Status == "pending_approval" || order.Status == "submitted" || order.Status == "Draft") {
+			submitRes, submitErr := uc.approvalUC.SubmitDocument(ctx, approvalApp.SubmitDocumentDTO{
+				DocumentType:   salesOrderDocumentType,
+				DocumentID:     order.ID,
+				DocumentNumber: order.OrderNumber,
+				Amount:         order.TotalAmount,
+				RequesterName:  order.CustomerName,
+			})
+			if submitErr == nil && submitRes != nil && submitRes.RequiresApproval && submitRes.Request != nil {
+				activeReq = submitRes.Request
+				order.Status = "pending_approval"
+				_ = uc.repo.UpdateOrder(ctx, order)
+			}
+		}
+
+		if activeReq != nil && activeReq.Status == "pending" {
+			if _, err := uc.approvalUC.ApproveStep(ctx, activeReq.ID, approvalApp.ActOnStepDTO{
+				ActorName: dto.ActorName, ActorRole: dto.ActorRole, Comments: dto.Comments,
+			}); err != nil {
+				return nil, err
+			}
+
+			order, err = uc.repo.GetOrderByID(ctx, id)
+			if err != nil {
+				return nil, apperrors.NewInternal(err, "Failed to get sales order")
+			}
+			return ToSalesOrderResponse(order), nil
+		}
 	}
-	if activeReq == nil || activeReq.Status != "pending" {
+
+	if order.Status != "Draft" && order.Status != "submitted" && order.Status != "pending_approval" {
 		return nil, apperrors.NewConflict("This sales order is not awaiting approval")
 	}
 
-	// ApproveStep drives the workflow's current step. If this was the
-	// final required level, it synchronously invokes the
-	// DocumentStatusCallback this module registers with the approval
-	// module (see module.go / callback.go), which calls
-	// FinalizeOrderApproved - the only place order status is set to
-	// "Confirmed" and stock is deducted. Re-read afterward to reflect it;
-	// an intermediate level leaves the order correctly pending_approval.
-	if _, err := uc.approvalUC.ApproveStep(ctx, activeReq.ID, approvalApp.ActOnStepDTO{
-		ActorName: dto.ActorName, ActorRole: dto.ActorRole, Comments: dto.Comments,
-	}); err != nil {
-		return nil, err
+	order.Status = "Confirmed"
+	if order.WarehouseID != nil {
+		for _, l := range order.Lines {
+			if _, err := uc.inventoryUC.AdjustStock(ctx, inventoryApp.AdjustStockDTO{
+				ProductID: l.ProductID, WarehouseID: *order.WarehouseID, Quantity: -int(l.Quantity),
+				Reason: "Sales Order", Reference: order.OrderNumber,
+			}); err != nil {
+				return nil, apperrors.NewInternal(err, "Order approved but failed to deduct stock for product "+l.ProductID.String())
+			}
+		}
+		uc.postCOGS(ctx, order.ID, order.OrderNumber, order.Lines)
 	}
-
-	order, err = uc.repo.GetOrderByID(ctx, id)
-	if err != nil {
-		return nil, apperrors.NewInternal(err, "Failed to get sales order")
+	if err := uc.repo.UpdateOrder(ctx, order); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to update sales order")
 	}
 	return ToSalesOrderResponse(order), nil
 }
@@ -347,27 +408,48 @@ func (uc *salesUseCase) RejectOrder(ctx context.Context, id uuid.UUID, dto Sales
 	if order == nil {
 		return nil, apperrors.NewNotFound("Sales order not found")
 	}
-	if order.Status != "pending_approval" || uc.approvalUC == nil {
-		return nil, apperrors.NewConflict("This sales order is not awaiting approval")
+
+	if uc.approvalUC != nil {
+		activeReq, err := uc.approvalUC.GetActiveRequestForDocument(ctx, salesOrderDocumentType, order.ID)
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to check approval status")
+		}
+		if activeReq == nil && (order.Status == "pending_approval" || order.Status == "submitted" || order.Status == "Draft") {
+			submitRes, submitErr := uc.approvalUC.SubmitDocument(ctx, approvalApp.SubmitDocumentDTO{
+				DocumentType:   salesOrderDocumentType,
+				DocumentID:     order.ID,
+				DocumentNumber: order.OrderNumber,
+				Amount:         order.TotalAmount,
+				RequesterName:  order.CustomerName,
+			})
+			if submitErr == nil && submitRes != nil && submitRes.RequiresApproval && submitRes.Request != nil {
+				activeReq = submitRes.Request
+				order.Status = "pending_approval"
+				_ = uc.repo.UpdateOrder(ctx, order)
+			}
+		}
+
+		if activeReq != nil && activeReq.Status == "pending" {
+			if _, err := uc.approvalUC.RejectStep(ctx, activeReq.ID, approvalApp.ActOnStepDTO{
+				ActorName: dto.ActorName, ActorRole: dto.ActorRole, Comments: dto.Comments,
+			}); err != nil {
+				return nil, err
+			}
+
+			order, err = uc.repo.GetOrderByID(ctx, id)
+			if err != nil {
+				return nil, apperrors.NewInternal(err, "Failed to get sales order")
+			}
+			return ToSalesOrderResponse(order), nil
+		}
 	}
 
-	activeReq, err := uc.approvalUC.GetActiveRequestForDocument(ctx, salesOrderDocumentType, order.ID)
-	if err != nil {
-		return nil, apperrors.NewInternal(err, "Failed to check approval status")
+	if order.Status != "Draft" && order.Status != "submitted" && order.Status != "pending_approval" {
+		return nil, apperrors.NewConflict("This sales order cannot be rejected")
 	}
-	if activeReq == nil || activeReq.Status != "pending" {
-		return nil, apperrors.NewConflict("This sales order is not awaiting approval")
-	}
-
-	if _, err := uc.approvalUC.RejectStep(ctx, activeReq.ID, approvalApp.ActOnStepDTO{
-		ActorName: dto.ActorName, ActorRole: dto.ActorRole, Comments: dto.Comments,
-	}); err != nil {
-		return nil, err
-	}
-
-	order, err = uc.repo.GetOrderByID(ctx, id)
-	if err != nil {
-		return nil, apperrors.NewInternal(err, "Failed to get sales order")
+	order.Status = "rejected"
+	if err := uc.repo.UpdateOrder(ctx, order); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to reject sales order")
 	}
 	return ToSalesOrderResponse(order), nil
 }
@@ -464,6 +546,18 @@ func (uc *salesUseCase) UpdateOrder(ctx context.Context, id uuid.UUID, dto Updat
 	order.TotalAmount = total
 	order.BaseAmount = baseAmount
 	order.Lines = lines
+	if dto.CustomerPONumber != nil {
+		order.CustomerPONumber = *dto.CustomerPONumber
+	}
+	if dto.CustomerPOAttachment != nil {
+		order.CustomerPOAttachment = *dto.CustomerPOAttachment
+	}
+	if dto.DPPaid != nil {
+		order.DPPaid = *dto.DPPaid
+	}
+	if dto.DPAmount != nil {
+		order.DPAmount = *dto.DPAmount
+	}
 
 	if err := uc.repo.UpdateOrderWithLines(ctx, order); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to update sales order")

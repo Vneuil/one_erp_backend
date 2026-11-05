@@ -42,6 +42,17 @@ type ManufacturingUseCase interface {
 	GetBackwardTraceability(ctx context.Context, fgBatchNo string) ([]domain.BatchGenealogy, error)
 	GetForwardTraceability(ctx context.Context, materialBatchNo string) ([]domain.BatchGenealogy, error)
 
+	// Requisitions (BPB, PBPK, LPC)
+	CreateRequisition(ctx context.Context, dto CreateMaterialRequisitionDTO) (*domain.MaterialRequisition, error)
+	GetRequisitionByID(ctx context.Context, id uuid.UUID) (*domain.MaterialRequisition, error)
+	ListRequisitions(ctx context.Context, reqType string, status string) ([]domain.MaterialRequisition, error)
+	UpdateRequisitionStatus(ctx context.Context, id uuid.UUID, dto UpdateRequisitionStatusDTO) error
+
+	// Oven Logs (LHO)
+	CreateOvenLog(ctx context.Context, dto CreateOvenLogDTO) (*domain.OvenProductionLog, error)
+	GetOvenLogByID(ctx context.Context, id uuid.UUID) (*domain.OvenProductionLog, error)
+	ListOvenLogs(ctx context.Context, date string, ovenNumber string) ([]domain.OvenProductionLog, error)
+
 	// Reports
 	DailyReport(ctx context.Context, from, to string) (*DailyReportDTO, error)
 	OrderSummary(ctx context.Context, from, to string) (*OrderSummaryDTO, error)
@@ -838,6 +849,183 @@ func (uc *manufacturingUseCase) GetBackwardTraceability(ctx context.Context, fgB
 		return nil, apperrors.NewInternal(err, "Failed to load backward traceability")
 	}
 	return records, nil
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Requisitions (BPB, PBPK, LPC) Implementation
+// ─────────────────────────────────────────────────────────────────────────────
+
+func (uc *manufacturingUseCase) CreateRequisition(ctx context.Context, dto CreateMaterialRequisitionDTO) (*domain.MaterialRequisition, error) {
+	prefix := "REQ"
+	switch dto.RequisitionType {
+	case domain.RequisitionTypeRawMaterial:
+		prefix = "BPB"
+	case domain.RequisitionTypePackaging:
+		prefix = "BPK"
+	case domain.RequisitionTypeLiquidSugar:
+		prefix = "LPC"
+	}
+	reqNo := fmt.Sprintf("%s-%s-%04d", prefix, time.Now().Format("200601"), time.Now().Unix()%10000)
+
+	lines := make([]domain.MaterialRequisitionLine, 0, len(dto.Lines))
+	for _, l := range dto.Lines {
+		lines = append(lines, domain.MaterialRequisitionLine{
+			ProductID:         l.ProductID,
+			ProductName:       l.ProductName,
+			BatchNo:           l.BatchNo,
+			QuantityRequested: l.QuantityRequested,
+			QuantityIssued:    l.QuantityIssued,
+			QuantityUsed:      l.QuantityUsed,
+			QuantityReject:    l.QuantityReject,
+			QuantityReturned:  l.QuantityReturned,
+			UoM:               l.UoM,
+			Notes:             l.Notes,
+		})
+	}
+
+	dispensing := make([]domain.LiquidSugarDispensingItem, 0, len(dto.DispensingItems))
+	for _, d := range dto.DispensingItems {
+		netWeight := d.GrossWeight - d.TareWeight
+		if netWeight < 0 {
+			netWeight = 0
+		}
+		dispensing = append(dispensing, domain.LiquidSugarDispensingItem{
+			JerryCanNo:  d.JerryCanNo,
+			GrossWeight: d.GrossWeight,
+			TareWeight:  d.TareWeight,
+			NetWeight:   netWeight,
+			Brix:        d.Brix,
+			AromaColor:  d.AromaColor,
+			Notes:       d.Notes,
+		})
+	}
+
+	req := &domain.MaterialRequisition{
+		RequestNo:         reqNo,
+		RequisitionType:   dto.RequisitionType,
+		ProductionOrderID: dto.ProductionOrderID,
+		OrderNumber:       dto.OrderNumber,
+		RequestDate:       dto.RequestDate,
+		Department:        dto.Department,
+		RequestedBy:       dto.RequestedBy,
+		Status:            "submitted",
+		Notes:             dto.Notes,
+		Lines:             lines,
+		DispensingItems:   dispensing,
+	}
+
+	if err := uc.repo.CreateRequisition(ctx, req); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to create material requisition")
+	}
+	return req, nil
+}
+
+func (uc *manufacturingUseCase) GetRequisitionByID(ctx context.Context, id uuid.UUID) (*domain.MaterialRequisition, error) {
+	req, err := uc.repo.GetRequisitionByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewNotFound("Material requisition not found")
+	}
+	return req, nil
+}
+
+func (uc *manufacturingUseCase) ListRequisitions(ctx context.Context, reqType string, status string) ([]domain.MaterialRequisition, error) {
+	list, err := uc.repo.ListRequisitions(ctx, reqType, status)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to list material requisitions")
+	}
+	return list, nil
+}
+
+func (uc *manufacturingUseCase) UpdateRequisitionStatus(ctx context.Context, id uuid.UUID, dto UpdateRequisitionStatusDTO) error {
+	if err := uc.repo.UpdateRequisitionStatus(ctx, id, dto.Status, dto.IssuedBy); err != nil {
+		return apperrors.NewInternal(err, "Failed to update requisition status")
+	}
+	return nil
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Oven Logs (LHO) Implementation
+// ─────────────────────────────────────────────────────────────────────────────
+
+func (uc *manufacturingUseCase) CreateOvenLog(ctx context.Context, dto CreateOvenLogDTO) (*domain.OvenProductionLog, error) {
+	logNo := fmt.Sprintf("LHO-%s-%04d", time.Now().Format("200601"), time.Now().Unix()%10000)
+
+	var totalWet, totalDry float64
+	cycles := make([]domain.OvenCycleLine, 0, len(dto.Cycles))
+	for _, c := range dto.Cycles {
+		netWet := c.GrossInWeight - c.TrayWeight - c.PaperWeight
+		if netWet < 0 {
+			netWet = 0
+		}
+		netDry := c.GrossOutWeight - c.TrayWeight - c.PaperWeight
+		if netDry < 0 {
+			netDry = 0
+		}
+		var lossPct float64
+		if netWet > 0 {
+			lossPct = ((netWet - netDry) / netWet) * 100
+		}
+		totalWet += netWet
+		totalDry += netDry
+
+		cycles = append(cycles, domain.OvenCycleLine{
+			CycleNumber:         c.CycleNumber,
+			TimeIn:              c.TimeIn,
+			TimeOut:             c.TimeOut,
+			Temperature:         c.Temperature,
+			TrayWeight:          c.TrayWeight,
+			PaperWeight:         c.PaperWeight,
+			GrossInWeight:       c.GrossInWeight,
+			GrossOutWeight:      c.GrossOutWeight,
+			NetWetWeight:        netWet,
+			NetDryWeight:        netDry,
+			MoistureLossPercent: lossPct,
+			MoistureContent:     c.MoistureContent,
+			Notes:               c.Notes,
+		})
+	}
+
+	var avgLoss float64
+	if totalWet > 0 {
+		avgLoss = ((totalWet - totalDry) / totalWet) * 100
+	}
+
+	log := &domain.OvenProductionLog{
+		LogNo:             logNo,
+		ProductionOrderID: dto.ProductionOrderID,
+		OrderNumber:       dto.OrderNumber,
+		Date:              dto.Date,
+		OvenNumber:        dto.OvenNumber,
+		OperatorName:      dto.OperatorName,
+		Shift:             dto.Shift,
+		TotalCycles:       len(cycles),
+		TotalWetWeight:    totalWet,
+		TotalDryWeight:    totalDry,
+		AvgMoistureLoss:   avgLoss,
+		Notes:             dto.Notes,
+		Cycles:            cycles,
+	}
+
+	if err := uc.repo.CreateOvenLog(ctx, log); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to create oven production log")
+	}
+	return log, nil
+}
+
+func (uc *manufacturingUseCase) GetOvenLogByID(ctx context.Context, id uuid.UUID) (*domain.OvenProductionLog, error) {
+	log, err := uc.repo.GetOvenLogByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewNotFound("Oven log not found")
+	}
+	return log, nil
+}
+
+func (uc *manufacturingUseCase) ListOvenLogs(ctx context.Context, date string, ovenNumber string) ([]domain.OvenProductionLog, error) {
+	logs, err := uc.repo.ListOvenLogs(ctx, date, ovenNumber)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to list oven logs")
+	}
+	return logs, nil
 }
 
 func (uc *manufacturingUseCase) GetForwardTraceability(ctx context.Context, materialBatchNo string) ([]domain.BatchGenealogy, error) {

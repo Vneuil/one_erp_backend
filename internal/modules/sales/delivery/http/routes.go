@@ -16,6 +16,7 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	sales.Get("/orders", h.ListOrders)
 	sales.Get("/orders/:id", h.GetOrderByID)
 	sales.Put("/orders/:id", h.UpdateOrder)
+	sales.Post("/orders/:id/submit", h.SubmitOrder)
 	sales.Post("/orders/:id/approve", h.ApproveOrder)
 	sales.Post("/orders/:id/reject", h.RejectOrder)
 	sales.Get("/orders/:id/billing-schedule", h.ListBillingSchedule)

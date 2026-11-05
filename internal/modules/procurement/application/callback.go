@@ -36,3 +36,23 @@ func (c *purchaseOrderApprovalCallback) OnRejected(ctx context.Context, document
 // registration in module.go (RegisterCallbackFactory needs the exact
 // string SubmitDocument used).
 const PurchaseOrderDocumentType = purchaseOrderDocumentType
+
+// purchaseRequestApprovalCallback implements approvalApp.DocumentStatusCallback
+// for the "purchase_request" document type.
+type purchaseRequestApprovalCallback struct {
+	uc ProcurementUseCase
+}
+
+func NewPurchaseRequestApprovalCallback(uc ProcurementUseCase) approvalApp.DocumentStatusCallback {
+	return &purchaseRequestApprovalCallback{uc: uc}
+}
+
+func (c *purchaseRequestApprovalCallback) OnApproved(ctx context.Context, documentID uuid.UUID) error {
+	return c.uc.FinalizePurchaseRequestApproved(ctx, documentID)
+}
+
+func (c *purchaseRequestApprovalCallback) OnRejected(ctx context.Context, documentID uuid.UUID) error {
+	return c.uc.FinalizePurchaseRequestRejected(ctx, documentID)
+}
+
+const PurchaseRequestDocumentType = purchaseRequestDocumentType

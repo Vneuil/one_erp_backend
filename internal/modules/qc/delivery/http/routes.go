@@ -26,4 +26,14 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	inspections.Post("/", h.CreateInspection)
 	inspections.Get("/:id", h.GetInspection)
 	inspections.Post("/:id/void", h.VoidInspection)
+
+	hygiene := qc.Group("/hygiene")
+	hygiene.Get("/", h.ListHygieneChecks)
+	hygiene.Post("/", h.CreateHygieneCheck)
+	hygiene.Delete("/:id", h.DeleteHygieneCheck)
+
+	preop := qc.Group("/preop")
+	preop.Get("/", h.ListPreOpChecks)
+	preop.Post("/", h.CreatePreOpCheck)
+	preop.Delete("/:id", h.DeletePreOpCheck)
 }

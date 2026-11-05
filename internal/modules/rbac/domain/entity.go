@@ -41,7 +41,8 @@ type Permission struct {
 	// role to approve/reject/pay/post documents in this module (see
 	// ApprovalGate). Managing a module (creating and editing records) does not
 	// imply being allowed to approve them.
-	CanApprove bool `gorm:"default:false" json:"canApprove"`
+	CanApprove    bool `gorm:"default:false" json:"canApprove"`
+	CanViewPrices bool `gorm:"default:false" json:"canViewPrices"`
 }
 
 func (Permission) TableName() string {

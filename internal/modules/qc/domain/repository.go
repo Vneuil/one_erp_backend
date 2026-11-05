@@ -40,4 +40,14 @@ type QCRepository interface {
 
 	// Stats / Reports
 	GetInspectionStats(ctx context.Context) (total int64, passed int64, failed int64, voided int64, err error)
+
+	// Hygiene (CPH)
+	CreateHygieneCheck(ctx context.Context, check *PersonalHygieneCheck) error
+	ListHygieneChecks(ctx context.Context, date string, line string) ([]PersonalHygieneCheck, error)
+	DeleteHygieneCheck(ctx context.Context, id uuid.UUID) error
+
+	// Pre-Op Sanitation (SSO)
+	CreatePreOpCheck(ctx context.Context, check *PreOpSanitationCheck) error
+	ListPreOpChecks(ctx context.Context, date string, room string) ([]PreOpSanitationCheck, error)
+	DeletePreOpCheck(ctx context.Context, id uuid.UUID) error
 }

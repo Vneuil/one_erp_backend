@@ -9,6 +9,7 @@ import (
 
 type CreateSupplierDTO struct {
 	Code          string `json:"code"`
+	BatchCode     string `json:"batchCode,omitempty"`
 	Name          string `json:"name"`
 	ContactPerson string `json:"contactPerson"`
 	Email         string `json:"email"`
@@ -22,6 +23,7 @@ type CreateSupplierDTO struct {
 
 type UpdateSupplierDTO struct {
 	Name          *string `json:"name,omitempty"`
+	BatchCode     *string `json:"batchCode,omitempty"`
 	ContactPerson *string `json:"contactPerson,omitempty"`
 	Email         *string `json:"email,omitempty"`
 	Phone         *string `json:"phone,omitempty"`
@@ -35,6 +37,7 @@ type UpdateSupplierDTO struct {
 type SupplierResponseDTO struct {
 	ID            uuid.UUID `json:"id"`
 	Code          string    `json:"code"`
+	BatchCode     string    `json:"batchCode,omitempty"`
 	Name          string    `json:"name"`
 	ContactPerson string    `json:"contactPerson"`
 	Email         string    `json:"email"`
@@ -55,6 +58,7 @@ func ToSupplierResponse(s *domain.Supplier) *SupplierResponseDTO {
 	return &SupplierResponseDTO{
 		ID:            s.ID,
 		Code:          s.Code,
+		BatchCode:     s.BatchCode,
 		Name:          s.Name,
 		ContactPerson: s.ContactPerson,
 		Email:         s.Email,

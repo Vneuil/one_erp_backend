@@ -27,6 +27,16 @@ type QCUseCase interface {
 	ListInspections(ctx context.Context, filter domain.ListInspectionFilter) ([]QCInspectionResponseDTO, int64, error)
 	VoidInspection(ctx context.Context, id uuid.UUID, actorID uuid.UUID, dto VoidQCInspectionDTO) (*QCInspectionResponseDTO, error)
 	GetStats(ctx context.Context) (*QCStatsResponseDTO, error)
+
+	// Hygiene (CPH)
+	CreateHygieneCheck(ctx context.Context, dto CreateHygieneCheckDTO) (*domain.PersonalHygieneCheck, error)
+	ListHygieneChecks(ctx context.Context, date string, line string) ([]domain.PersonalHygieneCheck, error)
+	DeleteHygieneCheck(ctx context.Context, id uuid.UUID) error
+
+	// Pre-Op Sanitation (SSO)
+	CreatePreOpCheck(ctx context.Context, dto CreatePreOpCheckDTO) (*domain.PreOpSanitationCheck, error)
+	ListPreOpChecks(ctx context.Context, date string, room string) ([]domain.PreOpSanitationCheck, error)
+	DeletePreOpCheck(ctx context.Context, id uuid.UUID) error
 }
 
 type qcUseCase struct {
@@ -407,4 +417,97 @@ func mapInspectionToDTO(insp *domain.QCInspection) QCInspectionResponseDTO {
 		CreatedAt:         insp.CreatedAt,
 		UpdatedAt:         insp.UpdatedAt,
 	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Personal Hygiene (Doc CPH) & Pre-Op Sanitation (Doc SSO)
+// ─────────────────────────────────────────────────────────────────────────────
+
+func (uc *qcUseCase) CreateHygieneCheck(ctx context.Context, dto CreateHygieneCheckDTO) (*domain.PersonalHygieneCheck, error) {
+	isPassed := dto.WorkWearClean && dto.HairNet && dto.NailsClean && dto.NoJewelry && dto.WorkShoesClean && dto.HandWashing && dto.HealthFit
+	check := &domain.PersonalHygieneCheck{
+		CheckDate:      dto.CheckDate,
+		Shift:          dto.Shift,
+		Line:           dto.Line,
+		EmployeeName:   dto.EmployeeName,
+		WorkWearClean:  dto.WorkWearClean,
+		HairNet:        dto.HairNet,
+		NailsClean:     dto.NailsClean,
+		NoJewelry:      dto.NoJewelry,
+		WorkShoesClean: dto.WorkShoesClean,
+		HandWashing:    dto.HandWashing,
+		HealthFit:      dto.HealthFit,
+		IsPassed:       isPassed,
+		ActionTaken:    dto.ActionTaken,
+		InspectorName:  dto.InspectorName,
+		Notes:          dto.Notes,
+	}
+	if err := uc.repo.CreateHygieneCheck(ctx, check); err != nil {
+		return nil, apperrors.NewInternal(err)
+	}
+	return check, nil
+}
+
+func (uc *qcUseCase) ListHygieneChecks(ctx context.Context, date string, line string) ([]domain.PersonalHygieneCheck, error) {
+	checks, err := uc.repo.ListHygieneChecks(ctx, date, line)
+	if err != nil {
+		return nil, apperrors.NewInternal(err)
+	}
+	return checks, nil
+}
+
+func (uc *qcUseCase) DeleteHygieneCheck(ctx context.Context, id uuid.UUID) error {
+	if err := uc.repo.DeleteHygieneCheck(ctx, id); err != nil {
+		return apperrors.NewInternal(err)
+	}
+	return nil
+}
+
+func (uc *qcUseCase) CreatePreOpCheck(ctx context.Context, dto CreatePreOpCheckDTO) (*domain.PreOpSanitationCheck, error) {
+	status := dto.Status
+	if status == "" {
+		allOk := dto.FloorClean && dto.WallCeilingClean && dto.EquipmentSanitized && dto.TrashBinClosed && dto.LightingProtected && dto.PestControlIntact
+		if allOk {
+			status = "approved"
+		} else {
+			status = "action_required"
+		}
+	}
+	check := &domain.PreOpSanitationCheck{
+		CheckDate:          dto.CheckDate,
+		CheckTime:          dto.CheckTime,
+		Shift:              dto.Shift,
+		Room:               dto.Room,
+		FloorClean:         dto.FloorClean,
+		WallCeilingClean:   dto.WallCeilingClean,
+		EquipmentSanitized: dto.EquipmentSanitized,
+		TrashBinClosed:     dto.TrashBinClosed,
+		LightingProtected:  dto.LightingProtected,
+		PestControlIntact:  dto.PestControlIntact,
+		GaussReading:       dto.GaussReading,
+		MetalTrapClean:     dto.MetalTrapClean,
+		Status:             status,
+		Notes:              dto.Notes,
+		InspectorName:      dto.InspectorName,
+		SupervisorName:     dto.SupervisorName,
+	}
+	if err := uc.repo.CreatePreOpCheck(ctx, check); err != nil {
+		return nil, apperrors.NewInternal(err)
+	}
+	return check, nil
+}
+
+func (uc *qcUseCase) ListPreOpChecks(ctx context.Context, date string, room string) ([]domain.PreOpSanitationCheck, error) {
+	checks, err := uc.repo.ListPreOpChecks(ctx, date, room)
+	if err != nil {
+		return nil, apperrors.NewInternal(err)
+	}
+	return checks, nil
+}
+
+func (uc *qcUseCase) DeletePreOpCheck(ctx context.Context, id uuid.UUID) error {
+	if err := uc.repo.DeletePreOpCheck(ctx, id); err != nil {
+		return apperrors.NewInternal(err)
+	}
+	return nil
 }

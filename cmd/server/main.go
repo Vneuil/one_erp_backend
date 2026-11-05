@@ -9,6 +9,7 @@ import (
 	"github.com/divinecoid/one-backend/internal/foundation/config"
 	"github.com/divinecoid/one-backend/internal/foundation/database"
 	"github.com/divinecoid/one-backend/internal/foundation/http"
+	"github.com/divinecoid/one-backend/internal/foundation/license"
 	"github.com/divinecoid/one-backend/internal/foundation/logger"
 	"github.com/divinecoid/one-backend/internal/foundation/middleware"
 	"github.com/divinecoid/one-backend/internal/foundation/notify"
@@ -48,6 +49,7 @@ import (
 	"github.com/divinecoid/one-backend/internal/modules/marketplace"
 	"github.com/divinecoid/one-backend/internal/modules/omnichannel"
 	"github.com/divinecoid/one-backend/internal/modules/payroll"
+	"github.com/divinecoid/one-backend/internal/modules/platform"
 	"github.com/divinecoid/one-backend/internal/modules/pos"
 	"github.com/divinecoid/one-backend/internal/modules/pricing"
 	"github.com/divinecoid/one-backend/internal/modules/procurement"
@@ -109,6 +111,11 @@ func main() {
 	tenantRegistryRepo := tenantInfra.NewTenantDatabaseRepository(db)
 	tenantManager := tenantMgr.NewManager(&cfg.Database, tenantRegistryRepo)
 
+	// Auto-migrate platform subscriptions schema for license & billing
+	if err := license.AutoMigrate(db); err != nil {
+		slog.Warn("failed to auto-migrate platform_subscriptions schema", "error", err)
+	}
+
 	// License enforcement: blocks tenant business-data requests once a
 	// company's trial/paid subscription has actually lapsed. Mounted before
 	// any module registers routes; exempts /auth, /tenant, /companies and
@@ -134,6 +141,7 @@ func main() {
 
 	// 5. Initialize Modules (Modular Monolith Dependency Injection)
 	companyMod := company.NewModule(db, server.V1)
+	platform.NewModule(db, server.V1)
 	checkout.NewModule(db, server.V1, cfg.Xendit)
 	userMod := user.NewModule(db, server.V1, cfg.JWT.Secret)
 	rbac.NewModule(db, server.V1, cfg.JWT.Secret)

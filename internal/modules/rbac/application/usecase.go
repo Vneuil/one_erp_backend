@@ -67,19 +67,19 @@ func (uc *rbacUseCase) seedSystemRoles(ctx context.Context, companyID uuid.UUID)
 		build       func(module string) PermissionDTO
 	}{
 		{"Admin", "Full access to every module", func(m string) PermissionDTO {
-			return PermissionDTO{Module: m, CanView: true, CanManage: true, CanApprove: true}
+			return PermissionDTO{Module: m, CanView: true, CanManage: true, CanApprove: true, CanViewPrices: true}
 		}},
 		{"Manager", "View and manage business modules; no user/role administration", func(m string) PermissionDTO {
 			if restricted[m] {
-				return PermissionDTO{Module: m, CanView: true, CanManage: false}
+				return PermissionDTO{Module: m, CanView: true, CanManage: false, CanViewPrices: false}
 			}
-			return PermissionDTO{Module: m, CanView: true, CanManage: true, CanApprove: true}
+			return PermissionDTO{Module: m, CanView: true, CanManage: true, CanApprove: true, CanViewPrices: true}
 		}},
 		{"Staff", "View-only access to business modules", func(m string) PermissionDTO {
 			if restricted[m] {
-				return PermissionDTO{Module: m, CanView: false, CanManage: false}
+				return PermissionDTO{Module: m, CanView: false, CanManage: false, CanViewPrices: false}
 			}
-			return PermissionDTO{Module: m, CanView: true, CanManage: false}
+			return PermissionDTO{Module: m, CanView: true, CanManage: false, CanViewPrices: false}
 		}},
 	}
 
@@ -91,7 +91,7 @@ func (uc *rbacUseCase) seedSystemRoles(ctx context.Context, companyID uuid.UUID)
 		perms := make([]domain.Permission, 0, len(allModules))
 		for _, m := range allModules {
 			dto := s.build(m)
-			perms = append(perms, domain.Permission{RoleID: role.ID, Module: dto.Module, CanView: dto.CanView, CanManage: dto.CanManage, CanApprove: dto.CanApprove})
+			perms = append(perms, domain.Permission{RoleID: role.ID, Module: dto.Module, CanView: dto.CanView, CanManage: dto.CanManage, CanApprove: dto.CanApprove, CanViewPrices: dto.CanViewPrices})
 		}
 		if err := uc.repo.ReplacePermissions(ctx, role.ID, perms); err != nil {
 			return err
@@ -176,7 +176,7 @@ func (uc *rbacUseCase) SetPermissions(ctx context.Context, roleID uuid.UUID, dto
 		if p.Module == "" {
 			continue
 		}
-		perms = append(perms, domain.Permission{Module: p.Module, CanView: p.CanView, CanManage: p.CanManage, CanApprove: p.CanApprove})
+		perms = append(perms, domain.Permission{Module: p.Module, CanView: p.CanView, CanManage: p.CanManage, CanApprove: p.CanApprove, CanViewPrices: p.CanViewPrices})
 	}
 	if err := uc.repo.ReplacePermissions(ctx, roleID, perms); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to save permissions")

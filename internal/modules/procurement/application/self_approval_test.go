@@ -27,20 +27,20 @@ func TestCannotApproveOwnPurchaseRequest(t *testing.T) {
 	uc := NewProcurementUseCase(&fakePRRepo{pr: pr}, nil, nil, nil)
 
 	own := actor.WithEmail(context.Background(), "Ani@x.com")
-	if _, err := uc.ApprovePurchaseRequest(own, pr.ID); err == nil {
+	if _, err := uc.ApprovePurchaseRequest(own, pr.ID, ApprovalActionDTO{}); err == nil {
 		t.Fatal("a requester must not approve their own purchase request")
 	}
 	if pr.Status != "submitted" {
 		t.Fatalf("status changed to %q by a blocked approval", pr.Status)
 	}
 	// Rejecting your own request is allowed: it is effectively withdrawing it.
-	if _, err := uc.RejectPurchaseRequest(own, pr.ID); err != nil {
+	if _, err := uc.RejectPurchaseRequest(own, pr.ID, ApprovalActionDTO{}); err != nil {
 		t.Fatalf("withdrawing your own request should be allowed: %v", err)
 	}
 
 	pr.Status = "submitted"
 	boss := actor.WithEmail(context.Background(), "boss@x.com")
-	if _, err := uc.ApprovePurchaseRequest(boss, pr.ID); err != nil {
+	if _, err := uc.ApprovePurchaseRequest(boss, pr.ID, ApprovalActionDTO{}); err != nil {
 		t.Fatalf("a different approver must be able to approve: %v", err)
 	}
 }
@@ -65,5 +65,33 @@ func TestCannotApproveOwnPurchaseOrder(t *testing.T) {
 	}
 	if po.Status != "draft" {
 		t.Fatalf("blocked approval changed status to %q", po.Status)
+	}
+}
+
+func TestPurchaseRequestFinalizeApproved(t *testing.T) {
+	pr := &domain.PurchaseRequest{Status: "pending_approval", RequestedBy: "staff@x.com"}
+	pr.ID = uuid.New()
+	fakeRepo := &fakePRRepo{pr: pr}
+	uc := NewProcurementUseCase(fakeRepo, nil, nil, nil)
+
+	if err := uc.FinalizePurchaseRequestApproved(context.Background(), pr.ID); err != nil {
+		t.Fatalf("finalize approved failed: %v", err)
+	}
+	if pr.Status != "approved" {
+		t.Fatalf("expected status 'approved', got %q", pr.Status)
+	}
+}
+
+func TestPurchaseRequestFinalizeRejected(t *testing.T) {
+	pr := &domain.PurchaseRequest{Status: "pending_approval", RequestedBy: "staff@x.com"}
+	pr.ID = uuid.New()
+	fakeRepo := &fakePRRepo{pr: pr}
+	uc := NewProcurementUseCase(fakeRepo, nil, nil, nil)
+
+	if err := uc.FinalizePurchaseRequestRejected(context.Background(), pr.ID); err != nil {
+		t.Fatalf("finalize rejected failed: %v", err)
+	}
+	if pr.Status != "rejected" {
+		t.Fatalf("expected status 'rejected', got %q", pr.Status)
 	}
 }

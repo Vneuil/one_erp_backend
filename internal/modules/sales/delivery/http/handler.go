@@ -45,6 +45,9 @@ func (h *Handler) resolve(c *fiber.Ctx) (application.SalesUseCase, error) {
 	inventoryUC := inventoryApp.NewInventoryUseCase(inventoryRepo, productRepo)
 	approvalRepo := approvalInfra.NewApprovalRepository(tenantDB)
 	approvalUC := approvalApp.NewApprovalUseCase(approvalRepo)
+	for docType, cb := range approvalApp.BuildCallbacks(tenantDB) {
+		approvalUC.RegisterCallback(docType, cb)
+	}
 	ledger := financeApp.NewLedgerPoster(financeInfra.NewFinanceRepository(tenantDB))
 	return application.NewSalesUseCase(repo, currencyUC, inventoryUC, approvalUC, application.WithLedger(ledger), application.WithProducts(productRepo)), nil
 }
@@ -151,6 +154,23 @@ func (h *Handler) UpdateOrder(c *fiber.Ctx) error {
 	}
 
 	return response.OK(c, "Sales order updated successfully", order)
+}
+
+func (h *Handler) SubmitOrder(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	idParam := c.Params("id")
+	id, err := uuid.Parse(idParam)
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid order ID format")
+	}
+	order, err := uc.SubmitOrder(h.ctx(c), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Sales order submitted successfully", order)
 }
 
 func (h *Handler) ApproveOrder(c *fiber.Ctx) error {

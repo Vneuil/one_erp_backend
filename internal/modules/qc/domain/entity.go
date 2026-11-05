@@ -100,3 +100,53 @@ type QCInspectionItem struct {
 func (QCInspectionItem) TableName() string {
 	return "qc_inspection_items"
 }
+
+// PersonalHygieneCheck records employee GMP hygiene checklist (Doc CPH / Catatan Personal Hygiene)
+type PersonalHygieneCheck struct {
+	types.BaseEntity
+	CheckDate      string `gorm:"type:varchar(10);not null;index" json:"checkDate"` // YYYY-MM-DD
+	Shift          string `gorm:"type:varchar(20);not null" json:"shift"`
+	Line           string `gorm:"type:varchar(100);not null" json:"line"`
+	EmployeeName   string `gorm:"type:varchar(150);not null;index" json:"employeeName"`
+	WorkWearClean  bool   `gorm:"not null;default:true" json:"workWearClean"`
+	HairNet        bool   `gorm:"not null;default:true" json:"hairNet"`
+	NailsClean     bool   `gorm:"not null;default:true" json:"nailsClean"`
+	NoJewelry      bool   `gorm:"not null;default:true" json:"noJewelry"`
+	WorkShoesClean bool   `gorm:"not null;default:true" json:"workShoesClean"`
+	HandWashing    bool   `gorm:"not null;default:true" json:"handWashing"`
+	HealthFit      bool   `gorm:"not null;default:true" json:"healthFit"`
+	IsPassed       bool   `gorm:"not null;default:true" json:"isPassed"`
+	ActionTaken    string `gorm:"type:varchar(255)" json:"actionTaken,omitempty"`
+	InspectorName  string `gorm:"type:varchar(150);not null" json:"inspectorName"`
+	Notes          string `gorm:"type:text" json:"notes,omitempty"`
+}
+
+func (PersonalHygieneCheck) TableName() string {
+	return "qc_personal_hygiene_checks"
+}
+
+// PreOpSanitationCheck records pre-operational room & equipment checklist (Doc SSO / Sarana Produksi Sebelum Operasional)
+type PreOpSanitationCheck struct {
+	types.BaseEntity
+	CheckDate          string   `gorm:"type:varchar(10);not null;index" json:"checkDate"` // YYYY-MM-DD
+	CheckTime          string   `gorm:"type:varchar(10);not null" json:"checkTime"`       // HH:mm
+	Shift              string   `gorm:"type:varchar(20);not null" json:"shift"`
+	Room               string   `gorm:"type:varchar(100);not null;index" json:"room"`
+	FloorClean         bool     `gorm:"not null;default:true" json:"floorClean"`
+	WallCeilingClean   bool     `gorm:"not null;default:true" json:"wallCeilingClean"`
+	EquipmentSanitized bool     `gorm:"not null;default:true" json:"equipmentSanitized"`
+	TrashBinClosed     bool     `gorm:"not null;default:true" json:"trashBinClosed"`
+	LightingProtected  bool     `gorm:"not null;default:true" json:"lightingProtected"`
+	PestControlIntact  bool     `gorm:"not null;default:true" json:"pestControlIntact"`
+	GaussReading       *float64 `gorm:"type:decimal(10,2)" json:"gaussReading,omitempty"`
+	MetalTrapClean     *bool    `json:"metalTrapClean,omitempty"`
+	Status             string   `gorm:"type:varchar(30);not null;default:'approved'" json:"status"` // approved, hold, action_required
+	Notes              string   `gorm:"type:text" json:"notes,omitempty"`
+	InspectorName      string   `gorm:"type:varchar(150);not null" json:"inspectorName"`
+	SupervisorName     string   `gorm:"type:varchar(150)" json:"supervisorName,omitempty"`
+}
+
+func (PreOpSanitationCheck) TableName() string {
+	return "qc_preop_sanitation_checks"
+}
+

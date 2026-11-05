@@ -7,6 +7,7 @@ import (
 	"github.com/divinecoid/one-backend/internal/modules/rbac/domain"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type rbacRepository struct {
@@ -41,7 +42,7 @@ func (r *rbacRepository) ListRolesByCompany(ctx context.Context, companyID uuid.
 
 func (r *rbacRepository) DeleteRole(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("role_id = ?", id).Delete(&domain.Permission{}).Error; err != nil {
+		if err := tx.Unscoped().Where("role_id = ?", id).Delete(&domain.Permission{}).Error; err != nil {
 			return err
 		}
 		return tx.Delete(&domain.Role{}, id).Error
@@ -50,16 +51,30 @@ func (r *rbacRepository) DeleteRole(ctx context.Context, id uuid.UUID) error {
 
 func (r *rbacRepository) ReplacePermissions(ctx context.Context, roleID uuid.UUID, perms []domain.Permission) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("role_id = ?", roleID).Delete(&domain.Permission{}).Error; err != nil {
+		if err := tx.Unscoped().Where("role_id = ?", roleID).Delete(&domain.Permission{}).Error; err != nil {
 			return err
 		}
 		if len(perms) == 0 {
 			return nil
 		}
-		for i := range perms {
-			perms[i].RoleID = roleID
+		seen := make(map[string]bool)
+		uniquePerms := make([]domain.Permission, 0, len(perms))
+		for _, p := range perms {
+			if p.Module == "" || seen[p.Module] {
+				continue
+			}
+			seen[p.Module] = true
+			p.ID = uuid.Nil
+			p.RoleID = roleID
+			uniquePerms = append(uniquePerms, p)
 		}
-		return tx.Create(&perms).Error
+		if len(uniquePerms) == 0 {
+			return nil
+		}
+		return tx.Clauses(clause.OnConflict{
+			Columns:   []clause.Column{{Name: "role_id"}, {Name: "module"}},
+			DoUpdates: clause.AssignmentColumns([]string{"can_view", "can_manage", "can_approve", "can_view_prices", "updated_at", "deleted_at"}),
+		}).Create(&uniquePerms).Error
 	})
 }
 

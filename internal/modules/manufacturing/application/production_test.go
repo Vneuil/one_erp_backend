@@ -34,6 +34,10 @@ func (m *memMfg) CreateBOM(_ context.Context, b *domain.BillOfMaterial) error {
 func (m *memMfg) GetBOMByID(_ context.Context, id uuid.UUID) (*domain.BillOfMaterial, error) {
 	return m.boms[id], nil
 }
+
+func (m *memMfg) CreateGenealogy(_ context.Context, _ *domain.BatchGenealogy) error { return nil }
+func (m *memMfg) GetBackwardTraceability(_ context.Context, _ string) ([]domain.BatchGenealogy, error) { return nil, nil }
+func (m *memMfg) GetForwardTraceability(_ context.Context, _ string) ([]domain.BatchGenealogy, error) { return nil, nil }
 func (m *memMfg) CreateOrder(_ context.Context, o *domain.ProductionOrder) error {
 	o.ID = uuid.New()
 	o.CreatedAt = time.Now()
@@ -279,7 +283,7 @@ func TestCompleteBatchOnlyForUnitsThatPassedEveryStep(t *testing.T) {
 	ctx := context.Background()
 	o := f.newOrder(t, 10, "")
 	f.release(o)
-	if _, err := f.uc.CompleteBatch(ctx, o.ID, CompleteBatchDTO{QuantityCompleted: 1}); err == nil || !strings.Contains(err.Error(), "Only 0 units have passed") {
+	if _, err := f.uc.CompleteBatch(ctx, o.ID, CompleteBatchDTO{QuantityCompleted: 1}); err == nil || (!strings.Contains(err.Error(), "Only 0 units have passed") && !strings.Contains(err.Error(), "Hanya 0 unit yang telah melewati")) {
 		t.Fatalf("nothing has passed the routing yet: %v", err)
 	}
 	for step, qty := range []int{10, 8, 6} {

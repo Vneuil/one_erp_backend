@@ -79,6 +79,20 @@ func Enforce(db *gorm.DB) fiber.Handler {
 			return c.Next()
 		}
 
+		if module == "approval" {
+			// Approval requests and active approval queries are cross-cutting workflow
+			// features accessible to any authenticated user involved in document approvals.
+			// Modifying workflows themselves (/approval/workflows) requires admin or rbac management.
+			isMutating := c.Method() != fiber.MethodGet && c.Method() != fiber.MethodHead && c.Method() != fiber.MethodOptions
+			if strings.Contains(path, "/approval/workflows") && isMutating {
+				var rbacPerm domain.Permission
+				if err := db.Where("role_id = ? AND module = ?", *user.RoleID, "rbac").First(&rbacPerm).Error; err != nil || !rbacPerm.CanManage {
+					return errors.NewForbidden("Your role does not have permission to modify approval workflows")
+				}
+			}
+			return c.Next()
+		}
+
 		var perm domain.Permission
 		err := db.Where("role_id = ? AND module = ?", *user.RoleID, module).First(&perm).Error
 		if err != nil {

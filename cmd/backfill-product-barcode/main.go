@@ -6,11 +6,15 @@ import (
 	"os"
 
 	"github.com/divinecoid/one-backend/internal/modules/product/domain"
+	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )
 
 func main() {
+	_ = godotenv.Load()
+	_ = godotenv.Load(".env")
+	_ = godotenv.Load("../../.env")
 	dsn := fmt.Sprintf(
 		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 		os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_USER"),

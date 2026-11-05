@@ -120,3 +120,41 @@ type QCStatsResponseDTO struct {
 	VoidedInspections int64   `json:"voidedInspections"`
 	PassRate          float64 `json:"passRate"`
 }
+
+type CreateHygieneCheckDTO struct {
+	CheckDate      string `json:"checkDate" validate:"required"`
+	Shift          string `json:"shift" validate:"required"`
+	Line           string `json:"line" validate:"required"`
+	EmployeeName   string `json:"employeeName" validate:"required"`
+	WorkWearClean  bool   `json:"workWearClean"`
+	HairNet        bool   `json:"hairNet"`
+	NailsClean     bool   `json:"nailsClean"`
+	NoJewelry      bool   `json:"noJewelry"`
+	WorkShoesClean bool   `json:"workShoesClean"`
+	HandWashing    bool   `json:"handWashing"`
+	HealthFit      bool   `json:"healthFit"`
+	IsPassed       bool   `json:"isPassed"`
+	ActionTaken    string `json:"actionTaken,omitempty"`
+	InspectorName  string `json:"inspectorName" validate:"required"`
+	Notes          string `json:"notes,omitempty"`
+}
+
+type CreatePreOpCheckDTO struct {
+	CheckDate          string   `json:"checkDate" validate:"required"`
+	CheckTime          string   `json:"checkTime" validate:"required"`
+	Shift              string   `json:"shift" validate:"required"`
+	Room               string   `json:"room" validate:"required"`
+	FloorClean         bool     `json:"floorClean"`
+	WallCeilingClean   bool     `json:"wallCeilingClean"`
+	EquipmentSanitized bool     `json:"equipmentSanitized"`
+	TrashBinClosed     bool     `json:"trashBinClosed"`
+	LightingProtected  bool     `json:"lightingProtected"`
+	PestControlIntact  bool     `json:"pestControlIntact"`
+	GaussReading       *float64 `json:"gaussReading,omitempty"`
+	MetalTrapClean     *bool    `json:"metalTrapClean,omitempty"`
+	Status             string   `json:"status"`
+	Notes              string   `json:"notes,omitempty"`
+	InspectorName      string   `json:"inspectorName" validate:"required"`
+	SupervisorName     string   `json:"supervisorName,omitempty"`
+}
+

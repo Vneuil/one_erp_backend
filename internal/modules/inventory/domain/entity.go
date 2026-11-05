@@ -74,6 +74,7 @@ const (
 	MovementAdjustment  = "adjustment"
 	MovementTransferIn  = "transfer_in"
 	MovementTransferOut = "transfer_out"
+	MovementReject      = "reject"
 )
 
 // StockMovement is an immutable ledger entry for a stock-level-changing event

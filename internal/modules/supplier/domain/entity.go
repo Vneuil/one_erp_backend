@@ -16,6 +16,7 @@ type Supplier struct {
 	// seeded default Tenant.
 	TenantID      *uuid.UUID `gorm:"type:uuid;index" json:"tenantId,omitempty"`
 	Code          string     `gorm:"type:varchar(50);not null;index" json:"code"`
+	BatchCode     string     `gorm:"type:varchar(10);index" json:"batchCode,omitempty"`
 	Name          string     `gorm:"type:varchar(255);not null" json:"name"`
 	ContactPerson string     `gorm:"type:varchar(100)" json:"contactPerson"`
 	Email         string     `gorm:"type:varchar(255)" json:"email"`

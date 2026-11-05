@@ -265,3 +265,74 @@ func stepResponses(o *domain.ProductionOrder) []StepResponseDTO {
 	}
 	return out
 }
+
+// Requisitions (BPB, PBPK, LPC)
+
+type MaterialRequisitionLineDTO struct {
+	ProductID         uuid.UUID `json:"productId"`
+	ProductName       string    `json:"productName"`
+	BatchNo           string    `json:"batchNo,omitempty"`
+	QuantityRequested float64   `json:"quantityRequested"`
+	QuantityIssued    float64   `json:"quantityIssued"`
+	QuantityUsed      float64   `json:"quantityUsed"`
+	QuantityReject    float64   `json:"quantityReject"`
+	QuantityReturned  float64   `json:"quantityReturned"`
+	UoM               string    `json:"uom"`
+	Notes             string    `json:"notes,omitempty"`
+}
+
+type LiquidSugarDispensingDTO struct {
+	JerryCanNo  int     `json:"jerryCanNo"`
+	GrossWeight float64 `json:"grossWeight"`
+	TareWeight  float64 `json:"tareWeight"`
+	NetWeight   float64 `json:"netWeight"`
+	Brix        float64 `json:"brix"`
+	AromaColor  string  `json:"aromaColor,omitempty"`
+	Notes       string  `json:"notes,omitempty"`
+}
+
+type CreateMaterialRequisitionDTO struct {
+	RequisitionType   string                       `json:"requisitionType"`
+	ProductionOrderID *uuid.UUID                   `json:"productionOrderId,omitempty"`
+	OrderNumber       string                       `json:"orderNumber,omitempty"`
+	RequestDate       string                       `json:"requestDate"`
+	Department        string                       `json:"department"`
+	RequestedBy       string                       `json:"requestedBy"`
+	Notes             string                       `json:"notes,omitempty"`
+	Lines             []MaterialRequisitionLineDTO `json:"lines,omitempty"`
+	DispensingItems   []LiquidSugarDispensingDTO   `json:"dispensingItems,omitempty"`
+}
+
+type UpdateRequisitionStatusDTO struct {
+	Status   string `json:"status"`
+	IssuedBy string `json:"issuedBy,omitempty"`
+}
+
+// Oven Logs (LHO)
+
+type OvenCycleLineDTO struct {
+	CycleNumber         int     `json:"cycleNumber"`
+	TimeIn              string  `json:"timeIn"`
+	TimeOut             string  `json:"timeOut"`
+	Temperature         float64 `json:"temperature"`
+	TrayWeight          float64 `json:"trayWeight"`
+	PaperWeight         float64 `json:"paperWeight"`
+	GrossInWeight       float64 `json:"grossInWeight"`
+	GrossOutWeight      float64 `json:"grossOutWeight"`
+	NetWetWeight        float64 `json:"netWetWeight"`
+	NetDryWeight        float64 `json:"netDryWeight"`
+	MoistureLossPercent float64 `json:"moistureLossPercent"`
+	MoistureContent     float64 `json:"moistureContent"`
+	Notes               string  `json:"notes,omitempty"`
+}
+
+type CreateOvenLogDTO struct {
+	ProductionOrderID *uuid.UUID         `json:"productionOrderId,omitempty"`
+	OrderNumber       string             `json:"orderNumber,omitempty"`
+	Date              string             `json:"date"`
+	OvenNumber        string             `json:"ovenNumber"`
+	OperatorName      string             `json:"operatorName"`
+	Shift             string             `json:"shift"`
+	Notes             string             `json:"notes,omitempty"`
+	Cycles            []OvenCycleLineDTO `json:"cycles,omitempty"`
+}

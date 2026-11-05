@@ -43,7 +43,8 @@ type PermissionDTO struct {
 	CanView   bool   `json:"canView"`
 	CanManage bool   `json:"canManage"`
 	// CanApprove allows approving/rejecting/paying/posting documents of this module.
-	CanApprove bool `json:"canApprove"`
+	CanApprove    bool `json:"canApprove"`
+	CanViewPrices bool `json:"canViewPrices"`
 }
 
 type SetPermissionsDTO struct {
@@ -53,7 +54,7 @@ type SetPermissionsDTO struct {
 func ToPermissionDTOList(items []domain.Permission) []PermissionDTO {
 	result := make([]PermissionDTO, len(items))
 	for i, p := range items {
-		result[i] = PermissionDTO{Module: p.Module, CanView: p.CanView, CanManage: p.CanManage, CanApprove: p.CanApprove}
+		result[i] = PermissionDTO{Module: p.Module, CanView: p.CanView, CanManage: p.CanManage, CanApprove: p.CanApprove, CanViewPrices: p.CanViewPrices}
 	}
 	return result
 }

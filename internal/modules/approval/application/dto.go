@@ -19,6 +19,14 @@ type CreateWorkflowDTO struct {
 	Levels       []WorkflowLevelDTO `json:"levels"`
 }
 
+type UpdateWorkflowDTO struct {
+	DocumentType string             `json:"documentType"`
+	Name         string             `json:"name"`
+	MinAmount    float64            `json:"minAmount"`
+	IsActive     *bool              `json:"isActive,omitempty"`
+	Levels       []WorkflowLevelDTO `json:"levels"`
+}
+
 type WorkflowResponseDTO struct {
 	ID           uuid.UUID          `json:"id"`
 	DocumentType string             `json:"documentType"`

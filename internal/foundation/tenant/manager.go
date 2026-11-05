@@ -75,6 +75,11 @@ func (m *Manager) GetDB(ctx context.Context, companyID uuid.UUID) (*gorm.DB, err
 		return nil, fmt.Errorf("failed to open tenant database connection for company %s: %w", companyID, err)
 	}
 
+	// Ensure tenant schema is up-to-date with all registered modules
+	if err := MigrateAll(db); err != nil {
+		slog.Warn("tenant schema auto-migration encountered error", "companyId", companyID, "database", record.DatabaseName, "error", err)
+	}
+
 	m.mu.Lock()
 	if existing, ok := m.pools[companyID]; ok {
 		// another goroutine won the race - close the connection we just opened

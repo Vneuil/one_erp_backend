@@ -70,6 +70,26 @@ func (h *Handler) ListWorkflows(c *fiber.Ctx) error {
 	return response.OK(c, "Approval workflows retrieved successfully", items)
 }
 
+func (h *Handler) UpdateWorkflow(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid workflow ID format")
+	}
+	var dto application.UpdateWorkflowDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	w, err := uc.UpdateWorkflow(h.ctx(c), id, dto)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Approval workflow updated successfully", w)
+}
+
 func (h *Handler) DeleteWorkflow(c *fiber.Ctx) error {
 	uc, err := h.resolve(c)
 	if err != nil {
@@ -170,4 +190,21 @@ func (h *Handler) ListRequests(c *fiber.Ctx) error {
 		return err
 	}
 	return response.SuccessWithMeta(c, fiber.StatusOK, "Approval requests retrieved successfully", items, meta)
+}
+
+func (h *Handler) GetActiveRequestForDocument(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	docType := c.Params("type")
+	docID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid document ID format")
+	}
+	item, err := uc.GetActiveRequestForDocument(h.ctx(c), docType, docID)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Active approval request retrieved successfully", item)
 }

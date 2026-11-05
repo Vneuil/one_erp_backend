@@ -291,3 +291,117 @@ func (h *Handler) GetStats(c *fiber.Ctx) error {
 	}
 	return response.OK(c, "Statistik QC berhasil dimuat", stats)
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Personal Hygiene (Doc CPH) Handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+func (h *Handler) ListHygieneChecks(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	date := c.Query("date")
+	line := c.Query("line")
+	checks, err := uc.ListHygieneChecks(c.Context(), date, line)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Data personal hygiene berhasil dimuat", checks)
+}
+
+func (h *Handler) CreateHygieneCheck(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var dto application.CreateHygieneCheckDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload pemeriksaan hygiene tidak valid")
+	}
+	if dto.InspectorName == "" {
+		claims := middleware.CurrentUser(c)
+		if claims != nil {
+			dto.InspectorName = claims.Email
+		} else {
+			dto.InspectorName = "Adin (QC)"
+		}
+	}
+	check, err := uc.CreateHygieneCheck(c.Context(), dto)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Catatan personal hygiene berhasil disimpan", check)
+}
+
+func (h *Handler) DeleteHygieneCheck(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	if err := uc.DeleteHygieneCheck(c.Context(), id); err != nil {
+		return err
+	}
+	return response.OK(c, "Catatan personal hygiene berhasil dihapus", fiber.Map{"id": id})
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pre-Op Sanitation (Doc SSO) Handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+func (h *Handler) ListPreOpChecks(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	date := c.Query("date")
+	room := c.Query("room")
+	checks, err := uc.ListPreOpChecks(c.Context(), date, room)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Data sarana pra-operasional berhasil dimuat", checks)
+}
+
+func (h *Handler) CreatePreOpCheck(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var dto application.CreatePreOpCheckDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload pemeriksaan sarana operasional tidak valid")
+	}
+	if dto.InspectorName == "" {
+		claims := middleware.CurrentUser(c)
+		if claims != nil {
+			dto.InspectorName = claims.Email
+		} else {
+			dto.InspectorName = "Adin (QC)"
+		}
+	}
+	check, err := uc.CreatePreOpCheck(c.Context(), dto)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Catatan sarana pra-operasional berhasil disimpan", check)
+}
+
+func (h *Handler) DeletePreOpCheck(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	if err := uc.DeletePreOpCheck(c.Context(), id); err != nil {
+		return err
+	}
+	return response.OK(c, "Catatan sarana pra-operasional berhasil dihapus", fiber.Map{"id": id})
+}

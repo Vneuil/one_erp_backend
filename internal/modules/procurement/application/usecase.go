@@ -12,6 +12,7 @@ import (
 	financeApp "github.com/divinecoid/one-backend/internal/modules/finance/application"
 	inventoryApp "github.com/divinecoid/one-backend/internal/modules/inventory/application"
 	"github.com/divinecoid/one-backend/internal/modules/procurement/domain"
+	productDomain "github.com/divinecoid/one-backend/internal/modules/product/domain"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/sod"
 	"github.com/divinecoid/one-backend/internal/shared/types"
@@ -22,24 +23,33 @@ import (
 // to modules/approval when a Purchase Order is created. Any workflow an
 // admin configures for this type (see /approval/workflows) automatically
 // gates PO approval - no code change needed to adjust thresholds/levels.
-const purchaseOrderDocumentType = "purchase_order"
+const (
+	purchaseOrderDocumentType   = "purchase_order"
+	purchaseRequestDocumentType = "purchase_request"
+)
 
 type ProcurementUseCase interface {
 	// Purchase requests
 	CreatePurchaseRequest(ctx context.Context, dto CreatePurchaseRequestDTO) (*PurchaseRequestResponseDTO, error)
 	GetPurchaseRequestByID(ctx context.Context, id uuid.UUID) (*PurchaseRequestResponseDTO, error)
 	ListPurchaseRequests(ctx context.Context, query types.PaginationQuery) ([]PurchaseRequestResponseDTO, types.PaginationMeta, error)
+	UpdatePurchaseRequest(ctx context.Context, id uuid.UUID, dto UpdatePurchaseRequestDTO) (*PurchaseRequestResponseDTO, error)
 	SubmitPurchaseRequest(ctx context.Context, id uuid.UUID) (*PurchaseRequestResponseDTO, error)
-	ApprovePurchaseRequest(ctx context.Context, id uuid.UUID) (*PurchaseRequestResponseDTO, error)
-	RejectPurchaseRequest(ctx context.Context, id uuid.UUID) (*PurchaseRequestResponseDTO, error)
+	ApprovePurchaseRequest(ctx context.Context, id uuid.UUID, dto ApprovalActionDTO) (*PurchaseRequestResponseDTO, error)
+	RejectPurchaseRequest(ctx context.Context, id uuid.UUID, dto ApprovalActionDTO) (*PurchaseRequestResponseDTO, error)
+	FinalizePurchaseRequestApproved(ctx context.Context, id uuid.UUID) error
+	FinalizePurchaseRequestRejected(ctx context.Context, id uuid.UUID) error
 
 	// Purchase orders
 	CreatePurchaseOrder(ctx context.Context, dto CreatePurchaseOrderDTO) (*PurchaseOrderResponseDTO, error)
 	GetPurchaseOrderByID(ctx context.Context, id uuid.UUID) (*PurchaseOrderResponseDTO, error)
 	ListPurchaseOrders(ctx context.Context, query types.PaginationQuery) ([]PurchaseOrderResponseDTO, types.PaginationMeta, error)
+	UpdatePurchaseOrder(ctx context.Context, id uuid.UUID, dto UpdatePurchaseOrderDTO) (*PurchaseOrderResponseDTO, error)
+	SubmitPurchaseOrder(ctx context.Context, id uuid.UUID) (*PurchaseOrderResponseDTO, error)
 	ApprovePurchaseOrder(ctx context.Context, id uuid.UUID, dto ApprovalActionDTO) (*PurchaseOrderResponseDTO, error)
 	RejectPurchaseOrder(ctx context.Context, id uuid.UUID, dto ApprovalActionDTO) (*PurchaseOrderResponseDTO, error)
 	CancelPurchaseOrder(ctx context.Context, id uuid.UUID) (*PurchaseOrderResponseDTO, error)
+	GetLastPOPrice(ctx context.Context, supplierID, productID uuid.UUID) (float64, error)
 
 	// FinalizePurchaseOrderApproved/Rejected are the single place that
 	// applies the effect of a Purchase Order's approval workflow reaching a
@@ -84,6 +94,7 @@ type procurementUseCase struct {
 	approvalUC  approvalApp.ApprovalUseCase
 	inventoryUC inventoryApp.InventoryUseCase
 	currencyUC  currencyApp.CurrencyUseCase
+	productRepo productDomain.ProductRepository
 	ledger      financeApp.LedgerPoster // optional; nil disables auto-posting to the general ledger
 }
 
@@ -93,6 +104,11 @@ type Option func(*procurementUseCase)
 // WithLedger enables automatic journal posting for purchase invoices, payments and down payments.
 func WithLedger(l financeApp.LedgerPoster) Option {
 	return func(uc *procurementUseCase) { uc.ledger = l }
+}
+
+// WithProductRepo provides access to product catalog for pricing checks during approvals.
+func WithProductRepo(pr productDomain.ProductRepository) Option {
+	return func(uc *procurementUseCase) { uc.productRepo = pr }
 }
 
 func NewProcurementUseCase(repo domain.ProcurementRepository, approvalUC approvalApp.ApprovalUseCase, inventoryUC inventoryApp.InventoryUseCase, currencyUC currencyApp.CurrencyUseCase, opts ...Option) ProcurementUseCase {
@@ -120,11 +136,17 @@ func (uc *procurementUseCase) CreatePurchaseRequest(ctx context.Context, dto Cre
 		lines[i] = domain.PurchaseRequestLine{ProductID: l.ProductID, Quantity: l.Quantity, Notes: l.Notes}
 	}
 
+	category := dto.Category
+	if category == "" {
+		category = "inventory"
+	}
+
 	pr := &domain.PurchaseRequest{
 		RequestNo:    fmt.Sprintf("PR-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000),
 		RequestedBy:  dto.RequestedBy,
 		Department:   dto.Department,
 		NeededByDate: dto.NeededByDate,
+		Category:     category,
 		Status:       "draft",
 		Lines:        lines,
 	}
@@ -179,16 +201,260 @@ func (uc *procurementUseCase) transitionPurchaseRequest(ctx context.Context, id 
 	return ToPurchaseRequestResponse(pr), nil
 }
 
+func (uc *procurementUseCase) UpdatePurchaseRequest(ctx context.Context, id uuid.UUID, dto UpdatePurchaseRequestDTO) (*PurchaseRequestResponseDTO, error) {
+	pr, err := uc.repo.GetPurchaseRequestByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get purchase request")
+	}
+	if pr == nil {
+		return nil, apperrors.NewNotFound("Purchase request not found")
+	}
+	if pr.Status != "draft" {
+		return nil, apperrors.NewConflict("Only draft purchase requests can be edited")
+	}
+	if len(dto.Lines) == 0 {
+		return nil, apperrors.NewBadRequest("At least one line item is required")
+	}
+	lines := make([]domain.PurchaseRequestLine, len(dto.Lines))
+	for i, l := range dto.Lines {
+		if l.ProductID == uuid.Nil || l.Quantity <= 0 {
+			return nil, apperrors.NewBadRequest("Each line requires a productId and a positive quantity")
+		}
+		lines[i] = domain.PurchaseRequestLine{ProductID: l.ProductID, Quantity: l.Quantity, Notes: l.Notes}
+	}
+	if dto.Department != "" {
+		pr.Department = dto.Department
+	}
+	if dto.NeededByDate != "" {
+		pr.NeededByDate = dto.NeededByDate
+	}
+	if dto.Category != "" {
+		pr.Category = dto.Category
+	}
+	pr.Lines = lines
+	if err := uc.repo.UpdatePurchaseRequest(ctx, pr); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to update purchase request")
+	}
+	return ToPurchaseRequestResponse(pr), nil
+}
+
 func (uc *procurementUseCase) SubmitPurchaseRequest(ctx context.Context, id uuid.UUID) (*PurchaseRequestResponseDTO, error) {
-	return uc.transitionPurchaseRequest(ctx, id, map[string]bool{"draft": true}, "submitted")
+	pr, err := uc.repo.GetPurchaseRequestByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get purchase request")
+	}
+	if pr == nil {
+		return nil, apperrors.NewNotFound("Purchase request not found")
+	}
+	if pr.Status != "draft" && pr.Status != "pending_supervisor" && pr.Status != "pending" {
+		return nil, apperrors.NewConflict(fmt.Sprintf("Purchase request in status %s cannot be submitted", pr.Status))
+	}
+
+	var totalAmount float64
+	if uc.productRepo != nil {
+		for _, l := range pr.Lines {
+			if prod, err := uc.productRepo.GetByID(ctx, l.ProductID); err == nil && prod != nil {
+				totalAmount += float64(l.Quantity) * prod.CostPrice
+			}
+		}
+	}
+
+	pr.Status = "pending_approval"
+	if uc.approvalUC != nil {
+		_, err := uc.approvalUC.SubmitDocument(ctx, approvalApp.SubmitDocumentDTO{
+			DocumentType:   purchaseRequestDocumentType,
+			DocumentID:     pr.ID,
+			DocumentNumber: pr.RequestNo,
+			Amount:         totalAmount,
+			RequesterName:  pr.RequestedBy,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+	if err := uc.repo.UpdatePurchaseRequest(ctx, pr); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to update purchase request")
+	}
+	return ToPurchaseRequestResponse(pr), nil
 }
 
-func (uc *procurementUseCase) ApprovePurchaseRequest(ctx context.Context, id uuid.UUID) (*PurchaseRequestResponseDTO, error) {
-	return uc.transitionPurchaseRequest(ctx, id, map[string]bool{"submitted": true}, "approved")
+func (uc *procurementUseCase) ApprovePurchaseRequest(ctx context.Context, id uuid.UUID, dto ApprovalActionDTO) (*PurchaseRequestResponseDTO, error) {
+	pr, err := uc.repo.GetPurchaseRequestByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get purchase request")
+	}
+	if pr == nil {
+		return nil, apperrors.NewNotFound("Purchase request not found")
+	}
+	if err := sod.ForbidSelfApproval(ctx, pr.RequestedBy); err != nil {
+		return nil, err
+	}
+
+	if uc.approvalUC != nil {
+		activeReq, err := uc.approvalUC.GetActiveRequestForDocument(ctx, purchaseRequestDocumentType, pr.ID)
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to check approval status")
+		}
+		// If there is no active approval request yet, but the document is in a pending state,
+		// dynamically submit to approval workflow if a workflow matches the nominal:
+		if activeReq == nil && (pr.Status == "pending_approval" || pr.Status == "pending_supervisor" || pr.Status == "pending_owner" || pr.Status == "pending" || pr.Status == "submitted") {
+			var totalAmount float64
+			if uc.productRepo != nil {
+				for _, l := range pr.Lines {
+					if prod, err := uc.productRepo.GetByID(ctx, l.ProductID); err == nil && prod != nil {
+						totalAmount += float64(l.Quantity) * prod.CostPrice
+					}
+				}
+			}
+			submitRes, submitErr := uc.approvalUC.SubmitDocument(ctx, approvalApp.SubmitDocumentDTO{
+				DocumentType:   purchaseRequestDocumentType,
+				DocumentID:     pr.ID,
+				DocumentNumber: pr.RequestNo,
+				Amount:         totalAmount,
+				RequesterName:  pr.RequestedBy,
+			})
+			if submitErr == nil && submitRes != nil && submitRes.RequiresApproval && submitRes.Request != nil {
+				activeReq = submitRes.Request
+				pr.Status = "pending_approval"
+				_ = uc.repo.UpdatePurchaseRequest(ctx, pr)
+			}
+		}
+
+		if activeReq != nil && activeReq.Status == "pending" {
+			if _, err := uc.approvalUC.ApproveStep(ctx, activeReq.ID, approvalApp.ActOnStepDTO{
+				ActorName: dto.ActorName, ActorRole: dto.ActorRole, Comments: dto.Comments,
+			}); err != nil {
+				return nil, err
+			}
+			pr, err = uc.repo.GetPurchaseRequestByID(ctx, id)
+			if err != nil {
+				return nil, apperrors.NewInternal(err, "Failed to get purchase request")
+			}
+			return ToPurchaseRequestResponse(pr), nil
+		}
+	}
+
+	if pr.Status != "draft" && pr.Status != "submitted" && pr.Status != "pending_supervisor" && pr.Status != "pending_owner" && pr.Status != "pending_approval" {
+		return nil, apperrors.NewConflict(fmt.Sprintf("Purchase request in status %s cannot be approved", pr.Status))
+	}
+	actorUser := actor.EmailFrom(ctx)
+	now := time.Now()
+	if pr.Status == "pending_supervisor" {
+		pr.SupervisorApprovedBy = actorUser
+		pr.Status = "pending_owner"
+	} else {
+		pr.OwnerApprovedBy = actorUser
+		pr.OwnerApprovedAt = &now
+		pr.Status = "approved"
+	}
+	if err := uc.repo.UpdatePurchaseRequest(ctx, pr); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to update purchase request")
+	}
+	return ToPurchaseRequestResponse(pr), nil
 }
 
-func (uc *procurementUseCase) RejectPurchaseRequest(ctx context.Context, id uuid.UUID) (*PurchaseRequestResponseDTO, error) {
-	return uc.transitionPurchaseRequest(ctx, id, map[string]bool{"submitted": true}, "rejected")
+func (uc *procurementUseCase) RejectPurchaseRequest(ctx context.Context, id uuid.UUID, dto ApprovalActionDTO) (*PurchaseRequestResponseDTO, error) {
+	pr, err := uc.repo.GetPurchaseRequestByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get purchase request")
+	}
+	if pr == nil {
+		return nil, apperrors.NewNotFound("Purchase request not found")
+	}
+
+	if uc.approvalUC != nil {
+		activeReq, err := uc.approvalUC.GetActiveRequestForDocument(ctx, purchaseRequestDocumentType, pr.ID)
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to check approval status")
+		}
+		if activeReq == nil && (pr.Status == "pending_approval" || pr.Status == "pending_supervisor" || pr.Status == "pending_owner" || pr.Status == "pending" || pr.Status == "submitted") {
+			var totalAmount float64
+			if uc.productRepo != nil {
+				for _, l := range pr.Lines {
+					if prod, err := uc.productRepo.GetByID(ctx, l.ProductID); err == nil && prod != nil {
+						totalAmount += float64(l.Quantity) * prod.CostPrice
+					}
+				}
+			}
+			submitRes, submitErr := uc.approvalUC.SubmitDocument(ctx, approvalApp.SubmitDocumentDTO{
+				DocumentType:   purchaseRequestDocumentType,
+				DocumentID:     pr.ID,
+				DocumentNumber: pr.RequestNo,
+				Amount:         totalAmount,
+				RequesterName:  pr.RequestedBy,
+			})
+			if submitErr == nil && submitRes != nil && submitRes.RequiresApproval && submitRes.Request != nil {
+				activeReq = submitRes.Request
+				pr.Status = "pending_approval"
+				_ = uc.repo.UpdatePurchaseRequest(ctx, pr)
+			}
+		}
+
+		if activeReq != nil && activeReq.Status == "pending" {
+			if _, err := uc.approvalUC.RejectStep(ctx, activeReq.ID, approvalApp.ActOnStepDTO{
+				ActorName: dto.ActorName, ActorRole: dto.ActorRole, Comments: dto.Comments,
+			}); err != nil {
+				return nil, err
+			}
+			pr, err = uc.repo.GetPurchaseRequestByID(ctx, id)
+			if err != nil {
+				return nil, apperrors.NewInternal(err, "Failed to get purchase request")
+			}
+			return ToPurchaseRequestResponse(pr), nil
+		}
+	}
+
+	if pr.Status != "draft" && pr.Status != "submitted" && pr.Status != "pending_supervisor" && pr.Status != "pending_owner" && pr.Status != "pending_approval" {
+		return nil, apperrors.NewConflict(fmt.Sprintf("Purchase request in status %s cannot be rejected", pr.Status))
+	}
+	pr.Status = "rejected"
+	if dto.Comments != "" {
+		pr.RejectionReason = dto.Comments
+	}
+	if err := uc.repo.UpdatePurchaseRequest(ctx, pr); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to update purchase request")
+	}
+	return ToPurchaseRequestResponse(pr), nil
+}
+
+func (uc *procurementUseCase) FinalizePurchaseRequestApproved(ctx context.Context, id uuid.UUID) error {
+	pr, err := uc.repo.GetPurchaseRequestByID(ctx, id)
+	if err != nil {
+		return apperrors.NewInternal(err, "Failed to get purchase request")
+	}
+	if pr == nil {
+		return apperrors.NewNotFound("Purchase request not found")
+	}
+	if pr.Status != "pending_approval" {
+		return nil
+	}
+	actorUser := actor.EmailFrom(ctx)
+	now := time.Now()
+	pr.OwnerApprovedBy = actorUser
+	pr.OwnerApprovedAt = &now
+	pr.Status = "approved"
+	if err := uc.repo.UpdatePurchaseRequest(ctx, pr); err != nil {
+		return apperrors.NewInternal(err, "Failed to approve purchase request")
+	}
+	return nil
+}
+
+func (uc *procurementUseCase) FinalizePurchaseRequestRejected(ctx context.Context, id uuid.UUID) error {
+	pr, err := uc.repo.GetPurchaseRequestByID(ctx, id)
+	if err != nil {
+		return apperrors.NewInternal(err, "Failed to get purchase request")
+	}
+	if pr == nil {
+		return apperrors.NewNotFound("Purchase request not found")
+	}
+	if pr.Status != "pending_approval" {
+		return nil
+	}
+	pr.Status = "rejected"
+	if err := uc.repo.UpdatePurchaseRequest(ctx, pr); err != nil {
+		return apperrors.NewInternal(err, "Failed to reject purchase request")
+	}
+	return nil
 }
 
 // Purchase orders
@@ -250,6 +516,11 @@ func (uc *procurementUseCase) CreatePurchaseOrder(ctx context.Context, dto Creat
 		baseAmount = result.BaseAmount
 	}
 
+	freightScheme := dto.FreightScheme
+	if freightScheme == "" {
+		freightScheme = "franco"
+	}
+
 	po := &domain.PurchaseOrder{
 		OrderNo:           orderNo,
 		SupplierID:        dto.SupplierID,
@@ -260,6 +531,9 @@ func (uc *procurementUseCase) CreatePurchaseOrder(ctx context.Context, dto Creat
 		Status:            "draft",
 		CreatedByEmail:    actor.EmailFrom(ctx),
 		TotalAmount:       total,
+		FreightScheme:     freightScheme,
+		FreightCost:       dto.FreightCost,
+		QualityNotes:      dto.QualityNotes,
 		Currency:          currency,
 		BaseAmount:        baseAmount,
 		Lines:             lines,
@@ -268,26 +542,86 @@ func (uc *procurementUseCase) CreatePurchaseOrder(ctx context.Context, dto Creat
 		return nil, apperrors.NewInternal(err, "Failed to create purchase order")
 	}
 
-	// If an admin has configured an approval workflow matching this document
-	// type/amount, route it through the workflow instead of leaving it
-	// directly approvable - see modules/approval. No matching workflow means
-	// no change from prior behavior (stays "draft", approvable directly).
+	return ToPurchaseOrderResponse(po), nil
+}
+
+func (uc *procurementUseCase) UpdatePurchaseOrder(ctx context.Context, id uuid.UUID, dto UpdatePurchaseOrderDTO) (*PurchaseOrderResponseDTO, error) {
+	po, err := uc.repo.GetPurchaseOrderByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get purchase order")
+	}
+	if po == nil {
+		return nil, apperrors.NewNotFound("Purchase order not found")
+	}
+	if po.Status != "draft" {
+		return nil, apperrors.NewConflict("Only draft purchase orders can be edited")
+	}
+	if len(dto.Lines) == 0 {
+		return nil, apperrors.NewBadRequest("At least one line item is required")
+	}
+	var total float64
+	lines := make([]domain.PurchaseOrderLine, len(dto.Lines))
+	for i, l := range dto.Lines {
+		if l.ProductID == uuid.Nil || l.Quantity <= 0 || l.UnitPrice <= 0 {
+			return nil, apperrors.NewBadRequest("Each line requires a productId, positive quantity and unit price")
+		}
+		subtotal := l.Quantity * l.UnitPrice
+		total += subtotal
+		lines[i] = domain.PurchaseOrderLine{ProductID: l.ProductID, Quantity: l.Quantity, UnitPrice: l.UnitPrice, Subtotal: subtotal}
+	}
+	if dto.SupplierID != uuid.Nil {
+		po.SupplierID = dto.SupplierID
+	}
+	if dto.SupplierName != "" {
+		po.SupplierName = dto.SupplierName
+	}
+	if dto.PurchaseRequestID != nil {
+		po.PurchaseRequestID = dto.PurchaseRequestID
+	}
+	if dto.ExpectedDate != "" {
+		po.ExpectedDate = dto.ExpectedDate
+	}
+	if dto.FreightScheme != "" {
+		po.FreightScheme = dto.FreightScheme
+	}
+	po.FreightCost = dto.FreightCost
+	po.QualityNotes = dto.QualityNotes
+	po.TotalAmount = total
+	po.BaseAmount = total
+	po.Lines = lines
+	if err := uc.repo.UpdatePurchaseOrder(ctx, po); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to update purchase order")
+	}
+	return ToPurchaseOrderResponse(po), nil
+}
+
+func (uc *procurementUseCase) SubmitPurchaseOrder(ctx context.Context, id uuid.UUID) (*PurchaseOrderResponseDTO, error) {
+	po, err := uc.repo.GetPurchaseOrderByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get purchase order")
+	}
+	if po == nil {
+		return nil, apperrors.NewNotFound("Purchase order not found")
+	}
+	if po.Status != "draft" {
+		return nil, apperrors.NewConflict(fmt.Sprintf("Purchase order in status %s cannot be submitted", po.Status))
+	}
+	po.Status = "pending_approval"
 	if uc.approvalUC != nil {
-		result, err := uc.approvalUC.SubmitDocument(ctx, approvalApp.SubmitDocumentDTO{
+		_, err := uc.approvalUC.SubmitDocument(ctx, approvalApp.SubmitDocumentDTO{
 			DocumentType:   purchaseOrderDocumentType,
 			DocumentID:     po.ID,
 			DocumentNumber: po.OrderNo,
 			Amount:         po.TotalAmount,
-			RequesterName:  dto.RequestedBy,
+			RequesterName:  po.CreatedByEmail,
 		})
-		if err == nil && result.RequiresApproval {
-			po.Status = "pending_approval"
-			if err := uc.repo.UpdatePurchaseOrder(ctx, po); err != nil {
-				return nil, apperrors.NewInternal(err, "Failed to update purchase order approval status")
-			}
+		if err != nil {
+			return nil, err
 		}
 	}
-
+	if err := uc.repo.UpdatePurchaseOrder(ctx, po); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to update purchase order")
+	}
 	return ToPurchaseOrderResponse(po), nil
 }
 
@@ -334,10 +668,24 @@ func (uc *procurementUseCase) ApprovePurchaseOrder(ctx context.Context, id uuid.
 		return nil, err
 	}
 
-	if po.Status == "pending_approval" && uc.approvalUC != nil {
+	if uc.approvalUC != nil {
 		activeReq, err := uc.approvalUC.GetActiveRequestForDocument(ctx, purchaseOrderDocumentType, po.ID)
 		if err != nil {
 			return nil, apperrors.NewInternal(err, "Failed to check approval status")
+		}
+		if activeReq == nil && (po.Status == "pending_approval" || po.Status == "submitted" || po.Status == "draft") {
+			submitRes, submitErr := uc.approvalUC.SubmitDocument(ctx, approvalApp.SubmitDocumentDTO{
+				DocumentType:   purchaseOrderDocumentType,
+				DocumentID:     po.ID,
+				DocumentNumber: po.OrderNo,
+				Amount:         po.TotalAmount,
+				RequesterName:  po.CreatedByEmail,
+			})
+			if submitErr == nil && submitRes != nil && submitRes.RequiresApproval && submitRes.Request != nil {
+				activeReq = submitRes.Request
+				po.Status = "pending_approval"
+				_ = uc.repo.UpdatePurchaseOrder(ctx, po)
+			}
 		}
 		if activeReq != nil && activeReq.Status == "pending" {
 			if _, err := uc.approvalUC.ApproveStep(ctx, activeReq.ID, approvalApp.ActOnStepDTO{
@@ -356,8 +704,8 @@ func (uc *procurementUseCase) ApprovePurchaseOrder(ctx context.Context, id uuid.
 		}
 	}
 
-	if po.Status != "draft" && po.Status != "submitted" {
-		return nil, apperrors.NewConflict("Only draft or submitted purchase orders can be approved")
+	if po.Status != "draft" && po.Status != "submitted" && po.Status != "pending_approval" {
+		return nil, apperrors.NewConflict("Only draft, submitted, or pending purchase orders can be approved")
 	}
 	po.Status = "approved"
 	if err := uc.repo.UpdatePurchaseOrder(ctx, po); err != nil {
@@ -378,25 +726,50 @@ func (uc *procurementUseCase) RejectPurchaseOrder(ctx context.Context, id uuid.U
 	if po == nil {
 		return nil, apperrors.NewNotFound("Purchase order not found")
 	}
-	if po.Status != "pending_approval" || uc.approvalUC == nil {
-		return nil, apperrors.NewConflict("This purchase order is not awaiting approval")
+
+	if uc.approvalUC != nil {
+		activeReq, err := uc.approvalUC.GetActiveRequestForDocument(ctx, purchaseOrderDocumentType, po.ID)
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to check approval status")
+		}
+		if activeReq == nil && (po.Status == "pending_approval" || po.Status == "submitted" || po.Status == "draft") {
+			submitRes, submitErr := uc.approvalUC.SubmitDocument(ctx, approvalApp.SubmitDocumentDTO{
+				DocumentType:   purchaseOrderDocumentType,
+				DocumentID:     po.ID,
+				DocumentNumber: po.OrderNo,
+				Amount:         po.TotalAmount,
+				RequesterName:  po.CreatedByEmail,
+			})
+			if submitErr == nil && submitRes != nil && submitRes.RequiresApproval && submitRes.Request != nil {
+				activeReq = submitRes.Request
+				po.Status = "pending_approval"
+				_ = uc.repo.UpdatePurchaseOrder(ctx, po)
+			}
+		}
+
+		if activeReq != nil && activeReq.Status == "pending" {
+			if _, err := uc.approvalUC.RejectStep(ctx, activeReq.ID, approvalApp.ActOnStepDTO{
+				ActorName: dto.ActorName, ActorRole: dto.ActorRole, Comments: dto.Comments,
+			}); err != nil {
+				return nil, err
+			}
+
+			po, err = uc.repo.GetPurchaseOrderByID(ctx, id)
+			if err != nil {
+				return nil, apperrors.NewInternal(err, "Failed to get purchase order")
+			}
+			return ToPurchaseOrderResponse(po), nil
+		}
 	}
 
-	activeReq, err := uc.approvalUC.GetActiveRequestForDocument(ctx, purchaseOrderDocumentType, po.ID)
-	if err != nil {
-		return nil, apperrors.NewInternal(err, "Failed to check approval status")
+	if po.Status != "draft" && po.Status != "submitted" && po.Status != "pending_approval" {
+		return nil, apperrors.NewConflict("This purchase order cannot be rejected")
 	}
-	if activeReq == nil || activeReq.Status != "pending" {
-		return nil, apperrors.NewConflict("This purchase order is not awaiting approval")
+	po.Status = "rejected"
+	if err := uc.repo.UpdatePurchaseOrder(ctx, po); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to reject purchase order")
 	}
-
-	if _, err := uc.approvalUC.RejectStep(ctx, activeReq.ID, approvalApp.ActOnStepDTO{
-		ActorName: dto.ActorName, ActorRole: dto.ActorRole, Comments: dto.Comments,
-	}); err != nil {
-		return nil, err
-	}
-
-	po, err = uc.repo.GetPurchaseOrderByID(ctx, id)
+	return ToPurchaseOrderResponse(po), nil
 	if err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to get purchase order")
 	}
@@ -445,6 +818,10 @@ func (uc *procurementUseCase) FinalizePurchaseOrderRejected(ctx context.Context,
 		return apperrors.NewInternal(err, "Failed to update purchase order")
 	}
 	return nil
+}
+
+func (uc *procurementUseCase) GetLastPOPrice(ctx context.Context, supplierID, productID uuid.UUID) (float64, error) {
+	return uc.repo.GetLastPOPrice(ctx, supplierID, productID)
 }
 
 func (uc *procurementUseCase) CancelPurchaseOrder(ctx context.Context, id uuid.UUID) (*PurchaseOrderResponseDTO, error) {
@@ -529,6 +906,7 @@ func (uc *procurementUseCase) CreateGoodsReceipt(ctx context.Context, dto Create
 			WeightTare:         l.WeightTare,
 			WeightNet:          l.WeightNet,
 			WeightDiffPO:       diffPO,
+			BagWeights:         l.BagWeights,
 		}
 		poLine.QuantityReceived += net
 	}
@@ -540,11 +918,17 @@ func (uc *procurementUseCase) CreateGoodsReceipt(ctx context.Context, dto Create
 
 	gr := &domain.GoodsReceipt{
 		ReceiptNo:       fmt.Sprintf("GR-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000),
+		DocumentCode:    "GD-007-LBM",
 		PurchaseOrderID: dto.PurchaseOrderID,
 		ReceivedDate:    receivedDate,
 		WarehouseID:     dto.WarehouseID,
 		ReceivedBy:      dto.ReceivedBy,
 		Status:          "completed",
+		DeliveryNoteNo:   dto.DeliveryNoteNo,
+		SugarCondition:   dto.SugarCondition,
+		PackageCondition: dto.PackageCondition,
+		PlasticTare:      dto.PlasticTare,
+		Notes:            dto.Notes,
 		Lines:           lines,
 	}
 	if err := uc.repo.CreateGoodsReceipt(ctx, gr); err != nil {

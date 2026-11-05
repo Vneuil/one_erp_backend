@@ -18,11 +18,19 @@ type PurchaseRequestLineDTO struct {
 type CreatePurchaseRequestDTO struct {
 	Department   string                   `json:"department"`
 	NeededByDate string                   `json:"neededByDate"`
+	Category     string                   `json:"category"` // inventory | non_inventory | fixed_asset
 	Lines        []PurchaseRequestLineDTO `json:"lines"`
 	// RequestedBy is set by the handler from the authenticated caller, never
 	// read from client-supplied JSON - there is no `json:"requestedBy"` tag
 	// on purpose, so BodyParser can never populate it from the request body.
 	RequestedBy string `json:"-"`
+}
+
+type UpdatePurchaseRequestDTO struct {
+	Department   string                   `json:"department"`
+	NeededByDate string                   `json:"neededByDate"`
+	Category     string                   `json:"category"`
+	Lines        []PurchaseRequestLineDTO `json:"lines"`
 }
 
 type PurchaseRequestLineResponseDTO struct {
@@ -38,7 +46,13 @@ type PurchaseRequestResponseDTO struct {
 	RequestedBy  string                           `json:"requestedBy"`
 	Department   string                           `json:"department"`
 	NeededByDate string                           `json:"neededByDate"`
-	Status       string                           `json:"status"`
+	Status               string                           `json:"status"`
+	Category             string                           `json:"category"`
+	SupervisorApprovedBy string                           `json:"supervisorApprovedBy,omitempty"`
+	SupervisorApprovedAt *time.Time                       `json:"supervisorApprovedAt,omitempty"`
+	OwnerApprovedBy      string                           `json:"ownerApprovedBy,omitempty"`
+	OwnerApprovedAt      *time.Time                       `json:"ownerApprovedAt,omitempty"`
+	RejectionReason      string                           `json:"rejectionReason,omitempty"`
 	Lines        []PurchaseRequestLineResponseDTO `json:"lines,omitempty"`
 	CreatedAt    time.Time                        `json:"createdAt"`
 }
@@ -53,7 +67,10 @@ func ToPurchaseRequestResponse(pr *domain.PurchaseRequest) *PurchaseRequestRespo
 	}
 	return &PurchaseRequestResponseDTO{
 		ID: pr.ID, RequestNo: pr.RequestNo, RequestedBy: pr.RequestedBy, Department: pr.Department,
-		NeededByDate: pr.NeededByDate, Status: pr.Status, Lines: lines, CreatedAt: pr.CreatedAt,
+		NeededByDate: pr.NeededByDate, Status: pr.Status, Category: pr.Category,
+		SupervisorApprovedBy: pr.SupervisorApprovedBy, SupervisorApprovedAt: pr.SupervisorApprovedAt,
+		OwnerApprovedBy: pr.OwnerApprovedBy, OwnerApprovedAt: pr.OwnerApprovedAt,
+		RejectionReason: pr.RejectionReason, Lines: lines, CreatedAt: pr.CreatedAt,
 	}
 }
 
@@ -80,11 +97,26 @@ type CreatePurchaseOrderDTO struct {
 	OrderDate         string     `json:"orderDate"`
 	ExpectedDate      string     `json:"expectedDate"`
 	RequestedBy       string     `json:"requestedBy"`
+	FreightScheme     string     `json:"freightScheme"` // franco | loco
+	FreightCost       float64    `json:"freightCost"`
+	QualityNotes      string     `json:"qualityNotes"`
 	// Currency is the code TotalAmount is denominated in. Empty/IDR (the
 	// base currency) skips conversion entirely - see application/usecase.go
 	// CreatePurchaseOrder.
 	Currency string                 `json:"currency"`
 	Lines    []PurchaseOrderLineDTO `json:"lines"`
+}
+
+type UpdatePurchaseOrderDTO struct {
+	SupplierID        uuid.UUID              `json:"supplierId"`
+	SupplierName      string                 `json:"supplierName"`
+	PurchaseRequestID *uuid.UUID             `json:"purchaseRequestId,omitempty"`
+	ExpectedDate      string                 `json:"expectedDate"`
+	FreightScheme     string                 `json:"freightScheme"`
+	FreightCost       float64                `json:"freightCost"`
+	QualityNotes      string                 `json:"qualityNotes"`
+	Currency          string                 `json:"currency"`
+	Lines             []PurchaseOrderLineDTO `json:"lines"`
 }
 
 // ApprovalActionDTO carries the acting user's identity when approving or
@@ -114,6 +146,9 @@ type PurchaseOrderResponseDTO struct {
 	ExpectedDate      string                         `json:"expectedDate"`
 	Status            string                         `json:"status"`
 	TotalAmount       float64                        `json:"totalAmount"`
+	FreightScheme     string                         `json:"freightScheme"`
+	FreightCost       float64                        `json:"freightCost"`
+	QualityNotes      string                         `json:"qualityNotes,omitempty"`
 	CreatedByEmail    string                         `json:"createdByEmail,omitempty"`
 	Currency          string                         `json:"currency"`
 	BaseAmount        float64                        `json:"baseAmount"`
@@ -136,6 +171,7 @@ func ToPurchaseOrderResponse(po *domain.PurchaseOrder) *PurchaseOrderResponseDTO
 		ID: po.ID, OrderNo: po.OrderNo, SupplierID: po.SupplierID, SupplierName: po.SupplierName, PurchaseRequestID: po.PurchaseRequestID,
 		OrderDate: po.OrderDate, ExpectedDate: po.ExpectedDate, Status: po.Status, TotalAmount: po.TotalAmount,
 		Currency: po.Currency, BaseAmount: po.BaseAmount, CreatedByEmail: po.CreatedByEmail,
+		FreightScheme: po.FreightScheme, FreightCost: po.FreightCost, QualityNotes: po.QualityNotes,
 		Lines: lines, CreatedAt: po.CreatedAt,
 	}
 }
@@ -157,12 +193,18 @@ type GoodsReceiptLineDTO struct {
 	WeightTare       *float64  `json:"weightTare,omitempty"`
 	WeightNet        *float64  `json:"weightNet,omitempty"`
 	WeightDiffPO     *float64  `json:"weightDiffPo,omitempty"`
+	BagWeights       string    `json:"bagWeights,omitempty"`
 }
 
 type CreateGoodsReceiptDTO struct {
 	PurchaseOrderID uuid.UUID             `json:"purchaseOrderId"`
 	ReceivedDate    string                `json:"receivedDate"`
-	WarehouseID     *uuid.UUID            `json:"warehouseId,omitempty"`
+	WarehouseID      *uuid.UUID            `json:"warehouseId,omitempty"`
+	DeliveryNoteNo   string                `json:"deliveryNoteNo,omitempty"`
+	SugarCondition   string                `json:"sugarCondition,omitempty"`
+	PackageCondition string                `json:"packageCondition,omitempty"`
+	PlasticTare      float64               `json:"plasticTare,omitempty"`
+	Notes            string                `json:"notes,omitempty"`
 	Lines           []GoodsReceiptLineDTO `json:"lines"`
 	// ReceivedBy is set by the handler from the authenticated caller, never
 	// read from client-supplied JSON - there is no `json:"receivedBy"` tag
@@ -179,16 +221,23 @@ type GoodsReceiptLineResponseDTO struct {
 	WeightTare               *float64  `json:"weightTare,omitempty"`
 	WeightNet                *float64  `json:"weightNet,omitempty"`
 	WeightDiffPO             *float64  `json:"weightDiffPo,omitempty"`
+	BagWeights               string    `json:"bagWeights,omitempty"`
 }
 
 type GoodsReceiptResponseDTO struct {
 	ID              uuid.UUID                     `json:"id"`
 	ReceiptNo       string                        `json:"receiptNo"`
+	DocumentCode    string                        `json:"documentCode"`
 	PurchaseOrderID uuid.UUID                     `json:"purchaseOrderId"`
 	ReceivedDate    string                        `json:"receivedDate"`
 	WarehouseID     *uuid.UUID                    `json:"warehouseId,omitempty"`
 	ReceivedBy      string                        `json:"receivedBy"`
-	Status          string                        `json:"status"`
+	Status           string                        `json:"status"`
+	DeliveryNoteNo   string                        `json:"deliveryNoteNo,omitempty"`
+	SugarCondition   string                        `json:"sugarCondition,omitempty"`
+	PackageCondition string                        `json:"packageCondition,omitempty"`
+	PlasticTare      float64                       `json:"plasticTare,omitempty"`
+	Notes            string                        `json:"notes,omitempty"`
 	Lines           []GoodsReceiptLineResponseDTO `json:"lines,omitempty"`
 	CreatedAt       time.Time                     `json:"createdAt"`
 }
@@ -206,11 +255,14 @@ func ToGoodsReceiptResponse(gr *domain.GoodsReceipt) *GoodsReceiptResponseDTO {
 			WeightTare:               l.WeightTare,
 			WeightNet:                l.WeightNet,
 			WeightDiffPO:             l.WeightDiffPO,
+			BagWeights:               l.BagWeights,
 		}
 	}
 	return &GoodsReceiptResponseDTO{
-		ID: gr.ID, ReceiptNo: gr.ReceiptNo, PurchaseOrderID: gr.PurchaseOrderID, ReceivedDate: gr.ReceivedDate,
-		WarehouseID: gr.WarehouseID, ReceivedBy: gr.ReceivedBy, Status: gr.Status, Lines: lines, CreatedAt: gr.CreatedAt,
+		ID: gr.ID, ReceiptNo: gr.ReceiptNo, DocumentCode: gr.DocumentCode, PurchaseOrderID: gr.PurchaseOrderID, ReceivedDate: gr.ReceivedDate,
+		WarehouseID: gr.WarehouseID, ReceivedBy: gr.ReceivedBy, Status: gr.Status,
+		DeliveryNoteNo: gr.DeliveryNoteNo, SugarCondition: gr.SugarCondition, PackageCondition: gr.PackageCondition,
+		PlasticTare: gr.PlasticTare, Notes: gr.Notes, Lines: lines, CreatedAt: gr.CreatedAt,
 	}
 }
 

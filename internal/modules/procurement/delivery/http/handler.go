@@ -48,13 +48,23 @@ func (h *Handler) resolve(c *fiber.Ctx) (application.ProcurementUseCase, error) 
 	repo := infrastructure.NewProcurementRepository(tenantDB)
 	approvalRepo := approvalInfra.NewApprovalRepository(tenantDB)
 	approvalUC := approvalApp.NewApprovalUseCase(approvalRepo)
+	for docType, cb := range approvalApp.BuildCallbacks(tenantDB) {
+		approvalUC.RegisterCallback(docType, cb)
+	}
 	inventoryRepo := inventoryInfra.NewInventoryRepository(tenantDB)
 	productRepo := productInfra.NewProductRepository(tenantDB)
 	inventoryUC := inventoryApp.NewInventoryUseCase(inventoryRepo, productRepo)
 	currencyRepo := currencyInfra.NewCurrencyRepository(tenantDB)
 	currencyUC := currencyApp.NewCurrencyUseCase(currencyRepo)
 	ledger := financeApp.NewLedgerPoster(financeInfra.NewFinanceRepository(tenantDB))
-	return application.NewProcurementUseCase(repo, approvalUC, inventoryUC, currencyUC, application.WithLedger(ledger)), nil
+	return application.NewProcurementUseCase(
+		repo,
+		approvalUC,
+		inventoryUC,
+		currencyUC,
+		application.WithLedger(ledger),
+		application.WithProductRepo(productRepo),
+	), nil
 }
 
 // actorFromRequest builds an ApprovalActionDTO from the caller's JWT claims,
@@ -148,6 +158,26 @@ func (h *Handler) SubmitPurchaseRequest(c *fiber.Ctx) error {
 	return response.OK(c, "Purchase request submitted successfully", pr)
 }
 
+func (h *Handler) UpdatePurchaseRequest(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var dto application.UpdatePurchaseRequestDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	pr, err := uc.UpdatePurchaseRequest(h.ctx(c), id, dto)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Purchase request updated successfully", pr)
+}
+
 func (h *Handler) ApprovePurchaseRequest(c *fiber.Ctx) error {
 	uc, err := h.resolve(c)
 	if err != nil {
@@ -158,7 +188,11 @@ func (h *Handler) ApprovePurchaseRequest(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	pr, err := uc.ApprovePurchaseRequest(h.ctx(c), id)
+	var body struct {
+		Comments string `json:"comments"`
+	}
+	_ = c.BodyParser(&body)
+	pr, err := uc.ApprovePurchaseRequest(h.ctx(c), id, actorFromRequest(c, body.Comments))
 	if err != nil {
 		return err
 	}
@@ -175,7 +209,11 @@ func (h *Handler) RejectPurchaseRequest(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	pr, err := uc.RejectPurchaseRequest(h.ctx(c), id)
+	var body struct {
+		Comments string `json:"comments"`
+	}
+	_ = c.BodyParser(&body)
+	pr, err := uc.RejectPurchaseRequest(h.ctx(c), id, actorFromRequest(c, body.Comments))
 	if err != nil {
 		return err
 	}
@@ -216,6 +254,76 @@ func (h *Handler) GetPurchaseOrderByID(c *fiber.Ctx) error {
 		return err
 	}
 	return response.OK(c, "Purchase order retrieved successfully", po)
+}
+
+func (h *Handler) UpdatePurchaseOrder(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var dto application.UpdatePurchaseOrderDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	po, err := uc.UpdatePurchaseOrder(h.ctx(c), id, dto)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Purchase order updated successfully", po)
+}
+
+func (h *Handler) SubmitPurchaseOrder(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	po, err := uc.SubmitPurchaseOrder(h.ctx(c), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Purchase order submitted successfully", po)
+}
+
+func (h *Handler) GetLastPOPrice(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+
+	supplierIDStr := c.Query("supplierId")
+	productIDStr := c.Query("productId")
+
+	if supplierIDStr == "" || productIDStr == "" {
+		return apperrors.NewBadRequest("supplierId and productId query parameters are required")
+	}
+
+	supplierID, err := uuid.Parse(supplierIDStr)
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid supplierId")
+	}
+	productID, err := uuid.Parse(productIDStr)
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid productId")
+	}
+
+	price, err := uc.GetLastPOPrice(h.ctx(c), supplierID, productID)
+	if err != nil {
+		return err
+	}
+
+	return response.OK(c, "Last PO price retrieved successfully", fiber.Map{
+		"supplierId": supplierID,
+		"productId":  productID,
+		"lastPrice":  price,
+	})
 }
 
 func (h *Handler) ListPurchaseOrders(c *fiber.Ctx) error {

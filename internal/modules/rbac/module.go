@@ -27,6 +27,7 @@ func NewModule(db *gorm.DB, router fiber.Router, jwtSecret string) *Module {
 	// only when the column is missing, so later edits by an admin are never
 	// overwritten.
 	needsApproveBackfill := db.Migrator().HasTable(&domain.Permission{}) && !db.Migrator().HasColumn(&domain.Permission{}, "can_approve")
+	needsPricesBackfill := db.Migrator().HasTable(&domain.Permission{}) && !db.Migrator().HasColumn(&domain.Permission{}, "can_view_prices")
 	if err := db.AutoMigrate(&domain.Role{}, &domain.Permission{}); err != nil {
 		slog.Error("failed to migrate rbac schema", "error", err)
 	}
@@ -34,6 +35,12 @@ func NewModule(db *gorm.DB, router fiber.Router, jwtSecret string) *Module {
 		if err := db.Exec(`UPDATE role_permissions SET can_approve = can_manage
 			WHERE role_id IN (SELECT id FROM roles WHERE is_system = true AND name IN ('Admin', 'Manager'))`).Error; err != nil {
 			slog.Error("failed to backfill rbac approve permissions", "error", err)
+		}
+	}
+	if needsPricesBackfill {
+		if err := db.Exec(`UPDATE role_permissions SET can_view_prices = true
+			WHERE role_id IN (SELECT id FROM roles WHERE is_system = true AND name IN ('Admin', 'Manager'))`).Error; err != nil {
+			slog.Error("failed to backfill rbac view prices permissions", "error", err)
 		}
 	}
 

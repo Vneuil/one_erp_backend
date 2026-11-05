@@ -67,8 +67,18 @@ func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager
 		inventoryRepo := inventoryInfra.NewInventoryRepository(tenantDB)
 		productRepo := productInfra.NewProductRepository(tenantDB)
 		currencyRepo := currencyInfra.NewCurrencyRepository(tenantDB)
-		uc := application.NewProcurementUseCase(repo, approvalApp.NewApprovalUseCase(approvalRepo), inventoryApp.NewInventoryUseCase(inventoryRepo, productRepo), currencyApp.NewCurrencyUseCase(currencyRepo))
+		uc := application.NewProcurementUseCase(repo, approvalApp.NewApprovalUseCase(approvalRepo), inventoryApp.NewInventoryUseCase(inventoryRepo, productRepo), currencyApp.NewCurrencyUseCase(currencyRepo), application.WithProductRepo(productRepo))
 		return application.NewPurchaseOrderApprovalCallback(uc)
+	})
+
+	approvalApp.RegisterCallbackFactory(application.PurchaseRequestDocumentType, func(tenantDB *gorm.DB) approvalApp.DocumentStatusCallback {
+		repo := infrastructure.NewProcurementRepository(tenantDB)
+		approvalRepo := approvalInfra.NewApprovalRepository(tenantDB)
+		inventoryRepo := inventoryInfra.NewInventoryRepository(tenantDB)
+		productRepo := productInfra.NewProductRepository(tenantDB)
+		currencyRepo := currencyInfra.NewCurrencyRepository(tenantDB)
+		uc := application.NewProcurementUseCase(repo, approvalApp.NewApprovalUseCase(approvalRepo), inventoryApp.NewInventoryUseCase(inventoryRepo, productRepo), currencyApp.NewCurrencyUseCase(currencyRepo), application.WithProductRepo(productRepo))
+		return application.NewPurchaseRequestApprovalCallback(uc)
 	})
 
 	handler := http.NewHandler()

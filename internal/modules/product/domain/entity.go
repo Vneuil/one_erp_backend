@@ -22,6 +22,9 @@ type Product struct {
 	CostPrice    float64    `gorm:"type:decimal(15,2);default:0" json:"costPrice"`
 	SellingPrice float64    `gorm:"type:decimal(15,2);default:0" json:"sellingPrice"`
 	Status       string     `gorm:"type:varchar(50);default:'in_stock'" json:"status"`
+	Grade        string     `gorm:"type:varchar(50)" json:"grade,omitempty"`
+	SafetyStock  int        `gorm:"default:0" json:"safetyStock"`
+	OrganicType  string     `gorm:"type:varchar(50);default:'Natural'" json:"organicType,omitempty"`
 	// VariantOf points a variant (e.g. "Merah / L") at its base product; nil for
 	// ordinary products. Variants are one level deep and are sold, priced and
 	// stocked as products in their own right.

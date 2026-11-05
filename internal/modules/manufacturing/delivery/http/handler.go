@@ -480,6 +480,149 @@ func (h *Handler) GetBackwardTraceability(c *fiber.Ctx) error {
 	return response.OK(c, "Data ketertelusuran batch (backward) berhasil dimuat", records)
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Requisitions (BPB, PBPK, LPC) Handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+func (h *Handler) ListRequisitions(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	reqType := c.Query("type")
+	status := c.Query("status")
+	list, err := uc.ListRequisitions(h.ctx(c), reqType, status)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Daftar permintaan bahan berhasil dimuat", list)
+}
+
+func (h *Handler) GetRequisitionByID(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	req, err := uc.GetRequisitionByID(h.ctx(c), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Detail permintaan bahan berhasil dimuat", req)
+}
+
+func (h *Handler) CreateRequisition(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var dto application.CreateMaterialRequisitionDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload permohonan bahan tidak valid")
+	}
+	if dto.RequestedBy == "" {
+		claims := middleware.CurrentUser(c)
+		if claims != nil {
+			dto.RequestedBy = claims.Email
+		} else {
+			dto.RequestedBy = "Produksi"
+		}
+	}
+	created, err := uc.CreateRequisition(h.ctx(c), dto)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Dokumen permintaan bahan berhasil dibuat", created)
+}
+
+func (h *Handler) UpdateRequisitionStatus(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var dto application.UpdateRequisitionStatusDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload status tidak valid")
+	}
+	if dto.IssuedBy == "" {
+		claims := middleware.CurrentUser(c)
+		if claims != nil {
+			dto.IssuedBy = claims.Email
+		} else {
+			dto.IssuedBy = "Gudang (Abel)"
+		}
+	}
+	if err := uc.UpdateRequisitionStatus(h.ctx(c), id, dto); err != nil {
+		return err
+	}
+	return response.OK(c, "Status dokumen permintaan bahan berhasil diperbarui", fiber.Map{"id": id, "status": dto.Status})
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Oven Logs (LHO) Handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+func (h *Handler) ListOvenLogs(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	date := c.Query("date")
+	ovenNumber := c.Query("ovenNumber")
+	logs, err := uc.ListOvenLogs(h.ctx(c), date, ovenNumber)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Daftar laporan oven (LHO) berhasil dimuat", logs)
+}
+
+func (h *Handler) GetOvenLogByID(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	log, err := uc.GetOvenLogByID(h.ctx(c), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Detail laporan oven berhasil dimuat", log)
+}
+
+func (h *Handler) CreateOvenLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var dto application.CreateOvenLogDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload laporan oven tidak valid")
+	}
+	if dto.OperatorName == "" {
+		claims := middleware.CurrentUser(c)
+		if claims != nil {
+			dto.OperatorName = claims.Email
+		} else {
+			dto.OperatorName = "Operator Oven"
+		}
+	}
+	created, err := uc.CreateOvenLog(h.ctx(c), dto)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Laporan harian oven berhasil disimpan", created)
+}
+
 func (h *Handler) GetForwardTraceability(c *fiber.Ctx) error {
 	uc, err := h.resolve(c)
 	if err != nil {

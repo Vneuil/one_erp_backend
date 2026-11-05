@@ -267,6 +267,17 @@ type ManufacturingRepository interface {
 	CreateGenealogy(ctx context.Context, g *BatchGenealogy) error
 	GetBackwardTraceability(ctx context.Context, childBatchNo string) ([]BatchGenealogy, error)
 	GetForwardTraceability(ctx context.Context, parentBatchNo string) ([]BatchGenealogy, error)
+
+	// Requisitions (BPB, PBPK, LPC)
+	CreateRequisition(ctx context.Context, req *MaterialRequisition) error
+	GetRequisitionByID(ctx context.Context, id uuid.UUID) (*MaterialRequisition, error)
+	ListRequisitions(ctx context.Context, reqType string, status string) ([]MaterialRequisition, error)
+	UpdateRequisitionStatus(ctx context.Context, id uuid.UUID, status string, issuedBy string) error
+
+	// Oven Logs (LHO)
+	CreateOvenLog(ctx context.Context, log *OvenProductionLog) error
+	GetOvenLogByID(ctx context.Context, id uuid.UUID) (*OvenProductionLog, error)
+	ListOvenLogs(ctx context.Context, date string, ovenNumber string) ([]OvenProductionLog, error)
 }
 
 // BatchGenealogy tracks relationship between raw material / input batches and FG output batch
@@ -286,3 +297,104 @@ type BatchGenealogy struct {
 }
 
 func (BatchGenealogy) TableName() string { return "manufacturing_batch_genealogy" }
+
+// Requisition types
+const (
+	RequisitionTypeRawMaterial = "raw_material" // BPB / GDG-011-BPB
+	RequisitionTypePackaging   = "packaging"    // PBPK / GDG-012-BPK
+	RequisitionTypeLiquidSugar = "liquid_sugar"  // LPC / GDG-008-LPC
+)
+
+// MaterialRequisition tracks requisition of raw materials, packaging, and liquid sugar (BPB, PBPK, LPC)
+type MaterialRequisition struct {
+	types.BaseEntity
+	RequestNo       string                       `gorm:"type:varchar(50);uniqueIndex;not null" json:"requestNo"`
+	RequisitionType string                       `gorm:"type:varchar(30);not null;index" json:"requisitionType"`
+	ProductionOrderID *uuid.UUID                 `gorm:"type:uuid;index" json:"productionOrderId,omitempty"`
+	OrderNumber     string                       `gorm:"type:varchar(50)" json:"orderNumber,omitempty"`
+	RequestDate     string                       `gorm:"type:varchar(10);not null;index" json:"requestDate"`
+	Department      string                       `gorm:"type:varchar(100);not null" json:"department"`
+	RequestedBy     string                       `gorm:"type:varchar(150);not null" json:"requestedBy"`
+	IssuedBy        string                       `gorm:"type:varchar(150)" json:"issuedBy,omitempty"`
+	Status          string                       `gorm:"type:varchar(30);not null;default:'submitted'" json:"status"` // draft, submitted, issued, completed, cancelled
+	Notes           string                       `gorm:"type:text" json:"notes,omitempty"`
+	Lines           []MaterialRequisitionLine    `gorm:"foreignKey:RequisitionID" json:"lines,omitempty"`
+	DispensingItems []LiquidSugarDispensingItem  `gorm:"foreignKey:RequisitionID" json:"dispensingItems,omitempty"`
+}
+
+func (MaterialRequisition) TableName() string { return "manufacturing_material_requisitions" }
+
+// MaterialRequisitionLine represents single item requested
+type MaterialRequisitionLine struct {
+	types.BaseEntity
+	RequisitionID    uuid.UUID `gorm:"type:uuid;not null;index" json:"requisitionId"`
+	ProductID        uuid.UUID `gorm:"type:uuid;not null;index" json:"productId"`
+	ProductName      string    `gorm:"type:varchar(255);not null" json:"productName"`
+	BatchNo          string    `gorm:"type:varchar(50)" json:"batchNo,omitempty"`
+	QuantityRequested float64   `gorm:"type:decimal(15,3);not null" json:"quantityRequested"`
+	QuantityIssued   float64   `gorm:"type:decimal(15,3);default:0" json:"quantityIssued"`
+	QuantityUsed     float64   `gorm:"type:decimal(15,3);default:0" json:"quantityUsed"`
+	QuantityReject   float64   `gorm:"type:decimal(15,3);default:0" json:"quantityReject"`
+	QuantityReturned float64   `gorm:"type:decimal(15,3);default:0" json:"quantityReturned"`
+	UoM              string    `gorm:"type:varchar(20);not null" json:"uom"`
+	Notes            string    `gorm:"type:varchar(255)" json:"notes,omitempty"`
+}
+
+func (MaterialRequisitionLine) TableName() string { return "manufacturing_material_requisition_lines" }
+
+// LiquidSugarDispensingItem logs individual jerry can tare & net weight for LPC (GDG-008-LPC)
+type LiquidSugarDispensingItem struct {
+	types.BaseEntity
+	RequisitionID uuid.UUID `gorm:"type:uuid;not null;index" json:"requisitionId"`
+	JerryCanNo    int       `gorm:"not null" json:"jerryCanNo"`
+	GrossWeight   float64   `gorm:"type:decimal(10,3);not null" json:"grossWeight"`
+	TareWeight    float64   `gorm:"type:decimal(10,3);not null" json:"tareWeight"`
+	NetWeight     float64   `gorm:"type:decimal(10,3);not null" json:"netWeight"`
+	Brix          float64   `gorm:"type:decimal(5,2)" json:"brix"`
+	AromaColor    string    `gorm:"type:varchar(100)" json:"aromaColor,omitempty"`
+	Notes         string    `gorm:"type:varchar(255)" json:"notes,omitempty"`
+}
+
+func (LiquidSugarDispensingItem) TableName() string { return "manufacturing_liquid_sugar_dispensing" }
+
+// OvenProductionLog records daily oven line operations (LHO)
+type OvenProductionLog struct {
+	types.BaseEntity
+	LogNo             string          `gorm:"type:varchar(50);uniqueIndex;not null" json:"logNo"`
+	ProductionOrderID *uuid.UUID      `gorm:"type:uuid;index" json:"productionOrderId,omitempty"`
+	OrderNumber       string          `gorm:"type:varchar(50)" json:"orderNumber,omitempty"`
+	Date              string          `gorm:"type:varchar(10);not null;index" json:"date"`
+	OvenNumber        string          `gorm:"type:varchar(50);not null" json:"ovenNumber"`
+	OperatorName      string          `gorm:"type:varchar(150);not null" json:"operatorName"`
+	Shift             string          `gorm:"type:varchar(20);not null" json:"shift"`
+	TotalCycles       int             `gorm:"default:0" json:"totalCycles"`
+	TotalWetWeight    float64         `gorm:"type:decimal(15,3);default:0" json:"totalWetWeight"`
+	TotalDryWeight    float64         `gorm:"type:decimal(15,3);default:0" json:"totalDryWeight"`
+	AvgMoistureLoss   float64         `gorm:"type:decimal(6,2);default:0" json:"avgMoistureLoss"`
+	Notes             string          `gorm:"type:text" json:"notes,omitempty"`
+	Cycles            []OvenCycleLine `gorm:"foreignKey:OvenLogID" json:"cycles,omitempty"`
+}
+
+func (OvenProductionLog) TableName() string { return "manufacturing_oven_logs" }
+
+// OvenCycleLine logs one cycle of drying
+type OvenCycleLine struct {
+	types.BaseEntity
+	OvenLogID          uuid.UUID `gorm:"type:uuid;not null;index" json:"ovenLogId"`
+	CycleNumber        int       `gorm:"not null" json:"cycleNumber"`
+	TimeIn             string    `gorm:"type:varchar(10);not null" json:"timeIn"`
+	TimeOut            string    `gorm:"type:varchar(10);not null" json:"timeOut"`
+	Temperature        float64   `gorm:"type:decimal(6,2);not null" json:"temperature"`
+	TrayWeight         float64   `gorm:"type:decimal(10,3);not null" json:"trayWeight"`
+	PaperWeight        float64   `gorm:"type:decimal(10,3);not null" json:"paperWeight"`
+	GrossInWeight      float64   `gorm:"type:decimal(10,3);not null" json:"grossInWeight"`
+	GrossOutWeight     float64   `gorm:"type:decimal(10,3);not null" json:"grossOutWeight"`
+	NetWetWeight       float64   `gorm:"type:decimal(10,3);not null" json:"netWetWeight"`
+	NetDryWeight       float64   `gorm:"type:decimal(10,3);not null" json:"netDryWeight"`
+	MoistureLossPercent float64  `gorm:"type:decimal(6,2);not null" json:"moistureLossPercent"`
+	MoistureContent    float64   `gorm:"type:decimal(6,2)" json:"moistureContent"`
+	Notes              string    `gorm:"type:varchar(255)" json:"notes,omitempty"`
+}
+
+func (OvenCycleLine) TableName() string { return "manufacturing_oven_cycle_lines" }
+

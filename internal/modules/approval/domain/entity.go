@@ -96,6 +96,7 @@ type ApprovalRepository interface {
 	// whose MinAmount is <= amount, ordered by MinAmount descending so the
 	// caller's first result is the most specific (highest threshold) match.
 	ListMatchingWorkflows(ctx context.Context, documentType string, amount float64) ([]ApprovalWorkflow, error)
+	UpdateWorkflow(ctx context.Context, w *ApprovalWorkflow) error
 	DeleteWorkflow(ctx context.Context, id uuid.UUID) error
 
 	CreateRequest(ctx context.Context, r *ApprovalRequest) error

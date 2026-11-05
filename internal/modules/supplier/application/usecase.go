@@ -74,6 +74,7 @@ func (uc *supplierUseCase) Create(ctx context.Context, dto CreateSupplierDTO) (*
 
 	supplier := &domain.Supplier{
 		Code:          code,
+		BatchCode:     strings.ToUpper(strings.TrimSpace(dto.BatchCode)),
 		Name:          name,
 		ContactPerson: dto.ContactPerson,
 		Email:         dto.Email,
@@ -123,6 +124,9 @@ func (uc *supplierUseCase) Update(ctx context.Context, id uuid.UUID, dto UpdateS
 		return nil, apperrors.NewNotFound("Supplier not found")
 	}
 
+	if dto.BatchCode != nil {
+		supplier.BatchCode = strings.ToUpper(strings.TrimSpace(*dto.BatchCode))
+	}
 	if dto.Name != nil {
 		supplier.Name = *dto.Name
 	}
