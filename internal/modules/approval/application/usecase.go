@@ -217,7 +217,7 @@ func (uc *approvalUseCase) currentStep(req *domain.ApprovalRequest) *domain.Appr
 }
 
 func roleMatches(actorRole, requiredRole string) bool {
-	return strings.EqualFold(actorRole, requiredRole)
+	return strings.EqualFold(actorRole, requiredRole) || strings.EqualFold(actorRole, "admin")
 }
 
 func (uc *approvalUseCase) ApproveStep(ctx context.Context, requestID uuid.UUID, dto ActOnStepDTO) (*RequestResponseDTO, error) {
