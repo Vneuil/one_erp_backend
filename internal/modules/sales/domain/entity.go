@@ -35,7 +35,11 @@ type SalesOrder struct {
 	CustomerPONumber     string  `gorm:"type:varchar(100)" json:"customerPoNumber,omitempty"`
 	CustomerPOAttachment string  `gorm:"type:text" json:"customerPoAttachment,omitempty"`
 	DPPaid               bool    `gorm:"default:false" json:"dpPaid"`
+	DPPercent            float64 `gorm:"type:decimal(5,2);default:0" json:"dpPercent"`
 	DPAmount             float64 `gorm:"type:decimal(15,2);default:0" json:"dpAmount"`
+	ShippingAddress      string  `gorm:"type:text" json:"shippingAddress,omitempty"`
+	ShippingCourier      string  `gorm:"type:varchar(100)" json:"shippingCourier,omitempty"`
+	DeliveryDate         string  `gorm:"type:varchar(50)" json:"deliveryDate,omitempty"`
 
 	// MarketplacePlatform/MarketplaceOrderID identify the source marketplace
 	// order when this Sales Order was created by the marketplace sync (see

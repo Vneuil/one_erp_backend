@@ -20,6 +20,8 @@ type PurchaseRequest struct {
 	NeededByDate string                `gorm:"type:varchar(50)" json:"neededByDate"`
 	Status               string                `gorm:"type:varchar(50);default:'draft'" json:"status"`
 	Category             string                `gorm:"type:varchar(50);default:'inventory'" json:"category"` // inventory | non_inventory | fixed_asset
+	SalesOrderID         *uuid.UUID            `gorm:"type:uuid;index" json:"salesOrderId,omitempty"`
+	SalesOrderNo         string                `gorm:"type:varchar(50)" json:"salesOrderNo,omitempty"`
 	SupervisorApprovedBy string                `gorm:"type:varchar(150)" json:"supervisorApprovedBy,omitempty"`
 	SupervisorApprovedAt *time.Time            `json:"supervisorApprovedAt,omitempty"`
 	OwnerApprovedBy      string                `gorm:"type:varchar(150)" json:"ownerApprovedBy,omitempty"`
@@ -54,6 +56,8 @@ type PurchaseOrder struct {
 	SupplierID        uuid.UUID  `gorm:"type:uuid;not null;index" json:"supplierId"`
 	SupplierName      string     `gorm:"type:varchar(255)" json:"supplierName"`
 	PurchaseRequestID *uuid.UUID `gorm:"type:uuid;index" json:"purchaseRequestId,omitempty"`
+	SalesOrderID      *uuid.UUID `gorm:"type:uuid;index" json:"salesOrderId,omitempty"`
+	SalesOrderNo      string     `gorm:"type:varchar(50)" json:"salesOrderNo,omitempty"`
 	OrderDate         string     `gorm:"type:varchar(50)" json:"orderDate"`
 	ExpectedDate      string     `gorm:"type:varchar(50)" json:"expectedDate"`
 	Status            string     `gorm:"type:varchar(50);default:'draft'" json:"status"`

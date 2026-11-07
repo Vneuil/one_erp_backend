@@ -19,6 +19,8 @@ type CreatePurchaseRequestDTO struct {
 	Department   string                   `json:"department"`
 	NeededByDate string                   `json:"neededByDate"`
 	Category     string                   `json:"category"` // inventory | non_inventory | fixed_asset
+	SalesOrderID *uuid.UUID               `json:"salesOrderId,omitempty"`
+	SalesOrderNo string                   `json:"salesOrderNo,omitempty"`
 	Lines        []PurchaseRequestLineDTO `json:"lines"`
 	// RequestedBy is set by the handler from the authenticated caller, never
 	// read from client-supplied JSON - there is no `json:"requestedBy"` tag
@@ -30,6 +32,8 @@ type UpdatePurchaseRequestDTO struct {
 	Department   string                   `json:"department"`
 	NeededByDate string                   `json:"neededByDate"`
 	Category     string                   `json:"category"`
+	SalesOrderID *uuid.UUID               `json:"salesOrderId,omitempty"`
+	SalesOrderNo string                   `json:"salesOrderNo,omitempty"`
 	Lines        []PurchaseRequestLineDTO `json:"lines"`
 }
 
@@ -48,6 +52,8 @@ type PurchaseRequestResponseDTO struct {
 	NeededByDate string                           `json:"neededByDate"`
 	Status               string                           `json:"status"`
 	Category             string                           `json:"category"`
+	SalesOrderID         *uuid.UUID                       `json:"salesOrderId,omitempty"`
+	SalesOrderNo         string                           `json:"salesOrderNo,omitempty"`
 	SupervisorApprovedBy string                           `json:"supervisorApprovedBy,omitempty"`
 	SupervisorApprovedAt *time.Time                       `json:"supervisorApprovedAt,omitempty"`
 	OwnerApprovedBy      string                           `json:"ownerApprovedBy,omitempty"`
@@ -68,6 +74,7 @@ func ToPurchaseRequestResponse(pr *domain.PurchaseRequest) *PurchaseRequestRespo
 	return &PurchaseRequestResponseDTO{
 		ID: pr.ID, RequestNo: pr.RequestNo, RequestedBy: pr.RequestedBy, Department: pr.Department,
 		NeededByDate: pr.NeededByDate, Status: pr.Status, Category: pr.Category,
+		SalesOrderID: pr.SalesOrderID, SalesOrderNo: pr.SalesOrderNo,
 		SupervisorApprovedBy: pr.SupervisorApprovedBy, SupervisorApprovedAt: pr.SupervisorApprovedAt,
 		OwnerApprovedBy: pr.OwnerApprovedBy, OwnerApprovedAt: pr.OwnerApprovedAt,
 		RejectionReason: pr.RejectionReason, Lines: lines, CreatedAt: pr.CreatedAt,
@@ -94,6 +101,8 @@ type CreatePurchaseOrderDTO struct {
 	SupplierID        uuid.UUID  `json:"supplierId"`
 	SupplierName      string     `json:"supplierName"`
 	PurchaseRequestID *uuid.UUID `json:"purchaseRequestId,omitempty"`
+	SalesOrderID      *uuid.UUID `json:"salesOrderId,omitempty"`
+	SalesOrderNo      string     `json:"salesOrderNo,omitempty"`
 	OrderDate         string     `json:"orderDate"`
 	ExpectedDate      string     `json:"expectedDate"`
 	RequestedBy       string     `json:"requestedBy"`
@@ -111,6 +120,8 @@ type UpdatePurchaseOrderDTO struct {
 	SupplierID        uuid.UUID              `json:"supplierId"`
 	SupplierName      string                 `json:"supplierName"`
 	PurchaseRequestID *uuid.UUID             `json:"purchaseRequestId,omitempty"`
+	SalesOrderID      *uuid.UUID             `json:"salesOrderId,omitempty"`
+	SalesOrderNo      string                 `json:"salesOrderNo,omitempty"`
 	ExpectedDate      string                 `json:"expectedDate"`
 	FreightScheme     string                 `json:"freightScheme"`
 	FreightCost       float64                `json:"freightCost"`
@@ -142,6 +153,8 @@ type PurchaseOrderResponseDTO struct {
 	SupplierID        uuid.UUID                      `json:"supplierId"`
 	SupplierName      string                         `json:"supplierName"`
 	PurchaseRequestID *uuid.UUID                     `json:"purchaseRequestId,omitempty"`
+	SalesOrderID      *uuid.UUID                     `json:"salesOrderId,omitempty"`
+	SalesOrderNo      string                         `json:"salesOrderNo,omitempty"`
 	OrderDate         string                         `json:"orderDate"`
 	ExpectedDate      string                         `json:"expectedDate"`
 	Status            string                         `json:"status"`
@@ -169,6 +182,7 @@ func ToPurchaseOrderResponse(po *domain.PurchaseOrder) *PurchaseOrderResponseDTO
 	}
 	return &PurchaseOrderResponseDTO{
 		ID: po.ID, OrderNo: po.OrderNo, SupplierID: po.SupplierID, SupplierName: po.SupplierName, PurchaseRequestID: po.PurchaseRequestID,
+		SalesOrderID: po.SalesOrderID, SalesOrderNo: po.SalesOrderNo,
 		OrderDate: po.OrderDate, ExpectedDate: po.ExpectedDate, Status: po.Status, TotalAmount: po.TotalAmount,
 		Currency: po.Currency, BaseAmount: po.BaseAmount, CreatedByEmail: po.CreatedByEmail,
 		FreightScheme: po.FreightScheme, FreightCost: po.FreightCost, QualityNotes: po.QualityNotes,

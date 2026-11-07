@@ -147,39 +147,16 @@ func (uc *salesUseCase) CreateOrder(ctx context.Context, dto CreateSalesOrderDTO
 		baseAmount = result.BaseAmount
 	}
 
-	// If the caller supplied line items and a warehouse, verify enough
-	// stock is available for every line BEFORE creating the order or
-	// touching any stock - a partial deduction (some lines succeed, one
-	// fails) would leave inventory in a state no document explains.
+	// Sales Orders capture customer demand, which triggers PR/PO procurement
+	// when stock is insufficient. We do not block order creation on low/zero stock.
 	var lines []domain.SalesOrderLine
-	if len(dto.Lines) > 0 && dto.WarehouseID != nil && uc.inventoryUC != nil {
-		for _, l := range dto.Lines {
-			if l.ProductID == uuid.Nil || l.Quantity <= 0 {
-				return nil, apperrors.NewBadRequest("Each line requires a productId and a positive quantity")
-			}
-			available, err := uc.inventoryUC.GetAvailability(ctx, l.ProductID, *dto.WarehouseID)
-			if err != nil {
-				return nil, err
-			}
-			if float64(available) < l.Quantity {
-				return nil, apperrors.NewBadRequest(fmt.Sprintf("Insufficient stock for product %s: available %d, requested %.0f", l.ProductID, available, l.Quantity))
-			}
-			lines = append(lines, domain.SalesOrderLine{
-				ProductID: l.ProductID, Quantity: l.Quantity, UnitPrice: l.UnitPrice, Subtotal: l.Quantity * l.UnitPrice,
-			})
+	for _, l := range dto.Lines {
+		if l.ProductID == uuid.Nil || l.Quantity <= 0 {
+			return nil, apperrors.NewBadRequest("Each line requires a productId and a positive quantity")
 		}
-	} else if len(dto.Lines) > 0 {
-		// No warehouse supplied (e.g. a Quotation conversion, which carries
-		// no warehouse) - keep the line items as a record on the order
-		// without any stock effect, same as the "no line items" case.
-		for _, l := range dto.Lines {
-			if l.ProductID == uuid.Nil || l.Quantity <= 0 {
-				return nil, apperrors.NewBadRequest("Each line requires a productId and a positive quantity")
-			}
-			lines = append(lines, domain.SalesOrderLine{
-				ProductID: l.ProductID, Quantity: l.Quantity, UnitPrice: l.UnitPrice, Subtotal: l.Quantity * l.UnitPrice,
-			})
-		}
+		lines = append(lines, domain.SalesOrderLine{
+			ProductID: l.ProductID, Quantity: l.Quantity, UnitPrice: l.UnitPrice, Subtotal: l.Quantity * l.UnitPrice,
+		})
 	}
 
 	order := &domain.SalesOrder{
@@ -200,7 +177,11 @@ func (uc *salesUseCase) CreateOrder(ctx context.Context, dto CreateSalesOrderDTO
 		CustomerPONumber:     dto.CustomerPONumber,
 		CustomerPOAttachment: dto.CustomerPOAttachment,
 		DPPaid:               dto.DPPaid,
+		DPPercent:            dto.DPPercent,
 		DPAmount:             dto.DPAmount,
+		ShippingAddress:      dto.ShippingAddress,
+		ShippingCourier:      dto.ShippingCourier,
+		DeliveryDate:         dto.DeliveryDate,
 	}
 
 	if err := uc.repo.CreateOrder(ctx, order); err != nil {
@@ -221,12 +202,18 @@ func (uc *salesUseCase) CreateOrder(ctx context.Context, dto CreateSalesOrderDTO
 			Amount:         order.TotalAmount,
 			RequesterName:  order.CustomerName,
 		})
-		if err == nil && result.RequiresApproval {
+		if err == nil && result != nil && result.RequiresApproval {
 			requiresApproval = true
 			order.Status = "pending_approval"
 			if err := uc.repo.UpdateOrder(ctx, order); err != nil {
 				return nil, apperrors.NewInternal(err, "Failed to update sales order approval status")
 			}
+		}
+	}
+	if !requiresApproval {
+		order.Status = "Confirmed"
+		if err := uc.repo.UpdateOrder(ctx, order); err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to update sales order status")
 		}
 	}
 
@@ -238,13 +225,14 @@ func (uc *salesUseCase) CreateOrder(ctx context.Context, dto CreateSalesOrderDTO
 	// order is not rolled back - matching how POS/loyalty treat inventory as
 	// a best-effort side effect of a sale, not a precondition for the sale
 	// existing.
-	if dto.WarehouseID != nil && !requiresApproval {
+	if dto.WarehouseID != nil && !requiresApproval && uc.inventoryUC != nil {
 		for _, l := range lines {
-			if _, err := uc.inventoryUC.AdjustStock(ctx, inventoryApp.AdjustStockDTO{
-				ProductID: l.ProductID, WarehouseID: *dto.WarehouseID, Quantity: -int(l.Quantity),
-				Reason: "Sales Order", Reference: order.OrderNumber,
-			}); err != nil {
-				return nil, apperrors.NewInternal(err, "Order created but failed to deduct stock for product "+l.ProductID.String())
+			available, err := uc.inventoryUC.GetAvailability(ctx, l.ProductID, *dto.WarehouseID)
+			if err == nil && float64(available) >= l.Quantity {
+				_, _ = uc.inventoryUC.AdjustStock(ctx, inventoryApp.AdjustStockDTO{
+					ProductID: l.ProductID, WarehouseID: *dto.WarehouseID, Quantity: -int(l.Quantity),
+					Reason: "Sales Order", Reference: order.OrderNumber,
+				})
 			}
 		}
 		uc.postCOGS(ctx, order.ID, order.OrderNumber, lines)
@@ -264,9 +252,9 @@ func (uc *salesUseCase) SubmitOrder(ctx context.Context, id uuid.UUID) (*SalesOr
 	if !strings.EqualFold(order.Status, "draft") {
 		return nil, apperrors.NewConflict(fmt.Sprintf("Sales order in status %s cannot be submitted", order.Status))
 	}
-	order.Status = "pending_approval"
+	requiresApproval := false
 	if uc.approvalUC != nil {
-		_, err := uc.approvalUC.SubmitDocument(ctx, approvalApp.SubmitDocumentDTO{
+		result, err := uc.approvalUC.SubmitDocument(ctx, approvalApp.SubmitDocumentDTO{
 			DocumentType:   salesOrderDocumentType,
 			DocumentID:     order.ID,
 			DocumentNumber: order.OrderNumber,
@@ -275,6 +263,26 @@ func (uc *salesUseCase) SubmitOrder(ctx context.Context, id uuid.UUID) (*SalesOr
 		})
 		if err != nil {
 			return nil, err
+		}
+		if result != nil && result.RequiresApproval {
+			requiresApproval = true
+		}
+	}
+	if requiresApproval {
+		order.Status = "pending_approval"
+	} else {
+		order.Status = "Confirmed"
+		if order.WarehouseID != nil && uc.inventoryUC != nil {
+			for _, l := range order.Lines {
+				available, err := uc.inventoryUC.GetAvailability(ctx, l.ProductID, *order.WarehouseID)
+				if err == nil && float64(available) >= l.Quantity {
+					_, _ = uc.inventoryUC.AdjustStock(ctx, inventoryApp.AdjustStockDTO{
+						ProductID: l.ProductID, WarehouseID: *order.WarehouseID, Quantity: -int(l.Quantity),
+						Reason: "Sales Order", Reference: order.OrderNumber,
+					})
+				}
+			}
+			uc.postCOGS(ctx, order.ID, order.OrderNumber, order.Lines)
 		}
 	}
 	if err := uc.repo.UpdateOrder(ctx, order); err != nil {
@@ -306,7 +314,7 @@ func (uc *salesUseCase) ApproveOrder(ctx context.Context, id uuid.UUID, dto Sale
 		if err != nil {
 			return nil, apperrors.NewInternal(err, "Failed to check approval status")
 		}
-		if activeReq == nil && (order.Status == "pending_approval" || order.Status == "submitted" || order.Status == "Draft") {
+		if activeReq == nil && (order.Status == "pending_approval" || order.Status == "submitted" || strings.EqualFold(order.Status, "draft")) {
 			submitRes, submitErr := uc.approvalUC.SubmitDocument(ctx, approvalApp.SubmitDocumentDTO{
 				DocumentType:   salesOrderDocumentType,
 				DocumentID:     order.ID,
@@ -336,18 +344,19 @@ func (uc *salesUseCase) ApproveOrder(ctx context.Context, id uuid.UUID, dto Sale
 		}
 	}
 
-	if order.Status != "Draft" && order.Status != "submitted" && order.Status != "pending_approval" {
+	if !strings.EqualFold(order.Status, "draft") && order.Status != "submitted" && order.Status != "pending_approval" {
 		return nil, apperrors.NewConflict("This sales order is not awaiting approval")
 	}
 
 	order.Status = "Confirmed"
-	if order.WarehouseID != nil {
+	if order.WarehouseID != nil && uc.inventoryUC != nil {
 		for _, l := range order.Lines {
-			if _, err := uc.inventoryUC.AdjustStock(ctx, inventoryApp.AdjustStockDTO{
-				ProductID: l.ProductID, WarehouseID: *order.WarehouseID, Quantity: -int(l.Quantity),
-				Reason: "Sales Order", Reference: order.OrderNumber,
-			}); err != nil {
-				return nil, apperrors.NewInternal(err, "Order approved but failed to deduct stock for product "+l.ProductID.String())
+			available, err := uc.inventoryUC.GetAvailability(ctx, l.ProductID, *order.WarehouseID)
+			if err == nil && float64(available) >= l.Quantity {
+				_, _ = uc.inventoryUC.AdjustStock(ctx, inventoryApp.AdjustStockDTO{
+					ProductID: l.ProductID, WarehouseID: *order.WarehouseID, Quantity: -int(l.Quantity),
+					Reason: "Sales Order", Reference: order.OrderNumber,
+				})
 			}
 		}
 		uc.postCOGS(ctx, order.ID, order.OrderNumber, order.Lines)
@@ -379,13 +388,14 @@ func (uc *salesUseCase) FinalizeOrderApproved(ctx context.Context, id uuid.UUID)
 
 	order.Status = "Confirmed"
 
-	if order.WarehouseID != nil {
+	if order.WarehouseID != nil && uc.inventoryUC != nil {
 		for _, l := range order.Lines {
-			if _, err := uc.inventoryUC.AdjustStock(ctx, inventoryApp.AdjustStockDTO{
-				ProductID: l.ProductID, WarehouseID: *order.WarehouseID, Quantity: -int(l.Quantity),
-				Reason: "Sales Order", Reference: order.OrderNumber,
-			}); err != nil {
-				return apperrors.NewInternal(err, "Order approved but failed to deduct stock for product "+l.ProductID.String())
+			available, err := uc.inventoryUC.GetAvailability(ctx, l.ProductID, *order.WarehouseID)
+			if err == nil && float64(available) >= l.Quantity {
+				_, _ = uc.inventoryUC.AdjustStock(ctx, inventoryApp.AdjustStockDTO{
+					ProductID: l.ProductID, WarehouseID: *order.WarehouseID, Quantity: -int(l.Quantity),
+					Reason: "Sales Order", Reference: order.OrderNumber,
+				})
 			}
 		}
 		uc.postCOGS(ctx, order.ID, order.OrderNumber, order.Lines)
@@ -414,7 +424,7 @@ func (uc *salesUseCase) RejectOrder(ctx context.Context, id uuid.UUID, dto Sales
 		if err != nil {
 			return nil, apperrors.NewInternal(err, "Failed to check approval status")
 		}
-		if activeReq == nil && (order.Status == "pending_approval" || order.Status == "submitted" || order.Status == "Draft") {
+		if activeReq == nil && (order.Status == "pending_approval" || order.Status == "submitted" || strings.EqualFold(order.Status, "draft")) {
 			submitRes, submitErr := uc.approvalUC.SubmitDocument(ctx, approvalApp.SubmitDocumentDTO{
 				DocumentType:   salesOrderDocumentType,
 				DocumentID:     order.ID,
@@ -444,7 +454,7 @@ func (uc *salesUseCase) RejectOrder(ctx context.Context, id uuid.UUID, dto Sales
 		}
 	}
 
-	if order.Status != "Draft" && order.Status != "submitted" && order.Status != "pending_approval" {
+	if !strings.EqualFold(order.Status, "draft") && order.Status != "submitted" && order.Status != "pending_approval" {
 		return nil, apperrors.NewConflict("This sales order cannot be rejected")
 	}
 	order.Status = "rejected"
@@ -555,8 +565,20 @@ func (uc *salesUseCase) UpdateOrder(ctx context.Context, id uuid.UUID, dto Updat
 	if dto.DPPaid != nil {
 		order.DPPaid = *dto.DPPaid
 	}
+	if dto.DPPercent != nil {
+		order.DPPercent = *dto.DPPercent
+	}
 	if dto.DPAmount != nil {
 		order.DPAmount = *dto.DPAmount
+	}
+	if dto.ShippingAddress != nil {
+		order.ShippingAddress = *dto.ShippingAddress
+	}
+	if dto.ShippingCourier != nil {
+		order.ShippingCourier = *dto.ShippingCourier
+	}
+	if dto.DeliveryDate != nil {
+		order.DeliveryDate = *dto.DeliveryDate
 	}
 
 	if err := uc.repo.UpdateOrderWithLines(ctx, order); err != nil {

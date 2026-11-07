@@ -24,7 +24,11 @@ type CreateSalesOrderDTO struct {
 	CustomerPONumber     string  `json:"customerPoNumber,omitempty"`
 	CustomerPOAttachment string  `json:"customerPoAttachment,omitempty"`
 	DPPaid               bool    `json:"dpPaid"`
+	DPPercent            float64 `json:"dpPercent"`
 	DPAmount             float64 `json:"dpAmount"`
+	ShippingAddress      string  `json:"shippingAddress,omitempty"`
+	ShippingCourier      string  `json:"shippingCourier,omitempty"`
+	DeliveryDate         string  `json:"deliveryDate,omitempty"`
 	// WarehouseID + Lines are optional. When both are set, stock for each
 	// line is deducted from this warehouse - see usecase.CreateOrder.
 	WarehouseID *uuid.UUID          `json:"warehouseId,omitempty"`
@@ -46,7 +50,11 @@ type UpdateSalesOrderDTO struct {
 	CustomerPONumber     *string             `json:"customerPoNumber,omitempty"`
 	CustomerPOAttachment *string             `json:"customerPoAttachment,omitempty"`
 	DPPaid               *bool               `json:"dpPaid,omitempty"`
+	DPPercent            *float64            `json:"dpPercent,omitempty"`
 	DPAmount             *float64            `json:"dpAmount,omitempty"`
+	ShippingAddress      *string             `json:"shippingAddress,omitempty"`
+	ShippingCourier      *string             `json:"shippingCourier,omitempty"`
+	DeliveryDate         *string             `json:"deliveryDate,omitempty"`
 	Lines        []SalesOrderLineDTO `json:"lines"`
 }
 
@@ -82,7 +90,11 @@ type SalesOrderResponseDTO struct {
 	CustomerPONumber     string                      `json:"customerPoNumber,omitempty"`
 	CustomerPOAttachment string                      `json:"customerPoAttachment,omitempty"`
 	DPPaid               bool                        `json:"dpPaid"`
+	DPPercent            float64                     `json:"dpPercent"`
 	DPAmount             float64                     `json:"dpAmount"`
+	ShippingAddress      string                      `json:"shippingAddress,omitempty"`
+	ShippingCourier      string                      `json:"shippingCourier,omitempty"`
+	DeliveryDate         string                      `json:"deliveryDate,omitempty"`
 	WarehouseID    *uuid.UUID                  `json:"warehouseId,omitempty"`
 	Lines          []SalesOrderLineResponseDTO `json:"lines,omitempty"`
 	CreatedAt      time.Time                   `json:"createdAt"`
@@ -149,7 +161,11 @@ func ToSalesOrderResponse(o *domain.SalesOrder) *SalesOrderResponseDTO {
 		CustomerPONumber:     o.CustomerPONumber,
 		CustomerPOAttachment: o.CustomerPOAttachment,
 		DPPaid:               o.DPPaid,
+		DPPercent:            o.DPPercent,
 		DPAmount:             o.DPAmount,
+		ShippingAddress:      o.ShippingAddress,
+		ShippingCourier:      o.ShippingCourier,
+		DeliveryDate:         o.DeliveryDate,
 		WarehouseID:    o.WarehouseID,
 		Lines:          lines,
 		CreatedAt:      o.CreatedAt,
