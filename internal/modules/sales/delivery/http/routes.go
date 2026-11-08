@@ -12,6 +12,9 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 
 	sales := router.Group("/sales", protected, tenantCtx)
 
+	sales.Post("/orders/upload-attachment", h.UploadAttachment)
+	sales.Get("/orders/attachment/download", h.DownloadAttachmentByKey)
+	sales.Get("/orders/:id/attachment", h.DownloadAttachment)
 	sales.Post("/orders", h.CreateOrder)
 	sales.Get("/orders", h.ListOrders)
 	sales.Get("/orders/:id", h.GetOrderByID)
