@@ -15,6 +15,8 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	sales.Post("/orders/upload-attachment", h.UploadAttachment)
 	sales.Get("/orders/attachment/download", h.DownloadAttachmentByKey)
 	sales.Get("/orders/:id/attachment", h.DownloadAttachment)
+	sales.Put("/orders/:id/invoice-document", h.AttachInvoiceDocument)
+	sales.Get("/orders/:id/invoice-attachment", h.DownloadInvoiceAttachment)
 	sales.Post("/orders", h.CreateOrder)
 	sales.Get("/orders", h.ListOrders)
 	sales.Get("/orders/:id", h.GetOrderByID)

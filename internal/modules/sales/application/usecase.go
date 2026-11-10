@@ -39,6 +39,7 @@ type SalesUseCase interface {
 	ApproveOrder(ctx context.Context, id uuid.UUID, dto SalesApprovalActionDTO) (*SalesOrderResponseDTO, error)
 	RejectOrder(ctx context.Context, id uuid.UUID, dto SalesApprovalActionDTO) (*SalesOrderResponseDTO, error)
 	UpdateOrder(ctx context.Context, id uuid.UUID, dto UpdateSalesOrderDTO) (*SalesOrderResponseDTO, error)
+	AttachInvoiceDocument(ctx context.Context, id uuid.UUID, dto AttachInvoiceDocDTO) (*SalesOrderResponseDTO, error)
 
 	// FinalizeOrderApproved/Rejected are the single place that applies the
 	// effect of a Sales Order's approval workflow reaching a final state:
@@ -179,6 +180,9 @@ func (uc *salesUseCase) CreateOrder(ctx context.Context, dto CreateSalesOrderDTO
 		DPPaid:               dto.DPPaid,
 		DPPercent:            dto.DPPercent,
 		DPAmount:             dto.DPAmount,
+		InvoiceDocType:       dto.InvoiceDocType,
+		InvoiceDocAttachment: dto.InvoiceDocAttachment,
+		InvoiceDocNumber:     dto.InvoiceDocNumber,
 		ShippingAddress:      dto.ShippingAddress,
 		ShippingCourier:      dto.ShippingCourier,
 		DeliveryDate:         dto.DeliveryDate,
@@ -190,9 +194,8 @@ func (uc *salesUseCase) CreateOrder(ctx context.Context, dto CreateSalesOrderDTO
 
 	// If an admin has configured an approval workflow matching this document
 	// type/amount, route it through the workflow instead of deducting stock
-	// immediately - see modules/approval. No matching workflow means no
-	// change from prior behavior (order keeps its normal status and stock is
-	// deducted right away, exactly as before this feature existed).
+	// immediately - see modules/approval. If no workflow rule matched, but
+	// DP was not paid, the order still enters pending_approval awaiting approval.
 	requiresApproval := false
 	if uc.approvalUC != nil {
 		result, err := uc.approvalUC.SubmitDocument(ctx, approvalApp.SubmitDocumentDTO{
@@ -211,9 +214,17 @@ func (uc *salesUseCase) CreateOrder(ctx context.Context, dto CreateSalesOrderDTO
 		}
 	}
 	if !requiresApproval {
-		order.Status = "Confirmed"
-		if err := uc.repo.UpdateOrder(ctx, order); err != nil {
-			return nil, apperrors.NewInternal(err, "Failed to update sales order status")
+		if !dto.DPPaid {
+			requiresApproval = true
+			order.Status = "pending_approval"
+			if err := uc.repo.UpdateOrder(ctx, order); err != nil {
+				return nil, apperrors.NewInternal(err, "Failed to update sales order approval status")
+			}
+		} else {
+			order.Status = "Confirmed"
+			if err := uc.repo.UpdateOrder(ctx, order); err != nil {
+				return nil, apperrors.NewInternal(err, "Failed to update sales order status")
+			}
 		}
 	}
 
@@ -580,9 +591,46 @@ func (uc *salesUseCase) UpdateOrder(ctx context.Context, id uuid.UUID, dto Updat
 	if dto.DeliveryDate != nil {
 		order.DeliveryDate = *dto.DeliveryDate
 	}
+	if dto.InvoiceDocType != nil {
+		order.InvoiceDocType = *dto.InvoiceDocType
+	}
+	if dto.InvoiceDocAttachment != nil {
+		order.InvoiceDocAttachment = *dto.InvoiceDocAttachment
+	}
+	if dto.InvoiceDocNumber != nil {
+		order.InvoiceDocNumber = *dto.InvoiceDocNumber
+	}
 
 	if err := uc.repo.UpdateOrderWithLines(ctx, order); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to update sales order")
+	}
+
+	return ToSalesOrderResponse(order), nil
+}
+
+func (uc *salesUseCase) AttachInvoiceDocument(ctx context.Context, id uuid.UUID, dto AttachInvoiceDocDTO) (*SalesOrderResponseDTO, error) {
+	if strings.TrimSpace(dto.InvoiceDocAttachment) == "" {
+		return nil, apperrors.NewBadRequest("Invoice document attachment is required")
+	}
+	docType := strings.ToUpper(strings.TrimSpace(dto.InvoiceDocType))
+	if docType != "CI" && docType != "PI" && !strings.Contains(strings.ToLower(dto.InvoiceDocType), "invoice") {
+		return nil, apperrors.NewBadRequest("Invoice document type must be CI (Commercial Invoice) or PI (Proforma Invoice)")
+	}
+
+	order, err := uc.repo.GetOrderByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get sales order")
+	}
+	if order == nil {
+		return nil, apperrors.NewNotFound("Sales order not found")
+	}
+
+	order.InvoiceDocType = docType
+	order.InvoiceDocNumber = strings.TrimSpace(dto.InvoiceDocNumber)
+	order.InvoiceDocAttachment = strings.TrimSpace(dto.InvoiceDocAttachment)
+
+	if err := uc.repo.UpdateOrder(ctx, order); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to attach invoice document to sales order")
 	}
 
 	return ToSalesOrderResponse(order), nil

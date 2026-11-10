@@ -17,6 +17,7 @@ import (
 	"github.com/divinecoid/one-backend/internal/modules/procurement/application"
 	"github.com/divinecoid/one-backend/internal/modules/procurement/infrastructure"
 	productInfra "github.com/divinecoid/one-backend/internal/modules/product/infrastructure"
+	salesInfra "github.com/divinecoid/one-backend/internal/modules/sales/infrastructure"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/gofiber/fiber/v2"
@@ -57,6 +58,7 @@ func (h *Handler) resolve(c *fiber.Ctx) (application.ProcurementUseCase, error) 
 	currencyRepo := currencyInfra.NewCurrencyRepository(tenantDB)
 	currencyUC := currencyApp.NewCurrencyUseCase(currencyRepo)
 	ledger := financeApp.NewLedgerPoster(financeInfra.NewFinanceRepository(tenantDB))
+	salesRepo := salesInfra.NewSalesRepository(tenantDB)
 	return application.NewProcurementUseCase(
 		repo,
 		approvalUC,
@@ -64,6 +66,7 @@ func (h *Handler) resolve(c *fiber.Ctx) (application.ProcurementUseCase, error) 
 		currencyUC,
 		application.WithLedger(ledger),
 		application.WithProductRepo(productRepo),
+		application.WithSalesRepo(salesRepo),
 	), nil
 }
 
