@@ -21,6 +21,7 @@ type ApprovalWorkflow struct {
 	DocumentType string                  `gorm:"type:varchar(100);not null;index" json:"documentType"`
 	Name         string                  `gorm:"type:varchar(150);not null" json:"name"`
 	MinAmount    float64                 `gorm:"type:decimal(15,2);not null;default:0" json:"minAmount"`
+	MaxAmount    *float64                `gorm:"type:decimal(15,2)" json:"maxAmount"`
 	IsActive     bool                    `gorm:"default:true" json:"isActive"`
 	Levels       []ApprovalWorkflowLevel `gorm:"foreignKey:WorkflowID" json:"levels,omitempty"`
 }
@@ -93,7 +94,8 @@ type ApprovalRepository interface {
 	GetWorkflowByID(ctx context.Context, id uuid.UUID) (*ApprovalWorkflow, error)
 	ListWorkflows(ctx context.Context, documentType string) ([]ApprovalWorkflow, error)
 	// ListMatchingWorkflows returns active workflows for a document type
-	// whose MinAmount is <= amount, ordered by MinAmount descending so the
+	// whose inclusive range [MinAmount, MaxAmount] contains amount (nil
+	// MaxAmount means unlimited), ordered by MinAmount descending so the
 	// caller's first result is the most specific (highest threshold) match.
 	ListMatchingWorkflows(ctx context.Context, documentType string, amount float64) ([]ApprovalWorkflow, error)
 	UpdateWorkflow(ctx context.Context, w *ApprovalWorkflow) error
@@ -102,7 +104,7 @@ type ApprovalRepository interface {
 	CreateRequest(ctx context.Context, r *ApprovalRequest) error
 	GetRequestByID(ctx context.Context, id uuid.UUID) (*ApprovalRequest, error)
 	GetActiveRequestForDocument(ctx context.Context, documentType string, documentID uuid.UUID) (*ApprovalRequest, error)
-	ListRequests(ctx context.Context, query types.PaginationQuery, documentType string) ([]ApprovalRequest, int64, error)
+	ListRequests(ctx context.Context, query types.PaginationQuery, documentType string, status string) ([]ApprovalRequest, int64, error)
 	UpdateRequest(ctx context.Context, r *ApprovalRequest) error
 
 	UpdateStep(ctx context.Context, s *ApprovalStep) error

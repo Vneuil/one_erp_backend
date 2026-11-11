@@ -58,6 +58,26 @@ func TestSalesOrder_CIPILogic(t *testing.T) {
 		}
 	})
 
+	t.Run("SubmitOrder without DP and without workflow routes to pending_approval", func(t *testing.T) {
+		orderID := uuid.New()
+		order := &domain.SalesOrder{
+			OrderNumber: "SO-DRAFT-NODP-001",
+			Status:      "draft",
+			DPPaid:      false,
+		}
+		order.ID = orderID
+		repo := &fakeSalesCIPIRepo{order: order}
+		uc := NewSalesUseCase(repo, nil, nil, nil)
+
+		res, err := uc.SubmitOrder(context.Background(), orderID)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if res.Status != "pending_approval" {
+			t.Fatalf("expected draft order without DP to submit to pending_approval, got %s", res.Status)
+		}
+	})
+
 	t.Run("AttachInvoiceDocument successfully attaches CI or PI", func(t *testing.T) {
 		orderID := uuid.New()
 		order := &domain.SalesOrder{

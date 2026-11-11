@@ -185,7 +185,7 @@ func (h *Handler) ListRequests(c *fiber.Ctx) error {
 	if err := c.QueryParser(&query); err != nil {
 		return apperrors.NewBadRequest("Invalid query parameters")
 	}
-	items, meta, err := uc.ListRequests(h.ctx(c), query, c.Query("documentType"))
+	items, meta, err := uc.ListRequests(h.ctx(c), query, c.Query("documentType"), c.Query("status"))
 	if err != nil {
 		return err
 	}

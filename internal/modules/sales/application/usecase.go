@@ -279,7 +279,7 @@ func (uc *salesUseCase) SubmitOrder(ctx context.Context, id uuid.UUID) (*SalesOr
 			requiresApproval = true
 		}
 	}
-	if requiresApproval {
+	if requiresApproval || !order.DPPaid {
 		order.Status = "pending_approval"
 	} else {
 		order.Status = "Confirmed"

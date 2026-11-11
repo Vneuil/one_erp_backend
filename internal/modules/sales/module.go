@@ -11,6 +11,8 @@ import (
 	approvalInfra "github.com/divinecoid/one-backend/internal/modules/approval/infrastructure"
 	currencyApp "github.com/divinecoid/one-backend/internal/modules/currency/application"
 	currencyInfra "github.com/divinecoid/one-backend/internal/modules/currency/infrastructure"
+	financeApp "github.com/divinecoid/one-backend/internal/modules/finance/application"
+	financeInfra "github.com/divinecoid/one-backend/internal/modules/finance/infrastructure"
 	inventoryApp "github.com/divinecoid/one-backend/internal/modules/inventory/application"
 	inventoryInfra "github.com/divinecoid/one-backend/internal/modules/inventory/infrastructure"
 	productInfra "github.com/divinecoid/one-backend/internal/modules/product/infrastructure"
@@ -58,7 +60,15 @@ func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager
 		inventoryRepo := inventoryInfra.NewInventoryRepository(tenantDB)
 		productRepo := productInfra.NewProductRepository(tenantDB)
 		approvalRepo := approvalInfra.NewApprovalRepository(tenantDB)
-		uc := application.NewSalesUseCase(repo, currencyApp.NewCurrencyUseCase(currencyRepo), inventoryApp.NewInventoryUseCase(inventoryRepo, productRepo), approvalApp.NewApprovalUseCase(approvalRepo))
+		ledger := financeApp.NewLedgerPoster(financeInfra.NewFinanceRepository(tenantDB))
+		uc := application.NewSalesUseCase(
+			repo,
+			currencyApp.NewCurrencyUseCase(currencyRepo),
+			inventoryApp.NewInventoryUseCase(inventoryRepo, productRepo),
+			approvalApp.NewApprovalUseCase(approvalRepo),
+			application.WithLedger(ledger),
+			application.WithProducts(productRepo),
+		)
 		return application.NewSalesOrderApprovalCallback(uc)
 	})
 
