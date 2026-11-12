@@ -36,8 +36,12 @@ func (m *memMfg) GetBOMByID(_ context.Context, id uuid.UUID) (*domain.BillOfMate
 }
 
 func (m *memMfg) CreateGenealogy(_ context.Context, _ *domain.BatchGenealogy) error { return nil }
-func (m *memMfg) GetBackwardTraceability(_ context.Context, _ string) ([]domain.BatchGenealogy, error) { return nil, nil }
-func (m *memMfg) GetForwardTraceability(_ context.Context, _ string) ([]domain.BatchGenealogy, error) { return nil, nil }
+func (m *memMfg) GetBackwardTraceability(_ context.Context, _ string) ([]domain.BatchGenealogy, error) {
+	return nil, nil
+}
+func (m *memMfg) GetForwardTraceability(_ context.Context, _ string) ([]domain.BatchGenealogy, error) {
+	return nil, nil
+}
 func (m *memMfg) CreateOrder(_ context.Context, o *domain.ProductionOrder) error {
 	o.ID = uuid.New()
 	o.CreatedAt = time.Now()

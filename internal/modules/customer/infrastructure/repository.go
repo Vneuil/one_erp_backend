@@ -28,7 +28,7 @@ func (r *customerRepository) Create(ctx context.Context, customer *domain.Custom
 
 func (r *customerRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Customer, error) {
 	var customer domain.Customer
-	err := r.db.WithContext(ctx).Where("id = ?", id).First(&customer).Error
+	err := r.db.WithContext(ctx).Preload("ShippingAddresses").Where("id = ?", id).First(&customer).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -40,7 +40,7 @@ func (r *customerRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain
 
 func (r *customerRepository) GetByCode(ctx context.Context, code string) (*domain.Customer, error) {
 	var customer domain.Customer
-	err := r.db.WithContext(ctx).Where("code = ?", code).First(&customer).Error
+	err := r.db.WithContext(ctx).Preload("ShippingAddresses").Where("code = ?", code).First(&customer).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -78,17 +78,23 @@ func (r *customerRepository) List(ctx context.Context, query types.PaginationQue
 	err := db.Order(fmt.Sprintf("%s %s", sortField, sortDir)).
 		Offset(offset).
 		Limit(query.PerPage).
+		Preload("ShippingAddresses").
 		Find(&customers).Error
 
 	return customers, total, err
 }
 
 func (r *customerRepository) Update(ctx context.Context, customer *domain.Customer) error {
-	return r.db.WithContext(ctx).Save(customer).Error
+	return r.db.WithContext(ctx).Omit("ShippingAddresses").Save(customer).Error
 }
 
 func (r *customerRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	return r.db.WithContext(ctx).Delete(&domain.Customer{}, id).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("customer_id = ?", id).Delete(&domain.CustomerAddress{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&domain.Customer{}, id).Error
+	})
 }
 
 func (r *customerRepository) Count(ctx context.Context) (int64, error) {
@@ -112,7 +118,7 @@ func (r *customerRepository) HasReferences(ctx context.Context, name string) (bo
 		column string
 	}{
 		{"sales_orders", "customer_name"},
-		{"invoices", "customer_name"},
+		{"sales_invoices", "customer_name"},
 		{"quotations", "customer_name"},
 		{"crm_deals", "customer"},
 	}
@@ -131,4 +137,27 @@ func (r *customerRepository) HasReferences(ctx context.Context, name string) (bo
 		}
 	}
 	return false, nil
+}
+
+func (r *customerRepository) CodesWithPrefix(ctx context.Context, prefix string) ([]string, error) {
+	var codes []string
+	err := r.db.WithContext(ctx).Model(&domain.Customer{}).
+		Where("code LIKE ?", prefix+"%").Pluck("code", &codes).Error
+	return codes, err
+}
+
+func (r *customerRepository) ReplaceShippingAddresses(ctx context.Context, customerID uuid.UUID, addrs []domain.CustomerAddress) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("customer_id = ?", customerID).Delete(&domain.CustomerAddress{}).Error; err != nil {
+			return err
+		}
+		if len(addrs) == 0 {
+			return nil
+		}
+		for i := range addrs {
+			addrs[i].ID = uuid.Nil
+			addrs[i].CustomerID = customerID
+		}
+		return tx.Create(&addrs).Error
+	})
 }

@@ -27,6 +27,9 @@ func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager
 	tenantMgr.RegisterSchema(tenantMgr.SchemaMigrator{
 		Name: "inventory",
 		Migrate: func(tenantDB *gorm.DB) error {
+			if err := renameLegacyWarehouseCodes(tenantDB); err != nil {
+				return err
+			}
 			return tenantDB.AutoMigrate(
 				&domain.Warehouse{},
 				&domain.StockLevel{},
@@ -55,4 +58,22 @@ func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager
 	return &Module{
 		Handler: handler,
 	}
+}
+
+// renameLegacyWarehouseCodes moves the old demo codes (WH-CKR, WH-SBY) onto the
+// "GDG NN" scheme Manna uses. It only renames when the target code is free and
+// the table already exists, so it is safe to run on every migrate.
+func renameLegacyWarehouseCodes(db *gorm.DB) error {
+	if !db.Migrator().HasTable(&domain.Warehouse{}) {
+		return nil
+	}
+	for old, next := range map[string]string{"WH-CKR": "GDG 01", "WH-SBY": "GDG 02"} {
+		if err := db.Exec(
+			"UPDATE inventory_warehouses SET code = ? WHERE code = ? AND NOT EXISTS (SELECT 1 FROM inventory_warehouses WHERE code = ?)",
+			next, old, next,
+		).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }

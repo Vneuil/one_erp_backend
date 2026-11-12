@@ -18,6 +18,7 @@ type SupplierUseCase interface {
 	List(ctx context.Context, query types.PaginationQuery) ([]SupplierResponseDTO, types.PaginationMeta, error)
 	Update(ctx context.Context, id uuid.UUID, dto UpdateSupplierDTO) (*SupplierResponseDTO, error)
 	Delete(ctx context.Context, id uuid.UUID) error
+	SetStatus(ctx context.Context, id uuid.UUID, status string) (*SupplierResponseDTO, error)
 	SeedInitialData(ctx context.Context) error
 }
 
@@ -38,12 +39,23 @@ func (uc *supplierUseCase) Create(ctx context.Context, dto CreateSupplierDTO) (*
 	}
 	// The code is generated when the client does not supply one, so the UI never
 	// has to guess the next number (and collide with an existing record).
+	vendorType, ok := normalizeVendorType(dto.VendorType)
+	if !ok {
+		return nil, apperrors.NewBadRequest("Vendor type must be 2-4 letters (e.g. PRD, PCK, ATK)")
+	}
 	if code == "" {
-		generated, err := uc.nextCode(ctx)
+		if vendorType == "" {
+			return nil, apperrors.NewBadRequest("Vendor type is required (PRD, PCK, ATK) to generate the vendor code")
+		}
+		generated, err := uc.nextCode(ctx, vendorType)
 		if err != nil {
 			return nil, apperrors.NewInternal(err, "Failed to generate supplier code")
 		}
 		code = generated
+	} else if t, valid := vendorCodeType(code); valid {
+		if vendorType == "" {
+			vendorType = t
+		}
 	}
 
 	existing, err := uc.repo.GetByCode(ctx, code)
@@ -80,6 +92,11 @@ func (uc *supplierUseCase) Create(ctx context.Context, dto CreateSupplierDTO) (*
 		Email:         dto.Email,
 		Phone:         dto.Phone,
 		Address:       dto.Address,
+		VendorType:    vendorType,
+		City:          defaultCity(dto.City),
+		Province:      dto.Province,
+		PostalCode:    dto.PostalCode,
+		PaymentTerm:   strings.TrimSpace(dto.PaymentTerm),
 		NPWP:          npwp,
 		NIK:           nik,
 		Category:      category,
@@ -124,6 +141,44 @@ func (uc *supplierUseCase) Update(ctx context.Context, id uuid.UUID, dto UpdateS
 		return nil, apperrors.NewNotFound("Supplier not found")
 	}
 
+	if dto.Code != nil {
+		newCode := strings.ToUpper(strings.TrimSpace(*dto.Code))
+		if newCode != "" && newCode != supplier.Code {
+			if _, valid := vendorCodeType(newCode); !valid {
+				return nil, apperrors.NewBadRequest("Vendor code must follow VD-<TYPE>-<NNN>, e.g. VD-PRD-001")
+			}
+			existing, err := uc.repo.GetByCode(ctx, newCode)
+			if err != nil {
+				return nil, apperrors.NewInternal(err, "Failed to check existing code")
+			}
+			if existing != nil && existing.ID != supplier.ID {
+				return nil, apperrors.NewConflict("Supplier with this code already exists")
+			}
+			supplier.Code = newCode
+			if t, _ := vendorCodeType(newCode); t != "" {
+				supplier.VendorType = t
+			}
+		}
+	}
+	if dto.VendorType != nil {
+		t, ok := normalizeVendorType(*dto.VendorType)
+		if !ok {
+			return nil, apperrors.NewBadRequest("Vendor type must be 2-4 letters (e.g. PRD, PCK, ATK)")
+		}
+		supplier.VendorType = t
+	}
+	if dto.City != nil {
+		supplier.City = defaultCity(*dto.City)
+	}
+	if dto.Province != nil {
+		supplier.Province = *dto.Province
+	}
+	if dto.PostalCode != nil {
+		supplier.PostalCode = *dto.PostalCode
+	}
+	if dto.PaymentTerm != nil {
+		supplier.PaymentTerm = strings.TrimSpace(*dto.PaymentTerm)
+	}
 	if dto.BatchCode != nil {
 		supplier.BatchCode = strings.ToUpper(strings.TrimSpace(*dto.BatchCode))
 	}
@@ -160,7 +215,11 @@ func (uc *supplierUseCase) Update(ctx context.Context, id uuid.UUID, dto UpdateS
 		supplier.Category = *dto.Category
 	}
 	if dto.Status != nil {
-		supplier.Status = *dto.Status
+		status, err := normalizeStatus(*dto.Status)
+		if err != nil {
+			return nil, err
+		}
+		supplier.Status = status
 	}
 
 	if err := uc.repo.Update(ctx, supplier); err != nil {
@@ -195,7 +254,7 @@ func (uc *supplierUseCase) SeedInitialData(ctx context.Context) error {
 
 	initial := []CreateSupplierDTO{
 		{
-			Code:          "SUP-001",
+			Code:          "VD-PRD-001",
 			Name:          "PT Surya Perkasa Paper",
 			ContactPerson: "Hendro Wijaya",
 			Email:         "sales@suryaperkasa.com",
@@ -205,7 +264,7 @@ func (uc *supplierUseCase) SeedInitialData(ctx context.Context) error {
 			Status:        "Active",
 		},
 		{
-			Code:          "SUP-002",
+			Code:          "VD-PRD-002",
 			Name:          "PT Indo Steel Perkasa",
 			ContactPerson: "Ir. Bambang",
 			Email:         "order@indosteel.co.id",
@@ -222,19 +281,58 @@ func (uc *supplierUseCase) SeedInitialData(ctx context.Context) error {
 	return nil
 }
 
-// nextCode returns the first unused "SUP-NNN" code, starting after the current record count.
-func (uc *supplierUseCase) nextCode(ctx context.Context) (string, error) {
-	count, err := uc.repo.Count(ctx)
+// SetStatus activates or deactivates a vendor. Vendors are never hard-deleted in
+// day-to-day use; deactivating keeps every historical PO/PI intact.
+func (uc *supplierUseCase) SetStatus(ctx context.Context, id uuid.UUID, status string) (*SupplierResponseDTO, error) {
+	normalized, err := normalizeStatus(status)
+	if err != nil {
+		return nil, err
+	}
+	supplier, err := uc.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get supplier")
+	}
+	if supplier == nil {
+		return nil, apperrors.NewNotFound("Supplier not found")
+	}
+	supplier.Status = normalized
+	if err := uc.repo.Update(ctx, supplier); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to update supplier status")
+	}
+	return ToSupplierResponse(supplier), nil
+}
+
+func normalizeStatus(s string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "active":
+		return "Active", nil
+	case "inactive":
+		return "Inactive", nil
+	}
+	return "", apperrors.NewBadRequest("Status must be Active or Inactive")
+}
+
+// defaultCity falls back to Semarang, Manna's home base, when no city is given.
+func defaultCity(c string) string {
+	if c = strings.TrimSpace(c); c != "" {
+		return c
+	}
+	return "Semarang"
+}
+
+// nextCode returns the next free "VD-<TYPE>-NNN" code for the vendor type.
+func (uc *supplierUseCase) nextCode(ctx context.Context, vendorType string) (string, error) {
+	existing, err := uc.repo.CodesWithPrefix(ctx, vendorCodePrefix+vendorType+"-")
 	if err != nil {
 		return "", err
 	}
-	for n := count + 1; n < count+10000; n++ {
-		candidate := fmt.Sprintf("SUP-%03d", n)
-		existing, err := uc.repo.GetByCode(ctx, candidate)
+	for seq := nextVendorSeq(vendorType, existing); seq < 1000000; seq++ {
+		candidate := formatVendorCode(vendorType, seq)
+		taken, err := uc.repo.GetByCode(ctx, candidate)
 		if err != nil {
 			return "", err
 		}
-		if existing == nil {
+		if taken == nil {
 			return candidate, nil
 		}
 	}

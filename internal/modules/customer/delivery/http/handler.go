@@ -141,3 +141,23 @@ func (h *Handler) Delete(c *fiber.Ctx) error {
 
 	return response.OK(c, "Customer deleted successfully", nil)
 }
+
+func (h *Handler) SetStatus(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid customer ID format")
+	}
+	var dto application.SetStatusDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	customer, err := uc.SetStatus(h.ctx(c), id, dto.Status)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Customer status updated successfully", customer)
+}

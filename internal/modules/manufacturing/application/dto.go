@@ -104,13 +104,13 @@ type CreateProductionOrderDTO struct {
 }
 
 type StepResponseDTO struct {
-	ID                  uuid.UUID  `json:"id"`
-	Sequence            int        `json:"sequence"`
-	Name                string     `json:"name"`
-	StandardMinutes     float64    `json:"standardMinutes"`
-	LaborRatePerHour    float64    `json:"laborRatePerHour"`
-	OverheadRatePerHour float64    `json:"overheadRatePerHour"`
-	QuantityDone        int        `json:"quantityDone"`
+	ID                  uuid.UUID `json:"id"`
+	Sequence            int       `json:"sequence"`
+	Name                string    `json:"name"`
+	StandardMinutes     float64   `json:"standardMinutes"`
+	LaborRatePerHour    float64   `json:"laborRatePerHour"`
+	OverheadRatePerHour float64   `json:"overheadRatePerHour"`
+	QuantityDone        int       `json:"quantityDone"`
 	// WaitingQuantity is how many units have reached this step but not finished it yet.
 	WaitingQuantity int        `json:"waitingQuantity"`
 	Status          string     `json:"status"`

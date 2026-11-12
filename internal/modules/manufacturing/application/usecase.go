@@ -1035,4 +1035,3 @@ func (uc *manufacturingUseCase) GetForwardTraceability(ctx context.Context, mate
 	}
 	return records, nil
 }
-

@@ -77,4 +77,3 @@ func TestTC_PRD_005_BulkTraceabilitySerialsGeneration(t *testing.T) {
 		seen[s] = true
 	}
 }
-

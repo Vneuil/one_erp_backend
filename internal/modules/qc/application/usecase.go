@@ -221,6 +221,8 @@ func (uc *qcUseCase) CreateInspection(ctx context.Context, inspectorID uuid.UUID
 		Iteration:         1,
 		OverallStatus:     domain.QCStatusPassed,
 		Notes:             strings.TrimSpace(dto.Notes),
+		SugarCondition:    strings.TrimSpace(dto.SugarCondition),
+		PackageCondition:  strings.TrimSpace(dto.PackageCondition),
 		Items:             make([]domain.QCInspectionItem, 0, len(dto.Items)),
 	}
 
@@ -409,6 +411,8 @@ func mapInspectionToDTO(insp *domain.QCInspection) QCInspectionResponseDTO {
 		Iteration:         insp.Iteration,
 		OverallStatus:     insp.OverallStatus,
 		Notes:             insp.Notes,
+		SugarCondition:    insp.SugarCondition,
+		PackageCondition:  insp.PackageCondition,
 		IsVoided:          insp.IsVoided,
 		VoidReason:        insp.VoidReason,
 		VoidedBy:          insp.VoidedBy,

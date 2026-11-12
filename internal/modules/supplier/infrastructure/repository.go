@@ -119,3 +119,10 @@ func (r *supplierRepository) HasReferences(ctx context.Context, id uuid.UUID) (b
 	}
 	return false, nil
 }
+
+func (r *supplierRepository) CodesWithPrefix(ctx context.Context, prefix string) ([]string, error) {
+	var codes []string
+	err := r.db.WithContext(ctx).Model(&domain.Supplier{}).
+		Where("code LIKE ?", prefix+"%").Pluck("code", &codes).Error
+	return codes, err
+}

@@ -74,4 +74,3 @@ func CalculateAttendanceReward(isTop3 bool) (float64, string) {
 	}
 	return 0, ""
 }
-

@@ -302,24 +302,24 @@ func (BatchGenealogy) TableName() string { return "manufacturing_batch_genealogy
 const (
 	RequisitionTypeRawMaterial = "raw_material" // BPB / GDG-011-BPB
 	RequisitionTypePackaging   = "packaging"    // PBPK / GDG-012-BPK
-	RequisitionTypeLiquidSugar = "liquid_sugar"  // LPC / GDG-008-LPC
+	RequisitionTypeLiquidSugar = "liquid_sugar" // LPC / GDG-008-LPC
 )
 
 // MaterialRequisition tracks requisition of raw materials, packaging, and liquid sugar (BPB, PBPK, LPC)
 type MaterialRequisition struct {
 	types.BaseEntity
-	RequestNo       string                       `gorm:"type:varchar(50);uniqueIndex;not null" json:"requestNo"`
-	RequisitionType string                       `gorm:"type:varchar(30);not null;index" json:"requisitionType"`
-	ProductionOrderID *uuid.UUID                 `gorm:"type:uuid;index" json:"productionOrderId,omitempty"`
-	OrderNumber     string                       `gorm:"type:varchar(50)" json:"orderNumber,omitempty"`
-	RequestDate     string                       `gorm:"type:varchar(10);not null;index" json:"requestDate"`
-	Department      string                       `gorm:"type:varchar(100);not null" json:"department"`
-	RequestedBy     string                       `gorm:"type:varchar(150);not null" json:"requestedBy"`
-	IssuedBy        string                       `gorm:"type:varchar(150)" json:"issuedBy,omitempty"`
-	Status          string                       `gorm:"type:varchar(30);not null;default:'submitted'" json:"status"` // draft, submitted, issued, completed, cancelled
-	Notes           string                       `gorm:"type:text" json:"notes,omitempty"`
-	Lines           []MaterialRequisitionLine    `gorm:"foreignKey:RequisitionID" json:"lines,omitempty"`
-	DispensingItems []LiquidSugarDispensingItem  `gorm:"foreignKey:RequisitionID" json:"dispensingItems,omitempty"`
+	RequestNo         string                      `gorm:"type:varchar(50);uniqueIndex;not null" json:"requestNo"`
+	RequisitionType   string                      `gorm:"type:varchar(30);not null;index" json:"requisitionType"`
+	ProductionOrderID *uuid.UUID                  `gorm:"type:uuid;index" json:"productionOrderId,omitempty"`
+	OrderNumber       string                      `gorm:"type:varchar(50)" json:"orderNumber,omitempty"`
+	RequestDate       string                      `gorm:"type:varchar(10);not null;index" json:"requestDate"`
+	Department        string                      `gorm:"type:varchar(100);not null" json:"department"`
+	RequestedBy       string                      `gorm:"type:varchar(150);not null" json:"requestedBy"`
+	IssuedBy          string                      `gorm:"type:varchar(150)" json:"issuedBy,omitempty"`
+	Status            string                      `gorm:"type:varchar(30);not null;default:'submitted'" json:"status"` // draft, submitted, issued, completed, cancelled
+	Notes             string                      `gorm:"type:text" json:"notes,omitempty"`
+	Lines             []MaterialRequisitionLine   `gorm:"foreignKey:RequisitionID" json:"lines,omitempty"`
+	DispensingItems   []LiquidSugarDispensingItem `gorm:"foreignKey:RequisitionID" json:"dispensingItems,omitempty"`
 }
 
 func (MaterialRequisition) TableName() string { return "manufacturing_material_requisitions" }
@@ -327,17 +327,17 @@ func (MaterialRequisition) TableName() string { return "manufacturing_material_r
 // MaterialRequisitionLine represents single item requested
 type MaterialRequisitionLine struct {
 	types.BaseEntity
-	RequisitionID    uuid.UUID `gorm:"type:uuid;not null;index" json:"requisitionId"`
-	ProductID        uuid.UUID `gorm:"type:uuid;not null;index" json:"productId"`
-	ProductName      string    `gorm:"type:varchar(255);not null" json:"productName"`
-	BatchNo          string    `gorm:"type:varchar(50)" json:"batchNo,omitempty"`
+	RequisitionID     uuid.UUID `gorm:"type:uuid;not null;index" json:"requisitionId"`
+	ProductID         uuid.UUID `gorm:"type:uuid;not null;index" json:"productId"`
+	ProductName       string    `gorm:"type:varchar(255);not null" json:"productName"`
+	BatchNo           string    `gorm:"type:varchar(50)" json:"batchNo,omitempty"`
 	QuantityRequested float64   `gorm:"type:decimal(15,3);not null" json:"quantityRequested"`
-	QuantityIssued   float64   `gorm:"type:decimal(15,3);default:0" json:"quantityIssued"`
-	QuantityUsed     float64   `gorm:"type:decimal(15,3);default:0" json:"quantityUsed"`
-	QuantityReject   float64   `gorm:"type:decimal(15,3);default:0" json:"quantityReject"`
-	QuantityReturned float64   `gorm:"type:decimal(15,3);default:0" json:"quantityReturned"`
-	UoM              string    `gorm:"type:varchar(20);not null" json:"uom"`
-	Notes            string    `gorm:"type:varchar(255)" json:"notes,omitempty"`
+	QuantityIssued    float64   `gorm:"type:decimal(15,3);default:0" json:"quantityIssued"`
+	QuantityUsed      float64   `gorm:"type:decimal(15,3);default:0" json:"quantityUsed"`
+	QuantityReject    float64   `gorm:"type:decimal(15,3);default:0" json:"quantityReject"`
+	QuantityReturned  float64   `gorm:"type:decimal(15,3);default:0" json:"quantityReturned"`
+	UoM               string    `gorm:"type:varchar(20);not null" json:"uom"`
+	Notes             string    `gorm:"type:varchar(255)" json:"notes,omitempty"`
 }
 
 func (MaterialRequisitionLine) TableName() string { return "manufacturing_material_requisition_lines" }
@@ -380,21 +380,20 @@ func (OvenProductionLog) TableName() string { return "manufacturing_oven_logs" }
 // OvenCycleLine logs one cycle of drying
 type OvenCycleLine struct {
 	types.BaseEntity
-	OvenLogID          uuid.UUID `gorm:"type:uuid;not null;index" json:"ovenLogId"`
-	CycleNumber        int       `gorm:"not null" json:"cycleNumber"`
-	TimeIn             string    `gorm:"type:varchar(10);not null" json:"timeIn"`
-	TimeOut            string    `gorm:"type:varchar(10);not null" json:"timeOut"`
-	Temperature        float64   `gorm:"type:decimal(6,2);not null" json:"temperature"`
-	TrayWeight         float64   `gorm:"type:decimal(10,3);not null" json:"trayWeight"`
-	PaperWeight        float64   `gorm:"type:decimal(10,3);not null" json:"paperWeight"`
-	GrossInWeight      float64   `gorm:"type:decimal(10,3);not null" json:"grossInWeight"`
-	GrossOutWeight     float64   `gorm:"type:decimal(10,3);not null" json:"grossOutWeight"`
-	NetWetWeight       float64   `gorm:"type:decimal(10,3);not null" json:"netWetWeight"`
-	NetDryWeight       float64   `gorm:"type:decimal(10,3);not null" json:"netDryWeight"`
-	MoistureLossPercent float64  `gorm:"type:decimal(6,2);not null" json:"moistureLossPercent"`
-	MoistureContent    float64   `gorm:"type:decimal(6,2)" json:"moistureContent"`
-	Notes              string    `gorm:"type:varchar(255)" json:"notes,omitempty"`
+	OvenLogID           uuid.UUID `gorm:"type:uuid;not null;index" json:"ovenLogId"`
+	CycleNumber         int       `gorm:"not null" json:"cycleNumber"`
+	TimeIn              string    `gorm:"type:varchar(10);not null" json:"timeIn"`
+	TimeOut             string    `gorm:"type:varchar(10);not null" json:"timeOut"`
+	Temperature         float64   `gorm:"type:decimal(6,2);not null" json:"temperature"`
+	TrayWeight          float64   `gorm:"type:decimal(10,3);not null" json:"trayWeight"`
+	PaperWeight         float64   `gorm:"type:decimal(10,3);not null" json:"paperWeight"`
+	GrossInWeight       float64   `gorm:"type:decimal(10,3);not null" json:"grossInWeight"`
+	GrossOutWeight      float64   `gorm:"type:decimal(10,3);not null" json:"grossOutWeight"`
+	NetWetWeight        float64   `gorm:"type:decimal(10,3);not null" json:"netWetWeight"`
+	NetDryWeight        float64   `gorm:"type:decimal(10,3);not null" json:"netDryWeight"`
+	MoistureLossPercent float64   `gorm:"type:decimal(6,2);not null" json:"moistureLossPercent"`
+	MoistureContent     float64   `gorm:"type:decimal(6,2)" json:"moistureContent"`
+	Notes               string    `gorm:"type:varchar(255)" json:"notes,omitempty"`
 }
 
 func (OvenCycleLine) TableName() string { return "manufacturing_oven_cycle_lines" }
-

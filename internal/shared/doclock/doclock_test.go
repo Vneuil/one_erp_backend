@@ -45,4 +45,3 @@ func TestDraftDocumentModificationAllowed(t *testing.T) {
 		t.Fatalf("expected draft modification allowed, got %v", err)
 	}
 }
-

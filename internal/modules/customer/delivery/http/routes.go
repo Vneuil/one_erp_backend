@@ -16,5 +16,7 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	customers.Get("/", h.List)
 	customers.Get("/:id", h.GetByID)
 	customers.Put("/:id", h.Update)
-	customers.Delete("/:id", h.Delete)
+	// Deactivate/reactivate and hard delete: Manager or Admin only (staff cannot remove customers).
+	customers.Patch("/:id/status", middleware.RequireRoles("admin", "manager"), h.SetStatus)
+	customers.Delete("/:id", middleware.RequireRoles("admin", "manager"), h.Delete)
 }

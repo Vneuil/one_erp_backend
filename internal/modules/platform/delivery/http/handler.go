@@ -157,4 +157,3 @@ func (h *Handler) CreatePayment(c *fiber.Ctx) error {
 
 	return response.OK(c, "Payment processed", data)
 }
-

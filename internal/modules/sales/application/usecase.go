@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	productDomain "github.com/divinecoid/one-backend/internal/modules/product/domain"
@@ -39,6 +40,8 @@ type SalesUseCase interface {
 	ApproveOrder(ctx context.Context, id uuid.UUID, dto SalesApprovalActionDTO) (*SalesOrderResponseDTO, error)
 	RejectOrder(ctx context.Context, id uuid.UUID, dto SalesApprovalActionDTO) (*SalesOrderResponseDTO, error)
 	UpdateOrder(ctx context.Context, id uuid.UUID, dto UpdateSalesOrderDTO) (*SalesOrderResponseDTO, error)
+	// ListOrderRevisions returns every earlier version of the order (oldest first).
+	ListOrderRevisions(ctx context.Context, id uuid.UUID) ([]domain.SalesOrderRevision, error)
 
 	// FinalizeOrderApproved/Rejected are the single place that applies the
 	// effect of a Sales Order's approval workflow reaching a final state:
@@ -136,6 +139,19 @@ func (uc *salesUseCase) CreateOrder(ctx context.Context, dto CreateSalesOrderDTO
 
 	orderDate := time.Now().Format("2006-01-02")
 
+	packaging, err := normalizeState("packagingAvailability", dto.PackagingAvailability, "pending", packagingStates)
+	if err != nil {
+		return nil, err
+	}
+	coa, err := normalizeState("coaStatus", dto.COAStatus, "pending", coaStates)
+	if err != nil {
+		return nil, err
+	}
+	production, err := normalizeState("productionStatus", dto.ProductionStatus, "not_started", productionStates)
+	if err != nil {
+		return nil, err
+	}
+
 	currency := dto.Currency
 	baseAmount := dto.TotalAmount
 	if uc.currencyUC != nil {
@@ -160,19 +176,19 @@ func (uc *salesUseCase) CreateOrder(ctx context.Context, dto CreateSalesOrderDTO
 	}
 
 	order := &domain.SalesOrder{
-		OrderNumber:         orderNum,
-		CustomerName:        dto.CustomerName,
-		TotalAmount:         dto.TotalAmount,
-		Currency:            currency,
-		BaseAmount:          baseAmount,
-		Status:              status,
-		CreatedByEmail:      actor.EmailFrom(ctx),
-		PaymentStatus:       paymentStatus,
-		Channel:             channel,
-		OrderDate:           orderDate,
-		WarehouseID:         dto.WarehouseID,
-		Lines:               lines,
-		MarketplacePlatform: dto.MarketplacePlatform,
+		OrderNumber:          orderNum,
+		CustomerName:         dto.CustomerName,
+		TotalAmount:          dto.TotalAmount,
+		Currency:             currency,
+		BaseAmount:           baseAmount,
+		Status:               status,
+		CreatedByEmail:       actor.EmailFrom(ctx),
+		PaymentStatus:        paymentStatus,
+		Channel:              channel,
+		OrderDate:            orderDate,
+		WarehouseID:          dto.WarehouseID,
+		Lines:                lines,
+		MarketplacePlatform:  dto.MarketplacePlatform,
 		MarketplaceOrderID:   dto.MarketplaceOrderID,
 		CustomerPONumber:     dto.CustomerPONumber,
 		CustomerPOAttachment: dto.CustomerPOAttachment,
@@ -182,6 +198,11 @@ func (uc *salesUseCase) CreateOrder(ctx context.Context, dto CreateSalesOrderDTO
 		ShippingAddress:      dto.ShippingAddress,
 		ShippingCourier:      dto.ShippingCourier,
 		DeliveryDate:         dto.DeliveryDate,
+
+		PackagingAvailability: packaging,
+		COAStatus:             coa,
+		ProductionStatus:      production,
+		VATExempt:             dto.VATExempt,
 	}
 
 	if err := uc.repo.CreateOrder(ctx, order); err != nil {
@@ -251,6 +272,9 @@ func (uc *salesUseCase) SubmitOrder(ctx context.Context, id uuid.UUID) (*SalesOr
 	}
 	if !strings.EqualFold(order.Status, "draft") {
 		return nil, apperrors.NewConflict(fmt.Sprintf("Sales order in status %s cannot be submitted", order.Status))
+	}
+	if err := checkSubmitDocuments(order); err != nil {
+		return nil, err
 	}
 	requiresApproval := false
 	if uc.approvalUC != nil {
@@ -340,6 +364,9 @@ func (uc *salesUseCase) ApproveOrder(ctx context.Context, id uuid.UUID, dto Sale
 			if err != nil {
 				return nil, apperrors.NewInternal(err, "Failed to get sales order")
 			}
+			// Keep who rejected and why on the order itself, for later analysis.
+			stampRejection(order, dto)
+			_ = uc.repo.UpdateOrder(ctx, order)
 			return ToSalesOrderResponse(order), nil
 		}
 	}
@@ -458,6 +485,7 @@ func (uc *salesUseCase) RejectOrder(ctx context.Context, id uuid.UUID, dto Sales
 		return nil, apperrors.NewConflict("This sales order cannot be rejected")
 	}
 	order.Status = "rejected"
+	stampRejection(order, dto)
 	if err := uc.repo.UpdateOrder(ctx, order); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to reject sales order")
 	}
@@ -552,10 +580,50 @@ func (uc *salesUseCase) UpdateOrder(ctx context.Context, id uuid.UUID, dto Updat
 		baseAmount = result.BaseAmount
 	}
 
+	// Keep the previous version when the line items actually change, so a revised
+	// order can still be analysed later. A reason is mandatory once past draft.
+	if linesChanged(order.Lines, lines) {
+		if !strings.EqualFold(order.Status, "draft") && strings.TrimSpace(dto.RevisionReason) == "" {
+			return nil, apperrors.NewBadRequest("Revision reason is required when changing items of a submitted order")
+		}
+		snapshot, _ := json.Marshal(order.Lines)
+		order.Revision++
+		if err := uc.repo.CreateOrderRevision(ctx, &domain.SalesOrderRevision{
+			SalesOrderID: order.ID, Revision: order.Revision, ChangedBy: actor.EmailFrom(ctx),
+			Reason: strings.TrimSpace(dto.RevisionReason), TotalAmount: order.TotalAmount, LinesJSON: string(snapshot),
+		}); err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to record order revision")
+		}
+	}
+
 	order.CustomerName = strings.TrimSpace(dto.CustomerName)
 	order.TotalAmount = total
 	order.BaseAmount = baseAmount
 	order.Lines = lines
+	if dto.PackagingAvailability != nil {
+		v, err := normalizeState("packagingAvailability", *dto.PackagingAvailability, "pending", packagingStates)
+		if err != nil {
+			return nil, err
+		}
+		order.PackagingAvailability = v
+	}
+	if dto.COAStatus != nil {
+		v, err := normalizeState("coaStatus", *dto.COAStatus, "pending", coaStates)
+		if err != nil {
+			return nil, err
+		}
+		order.COAStatus = v
+	}
+	if dto.ProductionStatus != nil {
+		v, err := normalizeState("productionStatus", *dto.ProductionStatus, "not_started", productionStates)
+		if err != nil {
+			return nil, err
+		}
+		order.ProductionStatus = v
+	}
+	if dto.VATExempt != nil {
+		order.VATExempt = *dto.VATExempt
+	}
 	if dto.CustomerPONumber != nil {
 		order.CustomerPONumber = *dto.CustomerPONumber
 	}
@@ -805,6 +873,10 @@ func (uc *salesUseCase) CreateInvoice(ctx context.Context, dto CreateInvoiceDTO)
 		}
 		if order == nil {
 			return nil, apperrors.NewNotFound("Sales order not found")
+		}
+		// PPN switched off on the order (e.g. export): never add VAT to its invoices.
+		if order.VATExempt {
+			dto.ApplyVAT = false
 		}
 	}
 
@@ -1226,4 +1298,63 @@ func (uc *salesUseCase) SeedInitialData(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+func (uc *salesUseCase) ListOrderRevisions(ctx context.Context, id uuid.UUID) ([]domain.SalesOrderRevision, error) {
+	order, err := uc.repo.GetOrderByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get sales order")
+	}
+	if order == nil {
+		return nil, apperrors.NewNotFound("Sales order not found")
+	}
+	revs, err := uc.repo.ListOrderRevisions(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to list order revisions")
+	}
+	return revs, nil
+}
+
+// linesChanged compares item sets by product, quantity and unit price.
+func linesChanged(old, next []domain.SalesOrderLine) bool {
+	if len(old) != len(next) {
+		return true
+	}
+	type key struct {
+		p    uuid.UUID
+		q, u float64
+	}
+	seen := make(map[key]int, len(old))
+	for _, l := range old {
+		seen[key{l.ProductID, l.Quantity, l.UnitPrice}]++
+	}
+	for _, l := range next {
+		k := key{l.ProductID, l.Quantity, l.UnitPrice}
+		if seen[k] == 0 {
+			return true
+		}
+		seen[k]--
+	}
+	return false
+}
+
+func stampRejection(order *domain.SalesOrder, dto SalesApprovalActionDTO) {
+	now := time.Now()
+	order.RejectionReason = strings.TrimSpace(dto.Comments)
+	order.RejectedBy = dto.ActorName
+	order.RejectedAt = &now
+}
+
+// checkSubmitDocuments enforces the B2B rule: before an order goes for approval the
+// incoming PO / outgoing PI document must be uploaded (number or attachment) and/or the
+// down payment received. Marketplace and POS orders are not B2B documents and are exempt.
+func checkSubmitDocuments(o *domain.SalesOrder) error {
+	if o.MarketplacePlatform != "" || o.Channel == "POS" {
+		return nil
+	}
+	hasDoc := strings.TrimSpace(o.CustomerPONumber) != "" || strings.TrimSpace(o.CustomerPOAttachment) != ""
+	if hasDoc || o.DPPaid {
+		return nil
+	}
+	return apperrors.NewBadRequest("Upload the incoming PO / outgoing PI document, or mark the down payment as received, before submitting this order")
 }

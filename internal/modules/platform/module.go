@@ -27,4 +27,3 @@ func NewModule(db *gorm.DB, router fiber.Router) *Module {
 		Handler: handler,
 	}
 }
-

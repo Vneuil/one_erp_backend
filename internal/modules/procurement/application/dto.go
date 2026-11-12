@@ -45,11 +45,11 @@ type PurchaseRequestLineResponseDTO struct {
 }
 
 type PurchaseRequestResponseDTO struct {
-	ID           uuid.UUID                        `json:"id"`
-	RequestNo    string                           `json:"requestNo"`
-	RequestedBy  string                           `json:"requestedBy"`
-	Department   string                           `json:"department"`
-	NeededByDate string                           `json:"neededByDate"`
+	ID                   uuid.UUID                        `json:"id"`
+	RequestNo            string                           `json:"requestNo"`
+	RequestedBy          string                           `json:"requestedBy"`
+	Department           string                           `json:"department"`
+	NeededByDate         string                           `json:"neededByDate"`
 	Status               string                           `json:"status"`
 	Category             string                           `json:"category"`
 	SalesOrderID         *uuid.UUID                       `json:"salesOrderId,omitempty"`
@@ -59,8 +59,8 @@ type PurchaseRequestResponseDTO struct {
 	OwnerApprovedBy      string                           `json:"ownerApprovedBy,omitempty"`
 	OwnerApprovedAt      *time.Time                       `json:"ownerApprovedAt,omitempty"`
 	RejectionReason      string                           `json:"rejectionReason,omitempty"`
-	Lines        []PurchaseRequestLineResponseDTO `json:"lines,omitempty"`
-	CreatedAt    time.Time                        `json:"createdAt"`
+	Lines                []PurchaseRequestLineResponseDTO `json:"lines,omitempty"`
+	CreatedAt            time.Time                        `json:"createdAt"`
 }
 
 func ToPurchaseRequestResponse(pr *domain.PurchaseRequest) *PurchaseRequestResponseDTO {
@@ -208,18 +208,23 @@ type GoodsReceiptLineDTO struct {
 	WeightNet        *float64  `json:"weightNet,omitempty"`
 	WeightDiffPO     *float64  `json:"weightDiffPo,omitempty"`
 	BagWeights       string    `json:"bagWeights,omitempty"`
+	// LotNumber is optional: generated (LOT-YYMMDD-<receipt>-<line>) when empty.
+	LotNumber string `json:"lotNumber,omitempty"`
+	// Manual adjustment on top of the per-sak total (kg, signed) + mandatory reason.
+	WeightAdjustment float64 `json:"weightAdjustment,omitempty"`
+	AdjustmentReason string  `json:"adjustmentReason,omitempty"`
 }
 
 type CreateGoodsReceiptDTO struct {
-	PurchaseOrderID uuid.UUID             `json:"purchaseOrderId"`
-	ReceivedDate    string                `json:"receivedDate"`
+	PurchaseOrderID  uuid.UUID             `json:"purchaseOrderId"`
+	ReceivedDate     string                `json:"receivedDate"`
 	WarehouseID      *uuid.UUID            `json:"warehouseId,omitempty"`
 	DeliveryNoteNo   string                `json:"deliveryNoteNo,omitempty"`
 	SugarCondition   string                `json:"sugarCondition,omitempty"`
 	PackageCondition string                `json:"packageCondition,omitempty"`
 	PlasticTare      float64               `json:"plasticTare,omitempty"`
 	Notes            string                `json:"notes,omitempty"`
-	Lines           []GoodsReceiptLineDTO `json:"lines"`
+	Lines            []GoodsReceiptLineDTO `json:"lines"`
 	// ReceivedBy is set by the handler from the authenticated caller, never
 	// read from client-supplied JSON - there is no `json:"receivedBy"` tag
 	// on purpose, so BodyParser can never populate it from the request body.
@@ -236,24 +241,27 @@ type GoodsReceiptLineResponseDTO struct {
 	WeightNet                *float64  `json:"weightNet,omitempty"`
 	WeightDiffPO             *float64  `json:"weightDiffPo,omitempty"`
 	BagWeights               string    `json:"bagWeights,omitempty"`
+	LotNumber                string    `json:"lotNumber,omitempty"`
+	WeightAdjustment         float64   `json:"weightAdjustment,omitempty"`
+	AdjustmentReason         string    `json:"adjustmentReason,omitempty"`
 }
 
 type GoodsReceiptResponseDTO struct {
-	ID              uuid.UUID                     `json:"id"`
-	ReceiptNo       string                        `json:"receiptNo"`
-	DocumentCode    string                        `json:"documentCode"`
-	PurchaseOrderID uuid.UUID                     `json:"purchaseOrderId"`
-	ReceivedDate    string                        `json:"receivedDate"`
-	WarehouseID     *uuid.UUID                    `json:"warehouseId,omitempty"`
-	ReceivedBy      string                        `json:"receivedBy"`
+	ID               uuid.UUID                     `json:"id"`
+	ReceiptNo        string                        `json:"receiptNo"`
+	DocumentCode     string                        `json:"documentCode"`
+	PurchaseOrderID  uuid.UUID                     `json:"purchaseOrderId"`
+	ReceivedDate     string                        `json:"receivedDate"`
+	WarehouseID      *uuid.UUID                    `json:"warehouseId,omitempty"`
+	ReceivedBy       string                        `json:"receivedBy"`
 	Status           string                        `json:"status"`
 	DeliveryNoteNo   string                        `json:"deliveryNoteNo,omitempty"`
 	SugarCondition   string                        `json:"sugarCondition,omitempty"`
 	PackageCondition string                        `json:"packageCondition,omitempty"`
 	PlasticTare      float64                       `json:"plasticTare,omitempty"`
 	Notes            string                        `json:"notes,omitempty"`
-	Lines           []GoodsReceiptLineResponseDTO `json:"lines,omitempty"`
-	CreatedAt       time.Time                     `json:"createdAt"`
+	Lines            []GoodsReceiptLineResponseDTO `json:"lines,omitempty"`
+	CreatedAt        time.Time                     `json:"createdAt"`
 }
 
 func ToGoodsReceiptResponse(gr *domain.GoodsReceipt) *GoodsReceiptResponseDTO {
@@ -270,6 +278,9 @@ func ToGoodsReceiptResponse(gr *domain.GoodsReceipt) *GoodsReceiptResponseDTO {
 			WeightNet:                l.WeightNet,
 			WeightDiffPO:             l.WeightDiffPO,
 			BagWeights:               l.BagWeights,
+			LotNumber:                l.LotNumber,
+			WeightAdjustment:         l.WeightAdjustment,
+			AdjustmentReason:         l.AdjustmentReason,
 		}
 	}
 	return &GoodsReceiptResponseDTO{

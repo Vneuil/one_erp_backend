@@ -18,6 +18,7 @@ type CustomerUseCase interface {
 	List(ctx context.Context, query types.PaginationQuery) ([]CustomerResponseDTO, types.PaginationMeta, error)
 	Update(ctx context.Context, id uuid.UUID, dto UpdateCustomerDTO) (*CustomerResponseDTO, error)
 	Delete(ctx context.Context, id uuid.UUID) error
+	SetStatus(ctx context.Context, id uuid.UUID, status string) (*CustomerResponseDTO, error)
 	SeedInitialData(ctx context.Context) error
 }
 
@@ -36,10 +37,17 @@ func (uc *customerUseCase) Create(ctx context.Context, dto CreateCustomerDTO) (*
 	if name == "" {
 		return nil, apperrors.NewBadRequest("Customer Name is required")
 	}
+	ctype, err := normalizeCustomerType(dto.CustomerType, code)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateB2BContact(ctype, dto.ContactPerson, dto.ContactPhone, dto.ContactMobile, dto.ContactWhatsapp); err != nil {
+		return nil, err
+	}
 	// The code is generated when the client does not supply one, so the UI never
 	// has to guess the next number (and collide with an existing record).
 	if code == "" {
-		generated, err := uc.nextCode(ctx)
+		generated, err := uc.nextCode(ctx, ctype)
 		if err != nil {
 			return nil, apperrors.NewInternal(err, "Failed to generate customer code")
 		}
@@ -61,6 +69,9 @@ func (uc *customerUseCase) Create(ctx context.Context, dto CreateCustomerDTO) (*
 	segment := dto.Segment
 	if segment == "" {
 		segment = "Enterprise B2B"
+		if ctype == CustomerTypeB2C {
+			segment = "Retail Individual"
+		}
 	}
 
 	npwp, err := taxid.NPWP(dto.NPWP)
@@ -73,19 +84,35 @@ func (uc *customerUseCase) Create(ctx context.Context, dto CreateCustomerDTO) (*
 	}
 
 	customer := &domain.Customer{
-		Code:    code,
-		Name:    name,
-		Email:   dto.Email,
-		Phone:   dto.Phone,
-		Address: dto.Address,
-		NPWP:    npwp,
-		NIK:     nik,
-		Segment: segment,
-		Status:  status,
+		Code:          code,
+		CustomerType:  ctype,
+		Name:          name,
+		Email:         dto.Email,
+		Phone:         dto.Phone,
+		Address:       dto.Address,
+		City:          defaultCity(dto.City),
+		Province:      dto.Province,
+		PostalCode:    dto.PostalCode,
+		NPWP:          npwp,
+		NIK:           nik,
+		Segment:       segment,
+		Status:        status,
+		ContactPerson: strings.TrimSpace(dto.ContactPerson),
+		ContactPhone:  strings.TrimSpace(dto.ContactPhone),
+		ContactMobile: strings.TrimSpace(dto.ContactMobile),
+		ContactWA:     strings.TrimSpace(dto.ContactWhatsapp),
 	}
 
 	if err := uc.repo.Create(ctx, customer); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to create customer")
+	}
+	if len(dto.ShippingAddresses) > 0 {
+		if err := uc.repo.ReplaceShippingAddresses(ctx, customer.ID, toAddressEntities(dto.ShippingAddresses)); err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to save shipping addresses")
+		}
+		if reloaded, _ := uc.repo.GetByID(ctx, customer.ID); reloaded != nil {
+			customer = reloaded
+		}
 	}
 
 	return ToCustomerResponse(customer), nil
@@ -125,6 +152,34 @@ func (uc *customerUseCase) Update(ctx context.Context, id uuid.UUID, dto UpdateC
 	if dto.Name != nil {
 		customer.Name = *dto.Name
 	}
+	if dto.CustomerType != nil {
+		t, err := normalizeCustomerType(*dto.CustomerType, "")
+		if err != nil {
+			return nil, err
+		}
+		customer.CustomerType = t
+	}
+	if dto.City != nil {
+		customer.City = defaultCity(*dto.City)
+	}
+	if dto.Province != nil {
+		customer.Province = *dto.Province
+	}
+	if dto.PostalCode != nil {
+		customer.PostalCode = *dto.PostalCode
+	}
+	if dto.ContactPerson != nil {
+		customer.ContactPerson = strings.TrimSpace(*dto.ContactPerson)
+	}
+	if dto.ContactPhone != nil {
+		customer.ContactPhone = strings.TrimSpace(*dto.ContactPhone)
+	}
+	if dto.ContactMobile != nil {
+		customer.ContactMobile = strings.TrimSpace(*dto.ContactMobile)
+	}
+	if dto.ContactWhatsapp != nil {
+		customer.ContactWA = strings.TrimSpace(*dto.ContactWhatsapp)
+	}
 	if dto.Email != nil {
 		customer.Email = *dto.Email
 	}
@@ -152,11 +207,28 @@ func (uc *customerUseCase) Update(ctx context.Context, id uuid.UUID, dto UpdateC
 		customer.Segment = *dto.Segment
 	}
 	if dto.Status != nil {
-		customer.Status = *dto.Status
+		status, err := normalizeStatus(*dto.Status)
+		if err != nil {
+			return nil, err
+		}
+		customer.Status = status
+	}
+
+	// Only explicit B2B records are validated; legacy rows without a type stay editable.
+	if err := validateB2BContact(customer.CustomerType, customer.ContactPerson, customer.ContactPhone, customer.ContactMobile, customer.ContactWA); err != nil {
+		return nil, err
 	}
 
 	if err := uc.repo.Update(ctx, customer); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to update customer")
+	}
+	if dto.ShippingAddresses != nil {
+		if err := uc.repo.ReplaceShippingAddresses(ctx, customer.ID, toAddressEntities(*dto.ShippingAddresses)); err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to save shipping addresses")
+		}
+		if reloaded, _ := uc.repo.GetByID(ctx, customer.ID); reloaded != nil {
+			customer = reloaded
+		}
 	}
 
 	return ToCustomerResponse(customer), nil
@@ -194,31 +266,34 @@ func (uc *customerUseCase) SeedInitialData(ctx context.Context) error {
 
 	initial := []CreateCustomerDTO{
 		{
-			Code:    "CUST-001",
-			Name:    "PT Graha Konstruksi Nusantara",
-			Email:   "procurement@grahakonstruksi.co.id",
-			Phone:   "+62 21 8901 2345",
-			Address: "Kawasan Industri MM2100 Blok C, Cikarang Barat",
-			Segment: "Enterprise B2B",
-			Status:  "Active",
+			Code:          "B2B-0001",
+			Name:          "PT Graha Konstruksi Nusantara",
+			Email:         "procurement@grahakonstruksi.co.id",
+			Phone:         "+62 21 8901 2345",
+			Address:       "Kawasan Industri MM2100 Blok C, Cikarang Barat",
+			Segment:       "Enterprise B2B",
+			Status:        "Active",
+			ContactPerson: "Bagian Pengadaan", ContactPhone: "+62 21 8901 2345",
 		},
 		{
-			Code:    "CUST-002",
-			Name:    "CV Surya Makmur Logistik",
-			Email:   "order@suryamakmur.id",
-			Phone:   "+62 31 5566 7788",
-			Address: "Jl. Rungkut Industri Raya No. 45, Surabaya",
-			Segment: "Wholesale & Distributor",
-			Status:  "Active",
+			Code:          "B2B-0002",
+			Name:          "CV Surya Makmur Logistik",
+			Email:         "order@suryamakmur.id",
+			Phone:         "+62 31 5566 7788",
+			Address:       "Jl. Rungkut Industri Raya No. 45, Surabaya",
+			Segment:       "Wholesale & Distributor",
+			Status:        "Active",
+			ContactPerson: "Bagian Order", ContactPhone: "+62 31 5566 7788",
 		},
 		{
-			Code:    "CUST-003",
-			Name:    "PT Sentosa Jaya Abadi",
-			Email:   "finance@sentosajaya.com",
-			Phone:   "+62 21 5544 3322",
-			Address: "Jl. Daan Mogot Km 12, Jakarta Barat",
-			Segment: "Retail Network",
-			Status:  "Active",
+			Code:          "B2B-0003",
+			Name:          "PT Sentosa Jaya Abadi",
+			Email:         "finance@sentosajaya.com",
+			Phone:         "+62 21 5544 3322",
+			Address:       "Jl. Daan Mogot Km 12, Jakarta Barat",
+			Segment:       "Retail Network",
+			Status:        "Active",
+			ContactPerson: "Bagian Keuangan", ContactPhone: "+62 21 5544 3322",
 		},
 	}
 
@@ -228,19 +303,39 @@ func (uc *customerUseCase) SeedInitialData(ctx context.Context) error {
 	return nil
 }
 
-// nextCode returns the first unused "CUST-NNN" code, starting after the current record count.
-func (uc *customerUseCase) nextCode(ctx context.Context) (string, error) {
-	count, err := uc.repo.Count(ctx)
+// SetStatus activates or deactivates a customer without touching its history.
+func (uc *customerUseCase) SetStatus(ctx context.Context, id uuid.UUID, status string) (*CustomerResponseDTO, error) {
+	normalized, err := normalizeStatus(status)
+	if err != nil {
+		return nil, err
+	}
+	customer, err := uc.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get customer")
+	}
+	if customer == nil {
+		return nil, apperrors.NewNotFound("Customer not found")
+	}
+	customer.Status = normalized
+	if err := uc.repo.Update(ctx, customer); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to update customer status")
+	}
+	return ToCustomerResponse(customer), nil
+}
+
+// nextCode returns the next free "B2B-NNNN" / "B2C-NNNN" code.
+func (uc *customerUseCase) nextCode(ctx context.Context, ctype string) (string, error) {
+	existing, err := uc.repo.CodesWithPrefix(ctx, ctype+"-")
 	if err != nil {
 		return "", err
 	}
-	for n := count + 1; n < count+10000; n++ {
-		candidate := fmt.Sprintf("CUST-%03d", n)
-		existing, err := uc.repo.GetByCode(ctx, candidate)
+	for seq := nextCustomerSeq(ctype, existing); seq < 10000000; seq++ {
+		candidate := formatCustomerCode(ctype, seq)
+		taken, err := uc.repo.GetByCode(ctx, candidate)
 		if err != nil {
 			return "", err
 		}
-		if existing == nil {
+		if taken == nil {
 			return candidate, nil
 		}
 	}

@@ -16,6 +16,7 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	sales.Get("/orders", h.ListOrders)
 	sales.Get("/orders/:id", h.GetOrderByID)
 	sales.Put("/orders/:id", h.UpdateOrder)
+	sales.Get("/orders/:id/revisions", h.ListOrderRevisions)
 	sales.Post("/orders/:id/submit", h.SubmitOrder)
 	sales.Post("/orders/:id/approve", h.ApproveOrder)
 	sales.Post("/orders/:id/reject", h.RejectOrder)
@@ -28,6 +29,14 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	sales.Get("/quotations/:id", h.GetQuotationByID)
 	sales.Put("/quotations/:id", h.UpdateQuotation)
 	sales.Post("/quotations/:id/convert", h.ConvertQuotationToOrder)
+
+	// PI / CI menu: superadmin (account role admin) only.
+	trade := sales.Group("/trade-invoices", middleware.RequireRoles("admin"))
+	trade.Post("/", h.CreateTradeInvoice)
+	trade.Get("/", h.ListTradeInvoices)
+	trade.Get("/:id", h.GetTradeInvoice)
+	trade.Post("/:id/issue", h.IssueTradeInvoice)
+	trade.Post("/:id/cancel", h.CancelTradeInvoice)
 
 	sales.Post("/invoices", h.CreateInvoice)
 	sales.Get("/invoices", h.ListInvoices)

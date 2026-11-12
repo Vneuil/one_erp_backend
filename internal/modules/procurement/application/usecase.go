@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/divinecoid/one-backend/internal/shared/actor"
 	"log/slog"
+	"strings"
 	"time"
 
 	approvalApp "github.com/divinecoid/one-backend/internal/modules/approval/application"
@@ -966,6 +967,9 @@ func (uc *procurementUseCase) CreateGoodsReceipt(ctx context.Context, dto Create
 		if !ok {
 			return nil, apperrors.NewBadRequest("Product is not part of the referenced purchase order")
 		}
+		if l.WeightAdjustment != 0 && strings.TrimSpace(l.AdjustmentReason) == "" {
+			return nil, apperrors.NewBadRequest("A manual weight adjustment requires a reason (needed for the organic audit trail)")
+		}
 		remaining := poLine.Quantity - poLine.QuantityReceived
 		if l.QuantityReceived > remaining {
 			return nil, apperrors.NewBadRequest(fmt.Sprintf("Received quantity exceeds remaining ordered quantity (%.2f) for product", remaining))
@@ -992,6 +996,9 @@ func (uc *procurementUseCase) CreateGoodsReceipt(ctx context.Context, dto Create
 			WeightNet:          l.WeightNet,
 			WeightDiffPO:       diffPO,
 			BagWeights:         l.BagWeights,
+			LotNumber:          strings.ToUpper(strings.TrimSpace(l.LotNumber)),
+			WeightAdjustment:   l.WeightAdjustment,
+			AdjustmentReason:   strings.TrimSpace(l.AdjustmentReason),
 		}
 		poLine.QuantityReceived += net
 	}
@@ -1001,20 +1008,26 @@ func (uc *procurementUseCase) CreateGoodsReceipt(ctx context.Context, dto Create
 		receivedDate = time.Now().Format("2006-01-02")
 	}
 
+	receiptSeq := time.Now().Nanosecond() % 10000
+	for i := range lines {
+		if lines[i].LotNumber == "" {
+			lines[i].LotNumber = GenerateLotNumber(time.Now(), receiptSeq, i+1)
+		}
+	}
 	gr := &domain.GoodsReceipt{
-		ReceiptNo:       fmt.Sprintf("GR-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000),
-		DocumentCode:    "GD-007-LBM",
-		PurchaseOrderID: dto.PurchaseOrderID,
-		ReceivedDate:    receivedDate,
-		WarehouseID:     dto.WarehouseID,
-		ReceivedBy:      dto.ReceivedBy,
-		Status:          "completed",
+		ReceiptNo:        fmt.Sprintf("GR-%s-%04d", time.Now().Format("200601"), receiptSeq),
+		DocumentCode:     "GD-007-LBM",
+		PurchaseOrderID:  dto.PurchaseOrderID,
+		ReceivedDate:     receivedDate,
+		WarehouseID:      dto.WarehouseID,
+		ReceivedBy:       dto.ReceivedBy,
+		Status:           "completed",
 		DeliveryNoteNo:   dto.DeliveryNoteNo,
 		SugarCondition:   dto.SugarCondition,
 		PackageCondition: dto.PackageCondition,
 		PlasticTare:      dto.PlasticTare,
 		Notes:            dto.Notes,
-		Lines:           lines,
+		Lines:            lines,
 	}
 	if err := uc.repo.CreateGoodsReceipt(ctx, gr); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to create goods receipt")
@@ -1028,7 +1041,8 @@ func (uc *procurementUseCase) CreateGoodsReceipt(ctx context.Context, dto Create
 		for _, l := range gr.Lines {
 			if _, err := uc.inventoryUC.AdjustStock(ctx, inventoryApp.AdjustStockDTO{
 				ProductID: l.ProductID, WarehouseID: *gr.WarehouseID, Quantity: int(l.QuantityReceived),
-				Reason: "Goods Receipt", Reference: gr.ReceiptNo, CreatedBy: gr.ReceivedBy,
+				BatchNo: l.LotNumber,
+				Reason:  "Goods Receipt", Reference: gr.ReceiptNo, CreatedBy: gr.ReceivedBy,
 			}); err != nil {
 				return nil, apperrors.NewInternal(err, "Goods receipt created but failed to increase stock for product "+l.ProductID.String())
 			}

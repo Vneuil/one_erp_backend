@@ -27,7 +27,6 @@ var pathsExemptFromEnforcement = []string{
 	"/api/v1/hr-self",
 }
 
-
 // Enforce is a generic, opt-in permission gate: mounted globally (see
 // cmd/server/main.go), it runs AFTER modules/activitylog.Logger in the
 // middleware chain conceptually but must itself run BEFORE the route
@@ -157,6 +156,9 @@ var moduleAliases = map[string]string{
 	"exchange-rates":        "finance",
 	"commission":            "commission",
 	"warehouse":             "warehouse",
+	// Certification and lot tracing belong to the quality function.
+	"certifications": "qc",
+	"traceability":   "qc",
 }
 
 func moduleFromPath(path string) string {

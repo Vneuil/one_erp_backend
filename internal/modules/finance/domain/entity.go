@@ -265,6 +265,7 @@ type TempAdvanceLine struct {
 }
 
 func (TempAdvanceLine) TableName() string { return "finance_temp_advance_lines" }
+
 // CashAdvance is an operational temporary cash advance (Kas Bon Sementara - KBS)
 type CashAdvance struct {
 	types.BaseEntity

@@ -13,11 +13,11 @@ type PurchaseRequest struct {
 	types.BaseEntity
 	CompanyID *uuid.UUID `gorm:"type:uuid;index" json:"companyId,omitempty"`
 	// TenantID scopes this request to one business unit within the company
-	TenantID     *uuid.UUID            `gorm:"type:uuid;index" json:"tenantId,omitempty"`
-	RequestNo    string                `gorm:"type:varchar(50);not null;index" json:"requestNo"`
-	RequestedBy  string                `gorm:"type:varchar(150);not null" json:"requestedBy"`
-	Department   string                `gorm:"type:varchar(150)" json:"department"`
-	NeededByDate string                `gorm:"type:varchar(50)" json:"neededByDate"`
+	TenantID             *uuid.UUID            `gorm:"type:uuid;index" json:"tenantId,omitempty"`
+	RequestNo            string                `gorm:"type:varchar(50);not null;index" json:"requestNo"`
+	RequestedBy          string                `gorm:"type:varchar(150);not null" json:"requestedBy"`
+	Department           string                `gorm:"type:varchar(150)" json:"department"`
+	NeededByDate         string                `gorm:"type:varchar(50)" json:"neededByDate"`
 	Status               string                `gorm:"type:varchar(50);default:'draft'" json:"status"`
 	Category             string                `gorm:"type:varchar(50);default:'inventory'" json:"category"` // inventory | non_inventory | fixed_asset
 	SalesOrderID         *uuid.UUID            `gorm:"type:uuid;index" json:"salesOrderId,omitempty"`
@@ -27,7 +27,7 @@ type PurchaseRequest struct {
 	OwnerApprovedBy      string                `gorm:"type:varchar(150)" json:"ownerApprovedBy,omitempty"`
 	OwnerApprovedAt      *time.Time            `json:"ownerApprovedAt,omitempty"`
 	RejectionReason      string                `gorm:"type:varchar(255)" json:"rejectionReason,omitempty"`
-	Lines        []PurchaseRequestLine `gorm:"foreignKey:PurchaseRequestID" json:"lines,omitempty"`
+	Lines                []PurchaseRequestLine `gorm:"foreignKey:PurchaseRequestID" json:"lines,omitempty"`
 }
 
 func (PurchaseRequest) TableName() string {
@@ -111,14 +111,14 @@ type GoodsReceipt struct {
 	// ReceivedBy is always set server-side from the authenticated caller
 	// (see handler.CreateGoodsReceipt) - never trust a client-supplied
 	// value for who received a shipment.
-	ReceivedBy string             `gorm:"type:varchar(255)" json:"receivedBy"`
+	ReceivedBy       string             `gorm:"type:varchar(255)" json:"receivedBy"`
 	Status           string             `gorm:"type:varchar(50);default:'draft'" json:"status"`
 	DeliveryNoteNo   string             `gorm:"type:varchar(100)" json:"deliveryNoteNo,omitempty"`
 	SugarCondition   string             `gorm:"type:varchar(100)" json:"sugarCondition,omitempty"`
 	PackageCondition string             `gorm:"type:varchar(100)" json:"packageCondition,omitempty"`
 	PlasticTare      float64            `gorm:"type:decimal(10,3);default:0" json:"plasticTare,omitempty"`
 	Notes            string             `gorm:"type:varchar(500)" json:"notes,omitempty"`
-	Lines      []GoodsReceiptLine `gorm:"foreignKey:GoodsReceiptID" json:"lines,omitempty"`
+	Lines            []GoodsReceiptLine `gorm:"foreignKey:GoodsReceiptID" json:"lines,omitempty"`
 }
 
 func (GoodsReceipt) TableName() string {
@@ -137,6 +137,14 @@ type GoodsReceiptLine struct {
 	WeightNet    *float64 `gorm:"type:decimal(15,3)" json:"weightNet,omitempty"`
 	WeightDiffPO *float64 `gorm:"type:decimal(15,3)" json:"weightDiffPo,omitempty"`
 	BagWeights   string   `gorm:"type:text" json:"bagWeights,omitempty"`
+	// WeightAdjustment is a manual correction (kg, may be negative) applied on top
+	// of the sum of the per-sak weights. Organic audit requires a reason whenever
+	// it is non-zero.
+	// LotNumber follows this material from receipt through production to the COI;
+	// it is also the stock batch number the received quantity is booked under.
+	LotNumber        string  `gorm:"type:varchar(60);index" json:"lotNumber,omitempty"`
+	WeightAdjustment float64 `gorm:"type:decimal(15,3);default:0" json:"weightAdjustment,omitempty"`
+	AdjustmentReason string  `gorm:"type:varchar(255)" json:"adjustmentReason,omitempty"`
 }
 
 func (GoodsReceiptLine) TableName() string {

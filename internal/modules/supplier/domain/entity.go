@@ -22,6 +22,14 @@ type Supplier struct {
 	Email         string     `gorm:"type:varchar(255)" json:"email"`
 	Phone         string     `gorm:"type:varchar(50)" json:"phone"`
 	Address       string     `gorm:"type:text" json:"address"`
+	// VendorType is the 3-letter family the code is built from: PRD (product /
+	// raw material), PCK (packaging), ATK (office supplies). Code = VD-<type>-<seq>.
+	VendorType string `gorm:"type:varchar(10);index" json:"vendorType,omitempty"`
+	City       string `gorm:"type:varchar(100);default:'Semarang'" json:"city"`
+	Province   string `gorm:"type:varchar(100)" json:"province,omitempty"`
+	PostalCode string `gorm:"type:varchar(10)" json:"postalCode,omitempty"`
+	// PaymentTerm is the name of a master Payment Term (e.g. "Net 30").
+	PaymentTerm string `gorm:"type:varchar(100)" json:"paymentTerm,omitempty"`
 	// NPWP (15/16 digits) and NIK (16 digits) identify the seller on Faktur Pajak Masukan.
 	NPWP     string `gorm:"type:varchar(20)" json:"npwp"`
 	NIK      string `gorm:"type:varchar(20)" json:"nik"`
@@ -41,6 +49,9 @@ type SupplierRepository interface {
 	Update(ctx context.Context, supplier *Supplier) error
 	Delete(ctx context.Context, id uuid.UUID) error
 	Count(ctx context.Context) (int64, error)
+	// CodesWithPrefix returns every supplier code starting with prefix, so the
+	// next sequence number for a vendor type can be derived.
+	CodesWithPrefix(ctx context.Context, prefix string) ([]string, error)
 	// HasReferences reports whether this supplier is still referenced by any
 	// Purchase Order or Purchase Invoice (both carry a real supplier_id FK),
 	// so Delete can be blocked the same way warehouse/product delete is

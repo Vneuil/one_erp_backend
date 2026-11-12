@@ -70,6 +70,8 @@ type CreateQCInspectionDTO struct {
 	ProductID         uuid.UUID                   `json:"productId" validate:"required"`
 	TestingTool       string                      `json:"testingTool,omitempty"`
 	Notes             string                      `json:"notes,omitempty"`
+	SugarCondition    string                      `json:"sugarCondition,omitempty"`
+	PackageCondition  string                      `json:"packageCondition,omitempty"`
 	Items             []CreateQCInspectionItemDTO `json:"items" validate:"required,min=1"`
 }
 
@@ -104,6 +106,8 @@ type QCInspectionResponseDTO struct {
 	Iteration         int                           `json:"iteration"`
 	OverallStatus     domain.InspectionStatus       `json:"overallStatus"`
 	Notes             string                        `json:"notes,omitempty"`
+	SugarCondition    string                        `json:"sugarCondition,omitempty"`
+	PackageCondition  string                        `json:"packageCondition,omitempty"`
 	IsVoided          bool                          `json:"isVoided"`
 	VoidReason        string                        `json:"voidReason,omitempty"`
 	VoidedBy          *uuid.UUID                    `json:"voidedBy,omitempty"`
@@ -157,4 +161,3 @@ type CreatePreOpCheckDTO struct {
 	InspectorName      string   `json:"inspectorName" validate:"required"`
 	SupervisorName     string   `json:"supervisorName,omitempty"`
 }
-

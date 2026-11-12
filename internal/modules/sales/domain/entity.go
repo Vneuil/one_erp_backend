@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"time"
 
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/google/uuid"
@@ -25,12 +26,12 @@ type SalesOrder struct {
 	// once at creation time so later rate changes never shift a past
 	// order's reported value. A company that never uses another currency
 	// simply has Currency == base and BaseAmount == TotalAmount always.
-	Currency       string  `gorm:"type:varchar(10);default:'IDR'" json:"currency"`
-	BaseAmount     float64 `gorm:"type:decimal(15,2);not null;default:0" json:"baseAmount"`
-	CreatedByEmail string  `gorm:"type:varchar(255);index" json:"createdByEmail,omitempty"`
-	Status         string  `gorm:"type:varchar(50);default:'Confirmed'" json:"status"`
-	PaymentStatus  string  `gorm:"type:varchar(50);default:'Unpaid'" json:"paymentStatus"`
-	Channel        string  `gorm:"type:varchar(50);default:'Direct B2B'" json:"channel"`
+	Currency             string  `gorm:"type:varchar(10);default:'IDR'" json:"currency"`
+	BaseAmount           float64 `gorm:"type:decimal(15,2);not null;default:0" json:"baseAmount"`
+	CreatedByEmail       string  `gorm:"type:varchar(255);index" json:"createdByEmail,omitempty"`
+	Status               string  `gorm:"type:varchar(50);default:'Confirmed'" json:"status"`
+	PaymentStatus        string  `gorm:"type:varchar(50);default:'Unpaid'" json:"paymentStatus"`
+	Channel              string  `gorm:"type:varchar(50);default:'Direct B2B'" json:"channel"`
 	OrderDate            string  `gorm:"type:varchar(50)" json:"orderDate"`
 	CustomerPONumber     string  `gorm:"type:varchar(100)" json:"customerPoNumber,omitempty"`
 	CustomerPOAttachment string  `gorm:"type:text" json:"customerPoAttachment,omitempty"`
@@ -40,6 +41,23 @@ type SalesOrder struct {
 	ShippingAddress      string  `gorm:"type:text" json:"shippingAddress,omitempty"`
 	ShippingCourier      string  `gorm:"type:varchar(100)" json:"shippingCourier,omitempty"`
 	DeliveryDate         string  `gorm:"type:varchar(50)" json:"deliveryDate,omitempty"`
+
+	// Fulfilment readiness shown on the SO (feedback Tim Manna).
+	// PackagingAvailability: pending | available | partial | unavailable
+	// COAStatus:             not_required | pending | ready
+	// ProductionStatus:      not_started | in_production | completed
+	PackagingAvailability string `gorm:"type:varchar(20);default:'pending'" json:"packagingAvailability"`
+	COAStatus             string `gorm:"type:varchar(20);default:'pending'" json:"coaStatus"`
+	ProductionStatus      string `gorm:"type:varchar(20);default:'not_started'" json:"productionStatus"`
+	// VATExempt switches PPN off for this order (e.g. export). Stored as an
+	// "exempt" flag so the zero value keeps PPN on for every existing order.
+	VATExempt bool `gorm:"default:false" json:"vatExempt"`
+	// Revision counts line-level revisions; each one snapshots the previous
+	// lines in SalesOrderRevision so a changed/rejected order can be analysed later.
+	Revision        int        `gorm:"default:0" json:"revision"`
+	RejectionReason string     `gorm:"type:varchar(500)" json:"rejectionReason,omitempty"`
+	RejectedBy      string     `gorm:"type:varchar(255)" json:"rejectedBy,omitempty"`
+	RejectedAt      *time.Time `json:"rejectedAt,omitempty"`
 
 	// MarketplacePlatform/MarketplaceOrderID identify the source marketplace
 	// order when this Sales Order was created by the marketplace sync (see
@@ -272,6 +290,10 @@ type BillingTerm struct {
 func (BillingTerm) TableName() string { return "sales_billing_terms" }
 
 type SalesRepository interface {
+	// Order revision history
+	CreateOrderRevision(ctx context.Context, rev *SalesOrderRevision) error
+	ListOrderRevisions(ctx context.Context, orderID uuid.UUID) ([]SalesOrderRevision, error)
+
 	// Billing schedule (termin)
 	ReplaceBillingTerms(ctx context.Context, orderID uuid.UUID, terms []BillingTerm) error
 	ListBillingTerms(ctx context.Context, orderID uuid.UUID) ([]BillingTerm, error)

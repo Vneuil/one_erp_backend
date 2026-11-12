@@ -619,3 +619,99 @@ func (h *Handler) RecordShippingCost(c *fiber.Ctx) error {
 	}
 	return response.OK(c, "Shipping details saved", d)
 }
+
+func (h *Handler) ListOrderRevisions(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid order ID format")
+	}
+	revs, err := uc.ListOrderRevisions(h.ctx(c), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Order revisions retrieved successfully", revs)
+}
+
+// --- PI / CI (superadmin only; the route group enforces the role) ---
+
+func (h *Handler) tradeUC(c *fiber.Ctx) (application.TradeInvoiceUseCase, error) {
+	tenantDB := middleware.TenantDB(c)
+	if tenantDB == nil {
+		return nil, apperrors.NewBadRequest("No active company. Please select or provision a company first.")
+	}
+	return application.NewTradeInvoiceUseCase(
+		infrastructure.NewTradeInvoiceRepository(tenantDB),
+		infrastructure.NewSalesRepository(tenantDB),
+		productInfra.NewProductRepository(tenantDB),
+	), nil
+}
+
+func (h *Handler) CreateTradeInvoice(c *fiber.Ctx) error {
+	uc, err := h.tradeUC(c)
+	if err != nil {
+		return err
+	}
+	var dto application.CreateTradeInvoiceDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	inv, err := uc.Create(h.ctx(c), dto)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Invoice created successfully", inv)
+}
+
+func (h *Handler) ListTradeInvoices(c *fiber.Ctx) error {
+	uc, err := h.tradeUC(c)
+	if err != nil {
+		return err
+	}
+	var query types.PaginationQuery
+	if err := c.QueryParser(&query); err != nil {
+		return apperrors.NewBadRequest("Invalid query parameters")
+	}
+	items, meta, err := uc.List(h.ctx(c), c.Query("kind"), query)
+	if err != nil {
+		return err
+	}
+	return response.SuccessWithMeta(c, fiber.StatusOK, "Invoices retrieved successfully", items, meta)
+}
+
+func (h *Handler) tradeAction(c *fiber.Ctx, fn func(application.TradeInvoiceUseCase, context.Context, uuid.UUID) (any, error), msg string) error {
+	uc, err := h.tradeUC(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid invoice ID format")
+	}
+	out, err := fn(uc, h.ctx(c), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, msg, out)
+}
+
+func (h *Handler) GetTradeInvoice(c *fiber.Ctx) error {
+	return h.tradeAction(c, func(uc application.TradeInvoiceUseCase, ctx context.Context, id uuid.UUID) (any, error) {
+		return uc.Get(ctx, id)
+	}, "Invoice retrieved successfully")
+}
+
+func (h *Handler) IssueTradeInvoice(c *fiber.Ctx) error {
+	return h.tradeAction(c, func(uc application.TradeInvoiceUseCase, ctx context.Context, id uuid.UUID) (any, error) {
+		return uc.Issue(ctx, id)
+	}, "Invoice issued successfully")
+}
+
+func (h *Handler) CancelTradeInvoice(c *fiber.Ctx) error {
+	return h.tradeAction(c, func(uc application.TradeInvoiceUseCase, ctx context.Context, id uuid.UUID) (any, error) {
+		return uc.Cancel(ctx, id)
+	}, "Invoice cancelled successfully")
+}

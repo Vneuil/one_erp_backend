@@ -14,21 +14,25 @@ type SalesOrderLineDTO struct {
 }
 
 type CreateSalesOrderDTO struct {
-	OrderNumber   string  `json:"orderNumber"`
-	CustomerName  string  `json:"customerName"`
-	TotalAmount   float64 `json:"totalAmount"`
-	Currency      string  `json:"currency"`
-	Channel       string  `json:"channel"`
-	PaymentStatus string  `json:"paymentStatus"`
-	Status        string  `json:"status"`
-	CustomerPONumber     string  `json:"customerPoNumber,omitempty"`
-	CustomerPOAttachment string  `json:"customerPoAttachment,omitempty"`
-	DPPaid               bool    `json:"dpPaid"`
-	DPPercent            float64 `json:"dpPercent"`
-	DPAmount             float64 `json:"dpAmount"`
-	ShippingAddress      string  `json:"shippingAddress,omitempty"`
-	ShippingCourier      string  `json:"shippingCourier,omitempty"`
-	DeliveryDate         string  `json:"deliveryDate,omitempty"`
+	OrderNumber           string  `json:"orderNumber"`
+	CustomerName          string  `json:"customerName"`
+	TotalAmount           float64 `json:"totalAmount"`
+	Currency              string  `json:"currency"`
+	Channel               string  `json:"channel"`
+	PaymentStatus         string  `json:"paymentStatus"`
+	Status                string  `json:"status"`
+	CustomerPONumber      string  `json:"customerPoNumber,omitempty"`
+	CustomerPOAttachment  string  `json:"customerPoAttachment,omitempty"`
+	DPPaid                bool    `json:"dpPaid"`
+	DPPercent             float64 `json:"dpPercent"`
+	DPAmount              float64 `json:"dpAmount"`
+	ShippingAddress       string  `json:"shippingAddress,omitempty"`
+	ShippingCourier       string  `json:"shippingCourier,omitempty"`
+	DeliveryDate          string  `json:"deliveryDate,omitempty"`
+	PackagingAvailability string  `json:"packagingAvailability,omitempty"`
+	COAStatus             string  `json:"coaStatus,omitempty"`
+	ProductionStatus      string  `json:"productionStatus,omitempty"`
+	VATExempt             bool    `json:"vatExempt"`
 	// WarehouseID + Lines are optional. When both are set, stock for each
 	// line is deducted from this warehouse - see usecase.CreateOrder.
 	WarehouseID *uuid.UUID          `json:"warehouseId,omitempty"`
@@ -46,16 +50,23 @@ type CreateSalesOrderDTO struct {
 // whose stock effect either never happened (quotation conversions, which
 // carry no warehouse) or is corrected separately.
 type UpdateSalesOrderDTO struct {
-	CustomerName         string              `json:"customerName"`
-	CustomerPONumber     *string             `json:"customerPoNumber,omitempty"`
-	CustomerPOAttachment *string             `json:"customerPoAttachment,omitempty"`
-	DPPaid               *bool               `json:"dpPaid,omitempty"`
-	DPPercent            *float64            `json:"dpPercent,omitempty"`
-	DPAmount             *float64            `json:"dpAmount,omitempty"`
-	ShippingAddress      *string             `json:"shippingAddress,omitempty"`
-	ShippingCourier      *string             `json:"shippingCourier,omitempty"`
-	DeliveryDate         *string             `json:"deliveryDate,omitempty"`
-	Lines        []SalesOrderLineDTO `json:"lines"`
+	CustomerName          string   `json:"customerName"`
+	CustomerPONumber      *string  `json:"customerPoNumber,omitempty"`
+	CustomerPOAttachment  *string  `json:"customerPoAttachment,omitempty"`
+	DPPaid                *bool    `json:"dpPaid,omitempty"`
+	DPPercent             *float64 `json:"dpPercent,omitempty"`
+	DPAmount              *float64 `json:"dpAmount,omitempty"`
+	ShippingAddress       *string  `json:"shippingAddress,omitempty"`
+	ShippingCourier       *string  `json:"shippingCourier,omitempty"`
+	DeliveryDate          *string  `json:"deliveryDate,omitempty"`
+	PackagingAvailability *string  `json:"packagingAvailability,omitempty"`
+	COAStatus             *string  `json:"coaStatus,omitempty"`
+	ProductionStatus      *string  `json:"productionStatus,omitempty"`
+	VATExempt             *bool    `json:"vatExempt,omitempty"`
+	// RevisionReason is required when the line items change on an order that has
+	// already left draft: the previous version is kept in the revision history.
+	RevisionReason string              `json:"revisionReason,omitempty"`
+	Lines          []SalesOrderLineDTO `json:"lines"`
 }
 
 // SalesApprovalActionDTO carries the acting user's identity when approving
@@ -76,28 +87,36 @@ type SalesOrderLineResponseDTO struct {
 }
 
 type SalesOrderResponseDTO struct {
-	ID             uuid.UUID                   `json:"id"`
-	OrderNumber    string                      `json:"orderNumber"`
-	CustomerName   string                      `json:"customerName"`
-	TotalAmount    float64                     `json:"totalAmount"`
-	Currency       string                      `json:"currency"`
-	BaseAmount     float64                     `json:"baseAmount"`
-	Status         string                      `json:"status"`
-	CreatedByEmail string                      `json:"createdByEmail,omitempty"`
-	PaymentStatus  string                      `json:"paymentStatus"`
-	Channel        string                      `json:"channel"`
-	OrderDate            string                      `json:"orderDate"`
-	CustomerPONumber     string                      `json:"customerPoNumber,omitempty"`
-	CustomerPOAttachment string                      `json:"customerPoAttachment,omitempty"`
-	DPPaid               bool                        `json:"dpPaid"`
-	DPPercent            float64                     `json:"dpPercent"`
-	DPAmount             float64                     `json:"dpAmount"`
-	ShippingAddress      string                      `json:"shippingAddress,omitempty"`
-	ShippingCourier      string                      `json:"shippingCourier,omitempty"`
-	DeliveryDate         string                      `json:"deliveryDate,omitempty"`
-	WarehouseID    *uuid.UUID                  `json:"warehouseId,omitempty"`
-	Lines          []SalesOrderLineResponseDTO `json:"lines,omitempty"`
-	CreatedAt      time.Time                   `json:"createdAt"`
+	ID                    uuid.UUID                   `json:"id"`
+	OrderNumber           string                      `json:"orderNumber"`
+	CustomerName          string                      `json:"customerName"`
+	TotalAmount           float64                     `json:"totalAmount"`
+	Currency              string                      `json:"currency"`
+	BaseAmount            float64                     `json:"baseAmount"`
+	Status                string                      `json:"status"`
+	CreatedByEmail        string                      `json:"createdByEmail,omitempty"`
+	PaymentStatus         string                      `json:"paymentStatus"`
+	Channel               string                      `json:"channel"`
+	OrderDate             string                      `json:"orderDate"`
+	CustomerPONumber      string                      `json:"customerPoNumber,omitempty"`
+	CustomerPOAttachment  string                      `json:"customerPoAttachment,omitempty"`
+	DPPaid                bool                        `json:"dpPaid"`
+	DPPercent             float64                     `json:"dpPercent"`
+	DPAmount              float64                     `json:"dpAmount"`
+	ShippingAddress       string                      `json:"shippingAddress,omitempty"`
+	ShippingCourier       string                      `json:"shippingCourier,omitempty"`
+	DeliveryDate          string                      `json:"deliveryDate,omitempty"`
+	PackagingAvailability string                      `json:"packagingAvailability"`
+	COAStatus             string                      `json:"coaStatus"`
+	ProductionStatus      string                      `json:"productionStatus"`
+	VATExempt             bool                        `json:"vatExempt"`
+	Revision              int                         `json:"revision"`
+	RejectionReason       string                      `json:"rejectionReason,omitempty"`
+	RejectedBy            string                      `json:"rejectedBy,omitempty"`
+	RejectedAt            *time.Time                  `json:"rejectedAt,omitempty"`
+	WarehouseID           *uuid.UUID                  `json:"warehouseId,omitempty"`
+	Lines                 []SalesOrderLineResponseDTO `json:"lines,omitempty"`
+	CreatedAt             time.Time                   `json:"createdAt"`
 }
 
 type QuotationLineDTO struct {
@@ -147,28 +166,36 @@ func ToSalesOrderResponse(o *domain.SalesOrder) *SalesOrderResponseDTO {
 		lines[i] = SalesOrderLineResponseDTO{ID: l.ID, ProductID: l.ProductID, Quantity: l.Quantity, UnitPrice: l.UnitPrice, Subtotal: l.Subtotal}
 	}
 	return &SalesOrderResponseDTO{
-		ID:             o.ID,
-		OrderNumber:    o.OrderNumber,
-		CustomerName:   o.CustomerName,
-		TotalAmount:    o.TotalAmount,
-		Currency:       o.Currency,
-		BaseAmount:     o.BaseAmount,
-		Status:         o.Status,
-		CreatedByEmail: o.CreatedByEmail,
-		PaymentStatus:  o.PaymentStatus,
-		Channel:        o.Channel,
-		OrderDate:            o.OrderDate,
-		CustomerPONumber:     o.CustomerPONumber,
-		CustomerPOAttachment: o.CustomerPOAttachment,
-		DPPaid:               o.DPPaid,
-		DPPercent:            o.DPPercent,
-		DPAmount:             o.DPAmount,
-		ShippingAddress:      o.ShippingAddress,
-		ShippingCourier:      o.ShippingCourier,
-		DeliveryDate:         o.DeliveryDate,
-		WarehouseID:    o.WarehouseID,
-		Lines:          lines,
-		CreatedAt:      o.CreatedAt,
+		ID:                    o.ID,
+		OrderNumber:           o.OrderNumber,
+		CustomerName:          o.CustomerName,
+		TotalAmount:           o.TotalAmount,
+		Currency:              o.Currency,
+		BaseAmount:            o.BaseAmount,
+		Status:                o.Status,
+		CreatedByEmail:        o.CreatedByEmail,
+		PaymentStatus:         o.PaymentStatus,
+		Channel:               o.Channel,
+		OrderDate:             o.OrderDate,
+		CustomerPONumber:      o.CustomerPONumber,
+		CustomerPOAttachment:  o.CustomerPOAttachment,
+		DPPaid:                o.DPPaid,
+		DPPercent:             o.DPPercent,
+		DPAmount:              o.DPAmount,
+		ShippingAddress:       o.ShippingAddress,
+		ShippingCourier:       o.ShippingCourier,
+		DeliveryDate:          o.DeliveryDate,
+		PackagingAvailability: o.PackagingAvailability,
+		COAStatus:             o.COAStatus,
+		ProductionStatus:      o.ProductionStatus,
+		VATExempt:             o.VATExempt,
+		Revision:              o.Revision,
+		RejectionReason:       o.RejectionReason,
+		RejectedBy:            o.RejectedBy,
+		RejectedAt:            o.RejectedAt,
+		WarehouseID:           o.WarehouseID,
+		Lines:                 lines,
+		CreatedAt:             o.CreatedAt,
 	}
 }
 

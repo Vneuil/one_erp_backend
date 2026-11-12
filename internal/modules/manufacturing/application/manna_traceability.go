@@ -96,4 +96,3 @@ func ConfirmSettleWeight(liveReading float64, isSettled bool) (float64, bool) {
 	}
 	return liveReading, true
 }
-

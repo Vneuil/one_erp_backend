@@ -24,4 +24,3 @@ func CheckModification(status string, isSuperAdmin bool) error {
 	}
 	return nil
 }
-

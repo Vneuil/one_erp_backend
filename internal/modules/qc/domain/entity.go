@@ -70,6 +70,10 @@ type QCInspection struct {
 	Iteration         int              `gorm:"default:1;not null" json:"iteration"`
 	OverallStatus     InspectionStatus `gorm:"type:varchar(20);not null;index;default:'pending'" json:"overallStatus"`
 	Notes             string           `gorm:"type:text" json:"notes,omitempty"`
+	// Physical condition recorded at incoming QC (moved here from the GRN form):
+	// the sugar itself and its sacks/packaging.
+	SugarCondition   string `gorm:"type:varchar(100)" json:"sugarCondition,omitempty"`
+	PackageCondition string `gorm:"type:varchar(100)" json:"packageCondition,omitempty"`
 
 	// Immutability & Void audit trail (BR-25, BRL-07)
 	IsVoided   bool       `gorm:"default:false;not null" json:"isVoided"`
@@ -149,4 +153,3 @@ type PreOpSanitationCheck struct {
 func (PreOpSanitationCheck) TableName() string {
 	return "qc_preop_sanitation_checks"
 }
-

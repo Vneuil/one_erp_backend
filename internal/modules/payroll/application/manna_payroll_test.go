@@ -88,4 +88,3 @@ func TestTC_HR_010_QuarterlyAttendanceReward(t *testing.T) {
 		t.Fatalf("expected 0 and empty badge for non top 3, got %f, '%s'", bonusZero, badgeEmpty)
 	}
 }
-

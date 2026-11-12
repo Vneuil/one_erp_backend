@@ -392,3 +392,14 @@ func (r *salesRepository) ListInvoicesByOrder(ctx context.Context, orderID uuid.
 	err := r.db.WithContext(ctx).Where("sales_order_id = ?", orderID).Order("invoice_date asc, created_at asc").Find(&out).Error
 	return out, err
 }
+
+func (r *salesRepository) CreateOrderRevision(ctx context.Context, rev *domain.SalesOrderRevision) error {
+	tenantctx.SetTenantID(ctx, &rev.TenantID)
+	return r.db.WithContext(ctx).Create(rev).Error
+}
+
+func (r *salesRepository) ListOrderRevisions(ctx context.Context, orderID uuid.UUID) ([]domain.SalesOrderRevision, error) {
+	var revs []domain.SalesOrderRevision
+	err := r.db.WithContext(ctx).Where("sales_order_id = ?", orderID).Order("revision asc").Find(&revs).Error
+	return revs, err
+}

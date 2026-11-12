@@ -100,8 +100,16 @@ func (uc *inventoryUseCase) warehouseName(ctx context.Context, id uuid.UUID) str
 // Warehouses
 
 func (uc *inventoryUseCase) CreateWarehouse(ctx context.Context, dto CreateWarehouseDTO) (*WarehouseResponseDTO, error) {
-	if dto.Code == "" || dto.Name == "" {
-		return nil, apperrors.NewBadRequest("Warehouse code and name are required")
+	if dto.Name == "" {
+		return nil, apperrors.NewBadRequest("Warehouse name is required")
+	}
+	if dto.Code == "" {
+		// Default scheme: "GDG 01", "GDG 02", ...
+		n, err := uc.repo.CountWarehouses(ctx)
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to generate warehouse code")
+		}
+		dto.Code = fmt.Sprintf("GDG %02d", n+1)
 	}
 	isActive := true
 	if dto.IsActive != nil {
@@ -724,8 +732,8 @@ func (uc *inventoryUseCase) SeedInitialData(ctx context.Context) error {
 	}
 
 	warehouses := []CreateWarehouseDTO{
-		{Code: "WH-CKR", Name: "Gudang Utama Cikarang", Address: "Cikarang, Bekasi, Jawa Barat"},
-		{Code: "WH-SBY", Name: "Hub Surabaya", Address: "Surabaya, Jawa Timur"},
+		{Code: "GDG 01", Name: "Gudang Utama", Address: "Semarang, Jawa Tengah"},
+		{Code: "GDG 02", Name: "Gudang Kemasan", Address: "Semarang, Jawa Tengah"},
 	}
 	for _, w := range warehouses {
 		_, _ = uc.CreateWarehouse(ctx, w)

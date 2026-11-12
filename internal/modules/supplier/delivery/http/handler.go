@@ -141,3 +141,28 @@ func (h *Handler) Delete(c *fiber.Ctx) error {
 
 	return response.OK(c, "Supplier deleted successfully", nil)
 }
+
+// Types lists the vendor code families (PRD / PCK / ATK) the UI offers.
+func (h *Handler) Types(c *fiber.Ctx) error {
+	return response.OK(c, "Vendor types retrieved successfully", application.VendorTypes)
+}
+
+func (h *Handler) SetStatus(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid supplier ID format")
+	}
+	var dto application.SetStatusDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	supplier, err := uc.SetStatus(h.ctx(c), id, dto.Status)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Supplier status updated successfully", supplier)
+}

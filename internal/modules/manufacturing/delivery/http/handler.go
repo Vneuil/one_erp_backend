@@ -635,5 +635,3 @@ func (h *Handler) GetForwardTraceability(c *fiber.Ctx) error {
 	}
 	return response.OK(c, "Data ketertelusuran batch (forward) berhasil dimuat", records)
 }
-
-
