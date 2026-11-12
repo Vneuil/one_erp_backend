@@ -2,10 +2,12 @@ package application
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/divinecoid/one-backend/internal/modules/approval/domain"
+	"github.com/divinecoid/one-backend/internal/shared/actor"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/google/uuid"
@@ -30,7 +32,7 @@ type ApprovalUseCase interface {
 	RejectStep(ctx context.Context, requestID uuid.UUID, dto ActOnStepDTO) (*RequestResponseDTO, error)
 
 	ListMyPendingApprovals(ctx context.Context, role string) ([]RequestResponseDTO, error)
-	ListRequests(ctx context.Context, query types.PaginationQuery, documentType string) ([]RequestResponseDTO, types.PaginationMeta, error)
+	ListRequests(ctx context.Context, query types.PaginationQuery, documentType string, status string) ([]RequestResponseDTO, types.PaginationMeta, error)
 
 	// RegisterCallback wires a DocumentStatusCallback for a document type
 	// into this use case instance. ApproveStep/RejectStep invoke it exactly
@@ -56,6 +58,54 @@ func (uc *approvalUseCase) RegisterCallback(documentType string, cb DocumentStat
 	uc.callbacks[documentType] = cb
 }
 
+func validateWorkflowAmountRange(minAmount float64, maxAmount *float64) error {
+	if minAmount < 0 {
+		return apperrors.NewBadRequest("Batas bawah nominal (minAmount) tidak boleh negatif")
+	}
+	if maxAmount != nil {
+		if *maxAmount < 0 {
+			return apperrors.NewBadRequest("Batas atas nominal (maxAmount) tidak boleh negatif")
+		}
+		if *maxAmount < minAmount {
+			return apperrors.NewBadRequest("Batas atas nominal (maxAmount) harus lebih besar atau sama dengan batas bawah (minAmount)")
+		}
+	}
+	return nil
+}
+
+// workflowRangesOverlap reports whether two inclusive intervals [aMin, aMax]
+// and [bMin, bMax] (where nil max means +infinity) share at least one amount.
+func workflowRangesOverlap(aMin float64, aMax *float64, bMin float64, bMax *float64) bool {
+	return (aMax == nil || *aMax >= bMin) && (bMax == nil || *bMax >= aMin)
+}
+
+func formatWorkflowRange(minAmount float64, maxAmount *float64) string {
+	if maxAmount == nil {
+		return fmt.Sprintf("Rp %.0f - Tidak Terbatas", minAmount)
+	}
+	return fmt.Sprintf("Rp %.0f - Rp %.0f", minAmount, *maxAmount)
+}
+
+func (uc *approvalUseCase) ensureNoWorkflowOverlap(ctx context.Context, documentType string, excludeID uuid.UUID, minAmount float64, maxAmount *float64) error {
+	existing, err := uc.repo.ListWorkflows(ctx, documentType)
+	if err != nil {
+		return apperrors.NewInternal(err, "Failed to validate approval workflow ranges")
+	}
+	for _, w := range existing {
+		if w.ID == excludeID || !w.IsActive {
+			continue
+		}
+		if workflowRangesOverlap(minAmount, maxAmount, w.MinAmount, w.MaxAmount) {
+			return apperrors.NewConflict(fmt.Sprintf(
+				"Rentang nominal bersinggungan dengan workflow aktif '%s' (%s) pada jenis dokumen yang sama",
+				w.Name,
+				formatWorkflowRange(w.MinAmount, w.MaxAmount),
+			))
+		}
+	}
+	return nil
+}
+
 func (uc *approvalUseCase) CreateWorkflow(ctx context.Context, dto CreateWorkflowDTO) (*WorkflowResponseDTO, error) {
 	docType := strings.TrimSpace(dto.DocumentType)
 	name := strings.TrimSpace(dto.Name)
@@ -65,8 +115,11 @@ func (uc *approvalUseCase) CreateWorkflow(ctx context.Context, dto CreateWorkflo
 	if len(dto.Levels) == 0 {
 		return nil, apperrors.NewBadRequest("At least one approval level is required")
 	}
-	if dto.MinAmount < 0 {
-		return nil, apperrors.NewBadRequest("minAmount cannot be negative")
+	if err := validateWorkflowAmountRange(dto.MinAmount, dto.MaxAmount); err != nil {
+		return nil, err
+	}
+	if err := uc.ensureNoWorkflowOverlap(ctx, docType, uuid.Nil, dto.MinAmount, dto.MaxAmount); err != nil {
+		return nil, err
 	}
 
 	levels := make([]domain.ApprovalWorkflowLevel, len(dto.Levels))
@@ -82,6 +135,7 @@ func (uc *approvalUseCase) CreateWorkflow(ctx context.Context, dto CreateWorkflo
 		DocumentType: docType,
 		Name:         name,
 		MinAmount:    dto.MinAmount,
+		MaxAmount:    dto.MaxAmount,
 		IsActive:     true,
 		Levels:       levels,
 	}
@@ -117,8 +171,18 @@ func (uc *approvalUseCase) UpdateWorkflow(ctx context.Context, id uuid.UUID, dto
 	if len(dto.Levels) == 0 {
 		return nil, apperrors.NewBadRequest("At least one approval level is required")
 	}
-	if dto.MinAmount < 0 {
-		return nil, apperrors.NewBadRequest("minAmount cannot be negative")
+	if err := validateWorkflowAmountRange(dto.MinAmount, dto.MaxAmount); err != nil {
+		return nil, err
+	}
+
+	targetActive := w.IsActive
+	if dto.IsActive != nil {
+		targetActive = *dto.IsActive
+	}
+	if targetActive {
+		if err := uc.ensureNoWorkflowOverlap(ctx, docType, w.ID, dto.MinAmount, dto.MaxAmount); err != nil {
+			return nil, err
+		}
 	}
 
 	levels := make([]domain.ApprovalWorkflowLevel, len(dto.Levels))
@@ -133,9 +197,8 @@ func (uc *approvalUseCase) UpdateWorkflow(ctx context.Context, id uuid.UUID, dto
 	w.DocumentType = docType
 	w.Name = name
 	w.MinAmount = dto.MinAmount
-	if dto.IsActive != nil {
-		w.IsActive = *dto.IsActive
-	}
+	w.MaxAmount = dto.MaxAmount
+	w.IsActive = targetActive
 	w.Levels = levels
 
 	if err := uc.repo.UpdateWorkflow(ctx, w); err != nil {
@@ -217,7 +280,34 @@ func (uc *approvalUseCase) currentStep(req *domain.ApprovalRequest) *domain.Appr
 }
 
 func roleMatches(actorRole, requiredRole string) bool {
-	return strings.EqualFold(actorRole, requiredRole)
+	return strings.EqualFold(actorRole, requiredRole) || strings.EqualFold(actorRole, "admin")
+}
+
+func effectiveActorRoles(ctx context.Context, primaryRole string) []string {
+	candidates := append([]string{primaryRole}, actor.RolesFrom(ctx)...)
+	seen := make(map[string]bool, len(candidates))
+	roles := make([]string, 0, len(candidates))
+	for _, r := range candidates {
+		r = strings.TrimSpace(r)
+		if r == "" {
+			continue
+		}
+		key := strings.ToLower(r)
+		if !seen[key] {
+			seen[key] = true
+			roles = append(roles, r)
+		}
+	}
+	return roles
+}
+
+func roleMatchesActor(ctx context.Context, actorRole, requiredRole string) bool {
+	for _, r := range effectiveActorRoles(ctx, actorRole) {
+		if roleMatches(r, requiredRole) {
+			return true
+		}
+	}
+	return false
 }
 
 func (uc *approvalUseCase) ApproveStep(ctx context.Context, requestID uuid.UUID, dto ActOnStepDTO) (*RequestResponseDTO, error) {
@@ -236,7 +326,7 @@ func (uc *approvalUseCase) ApproveStep(ctx context.Context, requestID uuid.UUID,
 	if step == nil {
 		return nil, apperrors.NewInternal(nil, "Approval request has no current step")
 	}
-	if !roleMatches(dto.ActorRole, step.ApproverRole) {
+	if !roleMatchesActor(ctx, dto.ActorRole, step.ApproverRole) {
 		return nil, apperrors.NewForbidden("You are not the approver for the current level")
 	}
 
@@ -293,7 +383,7 @@ func (uc *approvalUseCase) RejectStep(ctx context.Context, requestID uuid.UUID, 
 	if step == nil {
 		return nil, apperrors.NewInternal(nil, "Approval request has no current step")
 	}
-	if !roleMatches(dto.ActorRole, step.ApproverRole) {
+	if !roleMatchesActor(ctx, dto.ActorRole, step.ApproverRole) {
 		return nil, apperrors.NewForbidden("You are not the approver for the current level")
 	}
 
@@ -322,30 +412,42 @@ func (uc *approvalUseCase) RejectStep(ctx context.Context, requestID uuid.UUID, 
 }
 
 func (uc *approvalUseCase) ListMyPendingApprovals(ctx context.Context, role string) ([]RequestResponseDTO, error) {
-	steps, err := uc.repo.ListPendingStepsForRole(ctx, role)
-	if err != nil {
-		return nil, apperrors.NewInternal(err, "Failed to list pending approvals")
+	roles := effectiveActorRoles(ctx, role)
+	if len(roles) == 0 {
+		roles = []string{role}
+	}
+	for _, r := range roles {
+		if strings.EqualFold(r, "admin") {
+			roles = []string{"admin"}
+			break
+		}
 	}
 
 	seen := make(map[uuid.UUID]bool)
-	result := make([]RequestResponseDTO, 0, len(steps))
-	for _, s := range steps {
-		if seen[s.RequestID] {
-			continue
+	result := make([]RequestResponseDTO, 0)
+	for _, r := range roles {
+		steps, err := uc.repo.ListPendingStepsForRole(ctx, r)
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to list pending approvals")
 		}
-		seen[s.RequestID] = true
-		req, err := uc.repo.GetRequestByID(ctx, s.RequestID)
-		if err != nil || req == nil {
-			continue
+		for _, s := range steps {
+			if seen[s.RequestID] {
+				continue
+			}
+			seen[s.RequestID] = true
+			req, err := uc.repo.GetRequestByID(ctx, s.RequestID)
+			if err != nil || req == nil {
+				continue
+			}
+			result = append(result, ToRequestResponse(req))
 		}
-		result = append(result, ToRequestResponse(req))
 	}
 	return result, nil
 }
 
-func (uc *approvalUseCase) ListRequests(ctx context.Context, query types.PaginationQuery, documentType string) ([]RequestResponseDTO, types.PaginationMeta, error) {
+func (uc *approvalUseCase) ListRequests(ctx context.Context, query types.PaginationQuery, documentType string, status string) ([]RequestResponseDTO, types.PaginationMeta, error) {
 	query.SetDefaults()
-	items, total, err := uc.repo.ListRequests(ctx, query, documentType)
+	items, total, err := uc.repo.ListRequests(ctx, query, documentType, status)
 	if err != nil {
 		return nil, types.PaginationMeta{}, apperrors.NewInternal(err, "Failed to list approval requests")
 	}

@@ -54,21 +54,26 @@ func (r *approvalRepository) ListWorkflows(ctx context.Context, documentType str
 func (r *approvalRepository) ListMatchingWorkflows(ctx context.Context, documentType string, amount float64) ([]domain.ApprovalWorkflow, error) {
 	var items []domain.ApprovalWorkflow
 	db := tenantctx.Scope(ctx, r.db.WithContext(ctx).Model(&domain.ApprovalWorkflow{}))
-	err := db.Where("document_type = ? AND is_active = ? AND min_amount <= ?", documentType, true, amount).
+	err := db.Where("document_type = ? AND is_active = ? AND min_amount <= ? AND (max_amount IS NULL OR max_amount >= ?)", documentType, true, amount, amount).
 		Preload("Levels", func(db *gorm.DB) *gorm.DB {
 			return db.Order("level_order asc")
 		}).
-		Order("min_amount desc").
+		Order("min_amount desc, created_at desc").
 		Find(&items).Error
 	return items, err
 }
 
 func (r *approvalRepository) UpdateWorkflow(ctx context.Context, w *domain.ApprovalWorkflow) error {
 	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var maxAmt interface{}
+		if w.MaxAmount != nil {
+			maxAmt = *w.MaxAmount
+		}
 		if err := tx.Model(w).Updates(map[string]interface{}{
 			"document_type": w.DocumentType,
 			"name":          w.Name,
 			"min_amount":    w.MinAmount,
+			"max_amount":    maxAmt,
 			"is_active":     w.IsActive,
 		}).Error; err != nil {
 			return err
@@ -132,13 +137,16 @@ func (r *approvalRepository) GetActiveRequestForDocument(ctx context.Context, do
 	return &req, nil
 }
 
-func (r *approvalRepository) ListRequests(ctx context.Context, query types.PaginationQuery, documentType string) ([]domain.ApprovalRequest, int64, error) {
+func (r *approvalRepository) ListRequests(ctx context.Context, query types.PaginationQuery, documentType string, status string) ([]domain.ApprovalRequest, int64, error) {
 	var items []domain.ApprovalRequest
 	var total int64
 
 	db := tenantctx.Scope(ctx, r.db.WithContext(ctx).Model(&domain.ApprovalRequest{}))
 	if documentType != "" {
 		db = db.Where("document_type = ?", documentType)
+	}
+	if status != "" {
+		db = db.Where("status = ?", status)
 	}
 	if err := db.Count(&total).Error; err != nil {
 		return nil, 0, err
@@ -168,6 +176,10 @@ func (r *approvalRepository) ListPendingStepsForRole(ctx context.Context, role s
 		Joins("JOIN approval_requests ON approval_requests.id = approval_steps.request_id").
 		Where("approval_steps.status = ? AND approval_requests.current_level = approval_steps.level_order AND approval_requests.status = ?",
 			domain.StatusPending, domain.StatusPending)
+
+	if tid := tenantctx.FromContext(ctx); tid != nil {
+		query = query.Where("approval_requests.tenant_id = ?", *tid)
+	}
 
 	if !strings.EqualFold(role, "admin") {
 		query = query.Where("LOWER(approval_steps.approver_role) = ?", strings.ToLower(role))

@@ -16,6 +16,7 @@ type CreateWorkflowDTO struct {
 	DocumentType string             `json:"documentType"`
 	Name         string             `json:"name"`
 	MinAmount    float64            `json:"minAmount"`
+	MaxAmount    *float64           `json:"maxAmount"`
 	Levels       []WorkflowLevelDTO `json:"levels"`
 }
 
@@ -23,6 +24,7 @@ type UpdateWorkflowDTO struct {
 	DocumentType string             `json:"documentType"`
 	Name         string             `json:"name"`
 	MinAmount    float64            `json:"minAmount"`
+	MaxAmount    *float64           `json:"maxAmount"`
 	IsActive     *bool              `json:"isActive,omitempty"`
 	Levels       []WorkflowLevelDTO `json:"levels"`
 }
@@ -32,6 +34,7 @@ type WorkflowResponseDTO struct {
 	DocumentType string             `json:"documentType"`
 	Name         string             `json:"name"`
 	MinAmount    float64            `json:"minAmount"`
+	MaxAmount    *float64           `json:"maxAmount"`
 	IsActive     bool               `json:"isActive"`
 	Levels       []WorkflowLevelDTO `json:"levels"`
 	CreatedAt    time.Time          `json:"createdAt"`
@@ -44,7 +47,7 @@ func ToWorkflowResponse(w *domain.ApprovalWorkflow) WorkflowResponseDTO {
 	}
 	return WorkflowResponseDTO{
 		ID: w.ID, DocumentType: w.DocumentType, Name: w.Name, MinAmount: w.MinAmount,
-		IsActive: w.IsActive, Levels: levels, CreatedAt: w.CreatedAt,
+		MaxAmount: w.MaxAmount, IsActive: w.IsActive, Levels: levels, CreatedAt: w.CreatedAt,
 	}
 }
 

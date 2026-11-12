@@ -6,6 +6,7 @@ import (
 	"github.com/divinecoid/one-backend/internal/foundation/middleware"
 	"github.com/divinecoid/one-backend/internal/modules/rbac/domain"
 	userDomain "github.com/divinecoid/one-backend/internal/modules/user/domain"
+	"github.com/divinecoid/one-backend/internal/shared/actor"
 	"github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
@@ -56,6 +57,7 @@ func Enforce(db *gorm.DB) fiber.Handler {
 		// The legacy admin role string is always a full bypass - never
 		// lock out the primary account a company was created with.
 		if strings.EqualFold(claims.Role, "admin") {
+			c.SetUserContext(actor.WithRoles(c.UserContext(), []string{claims.Role}))
 			return c.Next()
 		}
 
@@ -63,8 +65,19 @@ func Enforce(db *gorm.DB) fiber.Handler {
 		if err := db.Where("id = ?", claims.UserID).First(&user).Error; err != nil {
 			// Can't resolve the user record - fail open rather than break
 			// every request on a transient DB hiccup.
+			c.SetUserContext(actor.WithRoles(c.UserContext(), []string{claims.Role}))
 			return c.Next()
 		}
+
+		roles := []string{string(user.Role), claims.Role}
+		if user.RoleID != nil {
+			var assignedRole domain.Role
+			if err := db.Select("name").Where("id = ?", *user.RoleID).First(&assignedRole).Error; err == nil && assignedRole.Name != "" {
+				roles = append(roles, assignedRole.Name)
+			}
+		}
+		c.SetUserContext(actor.WithRoles(c.UserContext(), roles))
+
 		if user.RoleID == nil {
 			// RBAC is opt-in, so an account with no custom role is otherwise unrestricted.
 			// Salary data is the exception: a plain staff account never sees it.

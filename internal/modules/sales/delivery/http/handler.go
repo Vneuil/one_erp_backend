@@ -17,16 +17,19 @@ import (
 	productInfra "github.com/divinecoid/one-backend/internal/modules/product/infrastructure"
 	"github.com/divinecoid/one-backend/internal/modules/sales/application"
 	"github.com/divinecoid/one-backend/internal/modules/sales/infrastructure"
+	"github.com/divinecoid/one-backend/internal/foundation/storage"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 )
 
-type Handler struct{}
+type Handler struct {
+	store storage.Storage
+}
 
-func NewHandler() *Handler {
-	return &Handler{}
+func NewHandler(store storage.Storage) *Handler {
+	return &Handler{store: store}
 }
 
 // resolve builds a use-case bound to the caller's own tenant database. The

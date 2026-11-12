@@ -14,6 +14,7 @@ import (
 	inventoryApp "github.com/divinecoid/one-backend/internal/modules/inventory/application"
 	"github.com/divinecoid/one-backend/internal/modules/procurement/domain"
 	productDomain "github.com/divinecoid/one-backend/internal/modules/product/domain"
+	salesDomain "github.com/divinecoid/one-backend/internal/modules/sales/domain"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/sod"
 	"github.com/divinecoid/one-backend/internal/shared/types"
@@ -96,6 +97,7 @@ type procurementUseCase struct {
 	inventoryUC inventoryApp.InventoryUseCase
 	currencyUC  currencyApp.CurrencyUseCase
 	productRepo productDomain.ProductRepository
+	salesRepo   salesDomain.SalesRepository
 	ledger      financeApp.LedgerPoster // optional; nil disables auto-posting to the general ledger
 }
 
@@ -110,6 +112,11 @@ func WithLedger(l financeApp.LedgerPoster) Option {
 // WithProductRepo provides access to product catalog for pricing checks during approvals.
 func WithProductRepo(pr productDomain.ProductRepository) Option {
 	return func(uc *procurementUseCase) { uc.productRepo = pr }
+}
+
+// WithSalesRepo provides access to sales orders for eligibility check (SO -> PR gatekeeping).
+func WithSalesRepo(sr salesDomain.SalesRepository) Option {
+	return func(uc *procurementUseCase) { uc.salesRepo = sr }
 }
 
 func NewProcurementUseCase(repo domain.ProcurementRepository, approvalUC approvalApp.ApprovalUseCase, inventoryUC inventoryApp.InventoryUseCase, currencyUC currencyApp.CurrencyUseCase, opts ...Option) ProcurementUseCase {
@@ -140,6 +147,26 @@ func (uc *procurementUseCase) CreatePurchaseRequest(ctx context.Context, dto Cre
 	category := dto.Category
 	if category == "" {
 		category = "inventory"
+	}
+
+	if dto.SalesOrderID != nil && *dto.SalesOrderID != uuid.Nil {
+		if uc.salesRepo != nil {
+			so, err := uc.salesRepo.GetOrderByID(ctx, *dto.SalesOrderID)
+			if err != nil {
+				return nil, apperrors.NewInternal(err, "Failed to verify referenced sales order")
+			}
+			if so == nil {
+				return nil, apperrors.NewNotFound("Referenced sales order not found")
+			}
+			// Gatekeeper 1: Must be Approved / Confirmed
+			if !strings.EqualFold(so.Status, "Confirmed") && !strings.EqualFold(so.Status, "approved") {
+				return nil, apperrors.NewBadRequest(fmt.Sprintf("Sales Order %s belum disetujui (status: %s). Selesaikan proses approval terlebih dahulu sebelum membuat PR.", so.OrderNumber, so.Status))
+			}
+			// Gatekeeper 2: Must have CI/PI document attached
+			if strings.TrimSpace(so.InvoiceDocAttachment) == "" && strings.TrimSpace(so.CustomerPOAttachment) == "" {
+				return nil, apperrors.NewBadRequest(fmt.Sprintf("Sales Order %s belum memiliki dokumen Commercial Invoice (CI) atau Proforma Invoice (PI). Silakan unggah dokumen terlebih dahulu sebelum membuat PR.", so.OrderNumber))
+			}
+		}
 	}
 
 	pr := &domain.PurchaseRequest{

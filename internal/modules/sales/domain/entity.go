@@ -38,6 +38,9 @@ type SalesOrder struct {
 	DPPaid               bool    `gorm:"default:false" json:"dpPaid"`
 	DPPercent            float64 `gorm:"type:decimal(5,2);default:0" json:"dpPercent"`
 	DPAmount             float64 `gorm:"type:decimal(15,2);default:0" json:"dpAmount"`
+	InvoiceDocType       string  `gorm:"type:varchar(50)" json:"invoiceDocType,omitempty"`
+	InvoiceDocAttachment string  `gorm:"type:text" json:"invoiceDocAttachment,omitempty"`
+	InvoiceDocNumber     string  `gorm:"type:varchar(100)" json:"invoiceDocNumber,omitempty"`
 	ShippingAddress      string  `gorm:"type:text" json:"shippingAddress,omitempty"`
 	ShippingCourier      string  `gorm:"type:varchar(100)" json:"shippingCourier,omitempty"`
 	DeliveryDate         string  `gorm:"type:varchar(50)" json:"deliveryDate,omitempty"`

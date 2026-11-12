@@ -26,6 +26,9 @@ type CreateSalesOrderDTO struct {
 	DPPaid                bool    `json:"dpPaid"`
 	DPPercent             float64 `json:"dpPercent"`
 	DPAmount              float64 `json:"dpAmount"`
+	InvoiceDocType       string  `json:"invoiceDocType,omitempty"`
+	InvoiceDocAttachment string  `json:"invoiceDocAttachment,omitempty"`
+	InvoiceDocNumber     string  `json:"invoiceDocNumber,omitempty"`
 	ShippingAddress       string  `json:"shippingAddress,omitempty"`
 	ShippingCourier       string  `json:"shippingCourier,omitempty"`
 	DeliveryDate          string  `json:"deliveryDate,omitempty"`
@@ -56,6 +59,9 @@ type UpdateSalesOrderDTO struct {
 	DPPaid                *bool    `json:"dpPaid,omitempty"`
 	DPPercent             *float64 `json:"dpPercent,omitempty"`
 	DPAmount              *float64 `json:"dpAmount,omitempty"`
+	InvoiceDocType       *string             `json:"invoiceDocType,omitempty"`
+	InvoiceDocAttachment *string             `json:"invoiceDocAttachment,omitempty"`
+	InvoiceDocNumber     *string             `json:"invoiceDocNumber,omitempty"`
 	ShippingAddress       *string  `json:"shippingAddress,omitempty"`
 	ShippingCourier       *string  `json:"shippingCourier,omitempty"`
 	DeliveryDate          *string  `json:"deliveryDate,omitempty"`
@@ -76,6 +82,14 @@ type SalesApprovalActionDTO struct {
 	ActorName string `json:"actorName"`
 	ActorRole string `json:"actorRole"`
 	Comments  string `json:"comments"`
+}
+
+// AttachInvoiceDocDTO carries the CI/PI document metadata and attachment key
+// when an approved Sales Order is updated with its mandatory invoice document.
+type AttachInvoiceDocDTO struct {
+	InvoiceDocType       string `json:"invoiceDocType"`
+	InvoiceDocNumber     string `json:"invoiceDocNumber,omitempty"`
+	InvoiceDocAttachment string `json:"invoiceDocAttachment"`
 }
 
 type SalesOrderLineResponseDTO struct {
@@ -103,6 +117,9 @@ type SalesOrderResponseDTO struct {
 	DPPaid                bool                        `json:"dpPaid"`
 	DPPercent             float64                     `json:"dpPercent"`
 	DPAmount              float64                     `json:"dpAmount"`
+	InvoiceDocType       string                      `json:"invoiceDocType,omitempty"`
+	InvoiceDocAttachment string                      `json:"invoiceDocAttachment,omitempty"`
+	InvoiceDocNumber     string                      `json:"invoiceDocNumber,omitempty"`
 	ShippingAddress       string                      `json:"shippingAddress,omitempty"`
 	ShippingCourier       string                      `json:"shippingCourier,omitempty"`
 	DeliveryDate          string                      `json:"deliveryDate,omitempty"`
@@ -182,6 +199,9 @@ func ToSalesOrderResponse(o *domain.SalesOrder) *SalesOrderResponseDTO {
 		DPPaid:                o.DPPaid,
 		DPPercent:             o.DPPercent,
 		DPAmount:              o.DPAmount,
+		InvoiceDocType:       o.InvoiceDocType,
+		InvoiceDocAttachment: o.InvoiceDocAttachment,
+		InvoiceDocNumber:     o.InvoiceDocNumber,
 		ShippingAddress:       o.ShippingAddress,
 		ShippingCourier:       o.ShippingCourier,
 		DeliveryDate:          o.DeliveryDate,
