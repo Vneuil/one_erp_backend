@@ -3,6 +3,7 @@ package http
 import (
 	"github.com/divinecoid/one-backend/internal/foundation/middleware"
 	tenantMgr "github.com/divinecoid/one-backend/internal/foundation/tenant"
+	"github.com/divinecoid/one-backend/internal/shared/actor"
 	"github.com/gofiber/fiber/v2"
 )
 
@@ -17,6 +18,7 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	sales.Get("/orders/:id/attachment", h.DownloadAttachment)
 	sales.Put("/orders/:id/invoice-document", h.AttachInvoiceDocument)
 	sales.Get("/orders/:id/invoice-attachment", h.DownloadInvoiceAttachment)
+	sales.Get("/orders/last-price", h.GetLastSalePrice)
 	sales.Post("/orders", h.CreateOrder)
 	sales.Get("/orders", h.ListOrders)
 	sales.Get("/orders/:id", h.GetOrderByID)
@@ -35,13 +37,14 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	sales.Put("/quotations/:id", h.UpdateQuotation)
 	sales.Post("/quotations/:id/convert", h.ConvertQuotationToOrder)
 
-	// PI / CI menu: superadmin (account role admin) only.
-	trade := sales.Group("/trade-invoices", middleware.RequireRoles("admin"))
+	// PI / CI menu: superadmin, admin and the accountants (see actor.TradeDocRoles).
+	trade := sales.Group("/trade-invoices", middleware.RequireRoles(actor.TradeDocRoles...))
 	trade.Post("/", h.CreateTradeInvoice)
 	trade.Get("/", h.ListTradeInvoices)
 	trade.Get("/:id", h.GetTradeInvoice)
 	trade.Post("/:id/issue", h.IssueTradeInvoice)
 	trade.Post("/:id/cancel", h.CancelTradeInvoice)
+	trade.Post("/:id/create-order", h.CreateOrderFromTradeInvoice)
 
 	sales.Post("/invoices", h.CreateInvoice)
 	sales.Get("/invoices", h.ListInvoices)

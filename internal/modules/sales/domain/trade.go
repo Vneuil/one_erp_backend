@@ -48,13 +48,20 @@ type TradeInvoice struct {
 	QuotationID  *uuid.UUID `gorm:"type:uuid;index" json:"quotationId,omitempty"`
 	ParentID     *uuid.UUID `gorm:"type:uuid;index" json:"parentId,omitempty"` // PI this CI was made from
 	CustomerName string     `gorm:"type:varchar(255);not null" json:"customerName"`
-	BillingAddr  string     `gorm:"type:text" json:"billingAddress,omitempty"`
-	ShippingAddr string     `gorm:"type:text" json:"shippingAddress,omitempty"`
-	Currency     string     `gorm:"type:varchar(10);default:'IDR'" json:"currency"`
-	IssueDate    string     `gorm:"type:varchar(10)" json:"issueDate"`
-	PaymentTerm  string     `gorm:"type:varchar(100)" json:"paymentTerm,omitempty"`
-	Incoterm     string     `gorm:"type:varchar(20)" json:"incoterm,omitempty"`
-	Notes        string     `gorm:"type:text" json:"notes,omitempty"`
+	// CustomerPO* reference the incoming PO (PO Masuk) the customer issued to us;
+	// a PI is normally raised straight from it, before any Sales Order exists.
+	CustomerPONumber     string `gorm:"type:varchar(100)" json:"customerPoNumber,omitempty"`
+	CustomerPOAttachment string `gorm:"type:text" json:"customerPoAttachment,omitempty"`
+	// DPPercent/DPAmount: the down payment this PI asks for (e.g. 50%).
+	DPPercent    float64 `gorm:"type:decimal(5,2);default:0" json:"dpPercent"`
+	DPAmount     float64 `gorm:"type:decimal(15,2);default:0" json:"dpAmount"`
+	BillingAddr  string  `gorm:"type:text" json:"billingAddress,omitempty"`
+	ShippingAddr string  `gorm:"type:text" json:"shippingAddress,omitempty"`
+	Currency     string  `gorm:"type:varchar(10);default:'IDR'" json:"currency"`
+	IssueDate    string  `gorm:"type:varchar(10)" json:"issueDate"`
+	PaymentTerm  string  `gorm:"type:varchar(100)" json:"paymentTerm,omitempty"`
+	Incoterm     string  `gorm:"type:varchar(20)" json:"incoterm,omitempty"`
+	Notes        string  `gorm:"type:text" json:"notes,omitempty"`
 	// VATExempt turns PPN off (export). When false, VATRate (default 11) applies.
 	VATExempt bool               `gorm:"default:false" json:"vatExempt"`
 	VATRate   float64            `gorm:"type:decimal(5,2);default:11" json:"vatRate"`

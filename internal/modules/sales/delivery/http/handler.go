@@ -4,9 +4,11 @@ import (
 	"context"
 	financeApp "github.com/divinecoid/one-backend/internal/modules/finance/application"
 	financeInfra "github.com/divinecoid/one-backend/internal/modules/finance/infrastructure"
+	"strings"
 
 	"github.com/divinecoid/one-backend/internal/foundation/middleware"
 	"github.com/divinecoid/one-backend/internal/foundation/response"
+	"github.com/divinecoid/one-backend/internal/foundation/storage"
 	"github.com/divinecoid/one-backend/internal/foundation/tenantctx"
 	approvalApp "github.com/divinecoid/one-backend/internal/modules/approval/application"
 	approvalInfra "github.com/divinecoid/one-backend/internal/modules/approval/infrastructure"
@@ -18,7 +20,6 @@ import (
 	productInfra "github.com/divinecoid/one-backend/internal/modules/product/infrastructure"
 	"github.com/divinecoid/one-backend/internal/modules/sales/application"
 	"github.com/divinecoid/one-backend/internal/modules/sales/infrastructure"
-	"github.com/divinecoid/one-backend/internal/foundation/storage"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/gofiber/fiber/v2"
@@ -719,4 +720,60 @@ func (h *Handler) CancelTradeInvoice(c *fiber.Ctx) error {
 	return h.tradeAction(c, func(uc application.TradeInvoiceUseCase, ctx context.Context, id uuid.UUID) (any, error) {
 		return uc.Cancel(ctx, id)
 	}, "Invoice cancelled successfully")
+}
+
+// CreateOrderFromTradeInvoice turns an issued PI into a Sales Order (PO Masuk -> PI ->
+// Sales Order). With dpPaid=false the order is created while the DP is still awaited
+// ("DP menyusul"), so PR/PO and production can start; the DP is ticked on the order later.
+func (h *Handler) CreateOrderFromTradeInvoice(c *fiber.Ctx) error {
+	tuc, err := h.tradeUC(c)
+	if err != nil {
+		return err
+	}
+	suc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid invoice ID format")
+	}
+	var dto application.OrderFromPIDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	pi, err := tuc.Get(h.ctx(c), id)
+	if err != nil {
+		return err
+	}
+	orderDTO, err := application.OrderFromPI(pi, dto)
+	if err != nil {
+		return err
+	}
+	order, err := suc.CreateOrder(h.ctx(c), orderDTO)
+	if err != nil {
+		return err
+	}
+	if _, err := tuc.LinkOrder(h.ctx(c), id, order.ID); err != nil {
+		return err
+	}
+	return response.Created(c, "Sales order created from proforma invoice", order)
+}
+
+// GetLastSalePrice returns the price a customer last paid for a product, so a new SO/PI
+// can start from it. The price stays editable; staff always receive 0.
+func (h *Handler) GetLastSalePrice(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	pid, err := uuid.Parse(c.Query("productId"))
+	if err != nil || strings.TrimSpace(c.Query("customerName")) == "" {
+		return apperrors.NewBadRequest("customerName and a valid productId are required")
+	}
+	price, err := uc.LastSalePrice(h.ctx(c), c.Query("customerName"), pid)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Last sale price retrieved successfully", fiber.Map{"unitPrice": price})
 }

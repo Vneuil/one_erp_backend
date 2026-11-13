@@ -403,3 +403,13 @@ func (r *salesRepository) ListOrderRevisions(ctx context.Context, orderID uuid.U
 	err := r.db.WithContext(ctx).Where("sales_order_id = ?", orderID).Order("revision asc").Find(&revs).Error
 	return revs, err
 }
+
+func (r *salesRepository) GetLastSalePrice(ctx context.Context, customerName string, productID uuid.UUID) (float64, error) {
+	var price float64
+	err := r.db.WithContext(ctx).Table("sales_order_lines AS l").
+		Select("l.unit_price").
+		Joins("JOIN sales_orders o ON o.id = l.sales_order_id").
+		Where("LOWER(o.customer_name) = LOWER(?) AND l.product_id = ? AND l.unit_price > 0 AND o.status NOT IN ('rejected','cancelled')", strings.TrimSpace(customerName), productID).
+		Order("o.created_at DESC").Limit(1).Scan(&price).Error
+	return price, err
+}

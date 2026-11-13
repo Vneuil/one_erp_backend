@@ -25,23 +25,28 @@ type TradeLineDTO struct {
 	UnitPrice   float64    `json:"unitPrice"`
 }
 
-// CreateTradeInvoiceDTO creates a PI/CI. Exactly one source may be given:
-// a Sales Order, a Quotation, or (for a CI) the PI it is made from. Lines may be
-// supplied to override the ones copied from the source.
+// CreateTradeInvoiceDTO creates a PI/CI. At most one source may be given: a Sales
+// Order, a Quotation, or (for a CI) the PI it is made from. With no source the
+// document is raised directly from the customer's incoming PO (the usual PI flow:
+// PO Masuk -> PI -> DP -> Sales Order), and customerName + lines are required.
+// Lines, when supplied, override the ones copied from the source.
 type CreateTradeInvoiceDTO struct {
-	Kind            string         `json:"kind"` // PI | CI
-	SalesOrderID    *uuid.UUID     `json:"salesOrderId,omitempty"`
-	QuotationID     *uuid.UUID     `json:"quotationId,omitempty"`
-	ParentID        *uuid.UUID     `json:"parentId,omitempty"`
-	CustomerName    string         `json:"customerName,omitempty"`
-	BillingAddress  string         `json:"billingAddress,omitempty"`
-	ShippingAddress string         `json:"shippingAddress,omitempty"`
-	Currency        string         `json:"currency,omitempty"`
-	PaymentTerm     string         `json:"paymentTerm,omitempty"`
-	Incoterm        string         `json:"incoterm,omitempty"`
-	Notes           string         `json:"notes,omitempty"`
-	VATExempt       *bool          `json:"vatExempt,omitempty"`
-	Lines           []TradeLineDTO `json:"lines,omitempty"`
+	Kind                 string         `json:"kind"` // PI | CI
+	SalesOrderID         *uuid.UUID     `json:"salesOrderId,omitempty"`
+	QuotationID          *uuid.UUID     `json:"quotationId,omitempty"`
+	ParentID             *uuid.UUID     `json:"parentId,omitempty"`
+	CustomerName         string         `json:"customerName,omitempty"`
+	CustomerPONumber     string         `json:"customerPoNumber,omitempty"`
+	CustomerPOAttachment string         `json:"customerPoAttachment,omitempty"`
+	DPPercent            float64        `json:"dpPercent,omitempty"`
+	BillingAddress       string         `json:"billingAddress,omitempty"`
+	ShippingAddress      string         `json:"shippingAddress,omitempty"`
+	Currency             string         `json:"currency,omitempty"`
+	PaymentTerm          string         `json:"paymentTerm,omitempty"`
+	Incoterm             string         `json:"incoterm,omitempty"`
+	Notes                string         `json:"notes,omitempty"`
+	VATExempt            *bool          `json:"vatExempt,omitempty"`
+	Lines                []TradeLineDTO `json:"lines,omitempty"`
 }
 
 type TradeInvoiceUseCase interface {
@@ -50,6 +55,51 @@ type TradeInvoiceUseCase interface {
 	List(ctx context.Context, kind string, q types.PaginationQuery) ([]domain.TradeInvoice, types.PaginationMeta, error)
 	Issue(ctx context.Context, id uuid.UUID) (*domain.TradeInvoice, error)
 	Cancel(ctx context.Context, id uuid.UUID) (*domain.TradeInvoice, error)
+	// LinkOrder records the Sales Order that was created from this PI.
+	LinkOrder(ctx context.Context, id, orderID uuid.UUID) (*domain.TradeInvoice, error)
+}
+
+// OrderFromPIDTO are the choices made when a Sales Order is created from a PI.
+type OrderFromPIDTO struct {
+	WarehouseID     *uuid.UUID `json:"warehouseId,omitempty"`
+	DPPaid          bool       `json:"dpPaid"` // false = "DP menyusul": production may start, DP is ticked later
+	DeliveryDate    string     `json:"deliveryDate,omitempty"`
+	ShippingCourier string     `json:"shippingCourier,omitempty"`
+}
+
+// OrderFromPI builds the Sales Order a PI turns into: same customer, items, prices,
+// PO reference, PPN setting and DP terms. The PI must be issued, be a PI, not yet be
+// linked to an order, and every line must point at a master product.
+func OrderFromPI(pi *domain.TradeInvoice, dto OrderFromPIDTO) (CreateSalesOrderDTO, error) {
+	if pi.Kind != domain.TradeKindPI {
+		return CreateSalesOrderDTO{}, apperrors.NewBadRequest("Only a Proforma Invoice can be turned into a Sales Order")
+	}
+	if pi.Status != domain.TradeStatusIssued {
+		return CreateSalesOrderDTO{}, apperrors.NewConflict("Issue the proforma invoice before creating a Sales Order from it")
+	}
+	if pi.SalesOrderID != nil {
+		return CreateSalesOrderDTO{}, apperrors.NewConflict("This proforma invoice already has a Sales Order")
+	}
+	lines := make([]SalesOrderLineDTO, 0, len(pi.Lines))
+	for _, l := range pi.Lines {
+		if l.ProductID == nil {
+			return CreateSalesOrderDTO{}, apperrors.NewBadRequest("Every PI line must reference a master product before a Sales Order can be created")
+		}
+		lines = append(lines, SalesOrderLineDTO{ProductID: *l.ProductID, Quantity: l.Quantity, UnitPrice: l.UnitPrice})
+	}
+	// The PI itself is the outgoing document; keep its number as the reference when
+	// the customer sent no PO number.
+	poNumber := pi.CustomerPONumber
+	if poNumber == "" {
+		poNumber = pi.Number
+	}
+	return CreateSalesOrderDTO{
+		CustomerName: pi.CustomerName, TotalAmount: pi.Total, Currency: pi.Currency,
+		CustomerPONumber: poNumber, CustomerPOAttachment: pi.CustomerPOAttachment,
+		DPPaid: dto.DPPaid, DPPercent: pi.DPPercent, DPAmount: pi.DPAmount,
+		ShippingAddress: pi.ShippingAddr, ShippingCourier: dto.ShippingCourier, DeliveryDate: dto.DeliveryDate,
+		VATExempt: pi.VATExempt, WarehouseID: dto.WarehouseID, Lines: lines, Status: "draft",
+	}, nil
 }
 
 type tradeInvoiceUseCase struct {
@@ -73,8 +123,11 @@ func (uc *tradeInvoiceUseCase) Create(ctx context.Context, dto CreateTradeInvoic
 			sources++
 		}
 	}
-	if sources != 1 {
-		return nil, apperrors.NewBadRequest("Provide exactly one source: salesOrderId, quotationId or parentId")
+	if sources > 1 {
+		return nil, apperrors.NewBadRequest("Provide at most one source: salesOrderId, quotationId or parentId")
+	}
+	if dto.DPPercent < 0 || dto.DPPercent > 100 {
+		return nil, apperrors.NewBadRequest("dpPercent must be between 0 and 100")
 	}
 
 	t := &domain.TradeInvoice{
@@ -82,6 +135,8 @@ func (uc *tradeInvoiceUseCase) Create(ctx context.Context, dto CreateTradeInvoic
 		CustomerName: strings.TrimSpace(dto.CustomerName), BillingAddr: dto.BillingAddress, ShippingAddr: dto.ShippingAddress,
 		Currency: dto.Currency, PaymentTerm: dto.PaymentTerm, Incoterm: dto.Incoterm, Notes: dto.Notes,
 		VATRate: DefaultTradeVATRate, CreatedBy: actor.EmailFrom(ctx),
+		CustomerPONumber: strings.TrimSpace(dto.CustomerPONumber), CustomerPOAttachment: strings.TrimSpace(dto.CustomerPOAttachment),
+		DPPercent:    dto.DPPercent,
 		SalesOrderID: dto.SalesOrderID, QuotationID: dto.QuotationID, ParentID: dto.ParentID,
 	}
 	var lines []domain.TradeInvoiceLine
@@ -105,6 +160,15 @@ func (uc *tradeInvoiceUseCase) Create(ctx context.Context, dto CreateTradeInvoic
 			t.Currency = o.Currency
 		}
 		t.VATExempt = o.VATExempt
+		if t.CustomerPONumber == "" {
+			t.CustomerPONumber = o.CustomerPONumber
+		}
+		if t.CustomerPOAttachment == "" {
+			t.CustomerPOAttachment = o.CustomerPOAttachment
+		}
+		if t.DPPercent == 0 {
+			t.DPPercent = o.DPPercent
+		}
 		for _, l := range o.Lines {
 			pid := l.ProductID
 			desc, unit := uc.describe(ctx, pid)
@@ -158,6 +222,15 @@ func (uc *tradeInvoiceUseCase) Create(ctx context.Context, dto CreateTradeInvoic
 			t.Incoterm = p.Incoterm
 		}
 		t.VATExempt = p.VATExempt
+		if t.CustomerPONumber == "" {
+			t.CustomerPONumber = p.CustomerPONumber
+		}
+		if t.CustomerPOAttachment == "" {
+			t.CustomerPOAttachment = p.CustomerPOAttachment
+		}
+		if t.DPPercent == 0 {
+			t.DPPercent = p.DPPercent
+		}
 		for _, l := range p.Lines {
 			lines = append(lines, domain.TradeInvoiceLine{ProductID: l.ProductID, Description: l.Description, Unit: l.Unit, Quantity: l.Quantity, UnitPrice: l.UnitPrice})
 		}
@@ -188,6 +261,7 @@ func (uc *tradeInvoiceUseCase) Create(ctx context.Context, dto CreateTradeInvoic
 	}
 	t.Lines = lines
 	computeTradeTotals(t)
+	t.DPAmount = round2(t.Total * t.DPPercent / 100)
 
 	count, err := uc.repo.CountByKind(ctx, kind)
 	if err != nil {
@@ -274,6 +348,18 @@ func (uc *tradeInvoiceUseCase) Cancel(ctx context.Context, id uuid.UUID) (*domai
 	t.Status = domain.TradeStatusCancelled
 	if err := uc.repo.Update(ctx, t); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to cancel invoice")
+	}
+	return t, nil
+}
+
+func (uc *tradeInvoiceUseCase) LinkOrder(ctx context.Context, id, orderID uuid.UUID) (*domain.TradeInvoice, error) {
+	t, err := uc.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	t.SalesOrderID = &orderID
+	if err := uc.repo.Update(ctx, t); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to link the Sales Order to the invoice")
 	}
 	return t, nil
 }

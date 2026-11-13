@@ -293,6 +293,9 @@ type BillingTerm struct {
 func (BillingTerm) TableName() string { return "sales_billing_terms" }
 
 type SalesRepository interface {
+	// GetLastSalePrice is the unit price this customer was last sold the product at
+	// (0 when never sold), used to prefill the price on a new order/PI.
+	GetLastSalePrice(ctx context.Context, customerName string, productID uuid.UUID) (float64, error)
 	// Order revision history
 	CreateOrderRevision(ctx context.Context, rev *SalesOrderRevision) error
 	ListOrderRevisions(ctx context.Context, orderID uuid.UUID) ([]SalesOrderRevision, error)

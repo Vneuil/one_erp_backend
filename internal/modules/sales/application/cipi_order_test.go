@@ -155,4 +155,3 @@ func TestSalesOrder_CIPILogic(t *testing.T) {
 		}
 	})
 }
-

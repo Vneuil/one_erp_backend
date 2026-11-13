@@ -26,9 +26,9 @@ type CreateSalesOrderDTO struct {
 	DPPaid                bool    `json:"dpPaid"`
 	DPPercent             float64 `json:"dpPercent"`
 	DPAmount              float64 `json:"dpAmount"`
-	InvoiceDocType       string  `json:"invoiceDocType,omitempty"`
-	InvoiceDocAttachment string  `json:"invoiceDocAttachment,omitempty"`
-	InvoiceDocNumber     string  `json:"invoiceDocNumber,omitempty"`
+	InvoiceDocType        string  `json:"invoiceDocType,omitempty"`
+	InvoiceDocAttachment  string  `json:"invoiceDocAttachment,omitempty"`
+	InvoiceDocNumber      string  `json:"invoiceDocNumber,omitempty"`
 	ShippingAddress       string  `json:"shippingAddress,omitempty"`
 	ShippingCourier       string  `json:"shippingCourier,omitempty"`
 	DeliveryDate          string  `json:"deliveryDate,omitempty"`
@@ -59,9 +59,9 @@ type UpdateSalesOrderDTO struct {
 	DPPaid                *bool    `json:"dpPaid,omitempty"`
 	DPPercent             *float64 `json:"dpPercent,omitempty"`
 	DPAmount              *float64 `json:"dpAmount,omitempty"`
-	InvoiceDocType       *string             `json:"invoiceDocType,omitempty"`
-	InvoiceDocAttachment *string             `json:"invoiceDocAttachment,omitempty"`
-	InvoiceDocNumber     *string             `json:"invoiceDocNumber,omitempty"`
+	InvoiceDocType        *string  `json:"invoiceDocType,omitempty"`
+	InvoiceDocAttachment  *string  `json:"invoiceDocAttachment,omitempty"`
+	InvoiceDocNumber      *string  `json:"invoiceDocNumber,omitempty"`
 	ShippingAddress       *string  `json:"shippingAddress,omitempty"`
 	ShippingCourier       *string  `json:"shippingCourier,omitempty"`
 	DeliveryDate          *string  `json:"deliveryDate,omitempty"`
@@ -101,39 +101,41 @@ type SalesOrderLineResponseDTO struct {
 }
 
 type SalesOrderResponseDTO struct {
-	ID                    uuid.UUID                   `json:"id"`
-	OrderNumber           string                      `json:"orderNumber"`
-	CustomerName          string                      `json:"customerName"`
-	TotalAmount           float64                     `json:"totalAmount"`
-	Currency              string                      `json:"currency"`
-	BaseAmount            float64                     `json:"baseAmount"`
-	Status                string                      `json:"status"`
-	CreatedByEmail        string                      `json:"createdByEmail,omitempty"`
-	PaymentStatus         string                      `json:"paymentStatus"`
-	Channel               string                      `json:"channel"`
-	OrderDate             string                      `json:"orderDate"`
-	CustomerPONumber      string                      `json:"customerPoNumber,omitempty"`
-	CustomerPOAttachment  string                      `json:"customerPoAttachment,omitempty"`
-	DPPaid                bool                        `json:"dpPaid"`
-	DPPercent             float64                     `json:"dpPercent"`
-	DPAmount              float64                     `json:"dpAmount"`
-	InvoiceDocType       string                      `json:"invoiceDocType,omitempty"`
-	InvoiceDocAttachment string                      `json:"invoiceDocAttachment,omitempty"`
-	InvoiceDocNumber     string                      `json:"invoiceDocNumber,omitempty"`
-	ShippingAddress       string                      `json:"shippingAddress,omitempty"`
-	ShippingCourier       string                      `json:"shippingCourier,omitempty"`
-	DeliveryDate          string                      `json:"deliveryDate,omitempty"`
-	PackagingAvailability string                      `json:"packagingAvailability"`
-	COAStatus             string                      `json:"coaStatus"`
-	ProductionStatus      string                      `json:"productionStatus"`
-	VATExempt             bool                        `json:"vatExempt"`
-	Revision              int                         `json:"revision"`
-	RejectionReason       string                      `json:"rejectionReason,omitempty"`
-	RejectedBy            string                      `json:"rejectedBy,omitempty"`
-	RejectedAt            *time.Time                  `json:"rejectedAt,omitempty"`
-	WarehouseID           *uuid.UUID                  `json:"warehouseId,omitempty"`
-	Lines                 []SalesOrderLineResponseDTO `json:"lines,omitempty"`
-	CreatedAt             time.Time                   `json:"createdAt"`
+	ID                    uuid.UUID `json:"id"`
+	OrderNumber           string    `json:"orderNumber"`
+	CustomerName          string    `json:"customerName"`
+	TotalAmount           float64   `json:"totalAmount"`
+	Currency              string    `json:"currency"`
+	BaseAmount            float64   `json:"baseAmount"`
+	Status                string    `json:"status"`
+	CreatedByEmail        string    `json:"createdByEmail,omitempty"`
+	PaymentStatus         string    `json:"paymentStatus"`
+	Channel               string    `json:"channel"`
+	OrderDate             string    `json:"orderDate"`
+	CustomerPONumber      string    `json:"customerPoNumber,omitempty"`
+	CustomerPOAttachment  string    `json:"customerPoAttachment,omitempty"`
+	DPPaid                bool      `json:"dpPaid"`
+	DPPercent             float64   `json:"dpPercent"`
+	DPAmount              float64   `json:"dpAmount"`
+	InvoiceDocType        string    `json:"invoiceDocType,omitempty"`
+	InvoiceDocAttachment  string    `json:"invoiceDocAttachment,omitempty"`
+	InvoiceDocNumber      string    `json:"invoiceDocNumber,omitempty"`
+	ShippingAddress       string    `json:"shippingAddress,omitempty"`
+	ShippingCourier       string    `json:"shippingCourier,omitempty"`
+	DeliveryDate          string    `json:"deliveryDate,omitempty"`
+	PackagingAvailability string    `json:"packagingAvailability"`
+	COAStatus             string    `json:"coaStatus"`
+	ProductionStatus      string    `json:"productionStatus"`
+	VATExempt             bool      `json:"vatExempt"`
+	// PricesHidden is true when the amounts were blanked for a caller who may not see prices.
+	PricesHidden    bool                        `json:"pricesHidden,omitempty"`
+	Revision        int                         `json:"revision"`
+	RejectionReason string                      `json:"rejectionReason,omitempty"`
+	RejectedBy      string                      `json:"rejectedBy,omitempty"`
+	RejectedAt      *time.Time                  `json:"rejectedAt,omitempty"`
+	WarehouseID     *uuid.UUID                  `json:"warehouseId,omitempty"`
+	Lines           []SalesOrderLineResponseDTO `json:"lines,omitempty"`
+	CreatedAt       time.Time                   `json:"createdAt"`
 }
 
 type QuotationLineDTO struct {
@@ -199,9 +201,9 @@ func ToSalesOrderResponse(o *domain.SalesOrder) *SalesOrderResponseDTO {
 		DPPaid:                o.DPPaid,
 		DPPercent:             o.DPPercent,
 		DPAmount:              o.DPAmount,
-		InvoiceDocType:       o.InvoiceDocType,
-		InvoiceDocAttachment: o.InvoiceDocAttachment,
-		InvoiceDocNumber:     o.InvoiceDocNumber,
+		InvoiceDocType:        o.InvoiceDocType,
+		InvoiceDocAttachment:  o.InvoiceDocAttachment,
+		InvoiceDocNumber:      o.InvoiceDocNumber,
 		ShippingAddress:       o.ShippingAddress,
 		ShippingCourier:       o.ShippingCourier,
 		DeliveryDate:          o.DeliveryDate,

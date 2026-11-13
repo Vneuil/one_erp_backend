@@ -44,6 +44,8 @@ type SalesUseCase interface {
 	AttachInvoiceDocument(ctx context.Context, id uuid.UUID, dto AttachInvoiceDocDTO) (*SalesOrderResponseDTO, error)
 	// ListOrderRevisions returns every earlier version of the order (oldest first).
 	ListOrderRevisions(ctx context.Context, id uuid.UUID) ([]domain.SalesOrderRevision, error)
+	// LastSalePrice returns the price the customer last paid for the product (0 = none, or caller may not see prices).
+	LastSalePrice(ctx context.Context, customerName string, productID uuid.UUID) (float64, error)
 
 	// FinalizeOrderApproved/Rejected are the single place that applies the
 	// effect of a Sales Order's approval workflow reaching a final state:
@@ -90,7 +92,7 @@ type salesUseCase struct {
 	repo        domain.SalesRepository
 	currencyUC  currencyApp.CurrencyUseCase
 	inventoryUC inventoryApp.InventoryUseCase
-	products    productDomain.ProductRepository // optional: unit costs for cost of goods sold
+	products    productDomain.ProductRepository   // optional: unit costs for cost of goods sold
 	customers   customerDomain.CustomerRepository // optional: block inactive customers on new orders
 	approvalUC  approvalApp.ApprovalUseCase
 	ledger      financeApp.LedgerPoster // optional; nil disables auto-posting to the general ledger
@@ -191,6 +193,13 @@ func (uc *salesUseCase) CreateOrder(ctx context.Context, dto CreateSalesOrderDTO
 			ProductID: l.ProductID, Quantity: l.Quantity, UnitPrice: l.UnitPrice, Subtotal: l.Quantity * l.UnitPrice,
 		})
 	}
+	// Staff take the order down without prices; superadmin/admin fill them in later.
+	if !actor.MaySetPrices(ctx) {
+		for i := range lines {
+			lines[i].UnitPrice, lines[i].Subtotal = 0, 0
+		}
+		dto.TotalAmount, dto.DPAmount = 0, 0
+	}
 
 	order := &domain.SalesOrder{
 		OrderNumber:          orderNum,
@@ -286,7 +295,7 @@ func (uc *salesUseCase) CreateOrder(ctx context.Context, dto CreateSalesOrderDTO
 		uc.postCOGS(ctx, order.ID, order.OrderNumber, lines)
 	}
 
-	return ToSalesOrderResponse(order), nil
+	return presentOrder(ctx, order), nil
 }
 
 func (uc *salesUseCase) SubmitOrder(ctx context.Context, id uuid.UUID) (*SalesOrderResponseDTO, error) {
@@ -299,9 +308,6 @@ func (uc *salesUseCase) SubmitOrder(ctx context.Context, id uuid.UUID) (*SalesOr
 	}
 	if !strings.EqualFold(order.Status, "draft") {
 		return nil, apperrors.NewConflict(fmt.Sprintf("Sales order in status %s cannot be submitted", order.Status))
-	}
-	if err := checkSubmitDocuments(order); err != nil {
-		return nil, err
 	}
 	requiresApproval := false
 	if uc.approvalUC != nil {
@@ -339,7 +345,7 @@ func (uc *salesUseCase) SubmitOrder(ctx context.Context, id uuid.UUID) (*SalesOr
 	if err := uc.repo.UpdateOrder(ctx, order); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to update sales order")
 	}
-	return ToSalesOrderResponse(order), nil
+	return presentOrder(ctx, order), nil
 }
 
 // ApproveOrder advances a Sales Order routed through modules/approval
@@ -357,6 +363,12 @@ func (uc *salesUseCase) ApproveOrder(ctx context.Context, id uuid.UUID, dto Sale
 		return nil, apperrors.NewNotFound("Sales order not found")
 	}
 	if err := sod.ForbidSelfApproval(ctx, order.CreatedByEmail); err != nil {
+		return nil, err
+	}
+	// "DP menyusul": the order may be created and submitted before the DP arrives, but it is
+	// only released to PR/PO and production once the incoming PO / PI document is on file
+	// and/or the DP has been received.
+	if err := checkSubmitDocuments(order); err != nil {
 		return nil, err
 	}
 
@@ -394,7 +406,7 @@ func (uc *salesUseCase) ApproveOrder(ctx context.Context, id uuid.UUID, dto Sale
 			// Keep who rejected and why on the order itself, for later analysis.
 			stampRejection(order, dto)
 			_ = uc.repo.UpdateOrder(ctx, order)
-			return ToSalesOrderResponse(order), nil
+			return presentOrder(ctx, order), nil
 		}
 	}
 
@@ -418,7 +430,7 @@ func (uc *salesUseCase) ApproveOrder(ctx context.Context, id uuid.UUID, dto Sale
 	if err := uc.repo.UpdateOrder(ctx, order); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to update sales order")
 	}
-	return ToSalesOrderResponse(order), nil
+	return presentOrder(ctx, order), nil
 }
 
 // FinalizeOrderApproved sets the order's status to "Confirmed" and performs
@@ -504,7 +516,7 @@ func (uc *salesUseCase) RejectOrder(ctx context.Context, id uuid.UUID, dto Sales
 			if err != nil {
 				return nil, apperrors.NewInternal(err, "Failed to get sales order")
 			}
-			return ToSalesOrderResponse(order), nil
+			return presentOrder(ctx, order), nil
 		}
 	}
 
@@ -516,7 +528,7 @@ func (uc *salesUseCase) RejectOrder(ctx context.Context, id uuid.UUID, dto Sales
 	if err := uc.repo.UpdateOrder(ctx, order); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to reject sales order")
 	}
-	return ToSalesOrderResponse(order), nil
+	return presentOrder(ctx, order), nil
 }
 
 // FinalizeOrderRejected mirrors FinalizeOrderApproved for the rejected
@@ -548,7 +560,7 @@ func (uc *salesUseCase) GetOrderByID(ctx context.Context, id uuid.UUID) (*SalesO
 	if order == nil {
 		return nil, apperrors.NewNotFound("Sales order not found")
 	}
-	return ToSalesOrderResponse(order), nil
+	return presentOrder(ctx, order), nil
 }
 
 // UpdateOrder lets the customer name and line items of a Sales Order be
@@ -593,9 +605,15 @@ func (uc *salesUseCase) UpdateOrder(ctx context.Context, id uuid.UUID, dto Updat
 		if l.ProductID == uuid.Nil || l.Quantity <= 0 || l.UnitPrice < 0 {
 			return nil, apperrors.NewBadRequest("Each line requires a productId, a positive quantity, and a non-negative unit price")
 		}
-		subtotal := l.Quantity * l.UnitPrice
+		unitPrice := l.UnitPrice
+		if !actor.MaySetPrices(ctx) {
+			// The caller never saw the prices (they are redacted for staff), so what
+			// they send back is meaningless: keep the price already on the order.
+			unitPrice = existingUnitPrice(order.Lines, l.ProductID)
+		}
+		subtotal := l.Quantity * unitPrice
 		total += subtotal
-		lines = append(lines, domain.SalesOrderLine{ProductID: l.ProductID, Quantity: l.Quantity, UnitPrice: l.UnitPrice, Subtotal: subtotal})
+		lines = append(lines, domain.SalesOrderLine{ProductID: l.ProductID, Quantity: l.Quantity, UnitPrice: unitPrice, Subtotal: subtotal})
 	}
 
 	baseAmount := total
@@ -689,7 +707,7 @@ func (uc *salesUseCase) UpdateOrder(ctx context.Context, id uuid.UUID, dto Updat
 		return nil, apperrors.NewInternal(err, "Failed to update sales order")
 	}
 
-	return ToSalesOrderResponse(order), nil
+	return presentOrder(ctx, order), nil
 }
 
 func (uc *salesUseCase) AttachInvoiceDocument(ctx context.Context, id uuid.UUID, dto AttachInvoiceDocDTO) (*SalesOrderResponseDTO, error) {
@@ -717,7 +735,7 @@ func (uc *salesUseCase) AttachInvoiceDocument(ctx context.Context, id uuid.UUID,
 		return nil, apperrors.NewInternal(err, "Failed to attach invoice document to sales order")
 	}
 
-	return ToSalesOrderResponse(order), nil
+	return presentOrder(ctx, order), nil
 }
 
 func (uc *salesUseCase) ListOrders(ctx context.Context, query types.PaginationQuery) ([]SalesOrderResponseDTO, types.PaginationMeta, error) {
@@ -728,7 +746,7 @@ func (uc *salesUseCase) ListOrders(ctx context.Context, query types.PaginationQu
 	}
 
 	meta := types.NewPaginationMeta(total, query.Page, query.PerPage)
-	return ToSalesOrderResponseList(orders), meta, nil
+	return presentOrders(ctx, orders), meta, nil
 }
 
 func quotationLines(inputs []QuotationLineDTO) ([]domain.QuotationLine, float64, error) {
@@ -1409,7 +1427,7 @@ func stampRejection(order *domain.SalesOrder, dto SalesApprovalActionDTO) {
 	order.RejectedAt = &now
 }
 
-// checkSubmitDocuments enforces the B2B rule: before an order goes for approval the
+// checkSubmitDocuments enforces the B2B rule: before an order is approved (released to PR/PO and production) the
 // incoming PO / outgoing PI document must be uploaded (number or attachment) and/or the
 // down payment received. Marketplace and POS orders are not B2B documents and are exempt.
 func checkSubmitDocuments(o *domain.SalesOrder) error {
@@ -1420,5 +1438,54 @@ func checkSubmitDocuments(o *domain.SalesOrder) error {
 	if hasDoc || o.DPPaid {
 		return nil
 	}
-	return apperrors.NewBadRequest("Upload the incoming PO / outgoing PI document, or mark the down payment as received, before submitting this order")
+	return apperrors.NewBadRequest("Upload the incoming PO / outgoing PI document, or mark the down payment as received, before approving this order")
+}
+
+// existingUnitPrice returns the price a product already has on the order, 0 for a new product.
+func existingUnitPrice(lines []domain.SalesOrderLine, productID uuid.UUID) float64 {
+	for _, l := range lines {
+		if l.ProductID == productID {
+			return l.UnitPrice
+		}
+	}
+	return 0
+}
+
+// presentOrder maps an order for the caller, blanking every monetary field when the
+// caller may not see prices (staff). PricesHidden tells the UI the zeros are redactions.
+func presentOrder(ctx context.Context, o *domain.SalesOrder) *SalesOrderResponseDTO {
+	r := ToSalesOrderResponse(o)
+	if r != nil && !actor.MaySeePrices(ctx) {
+		redactOrder(r)
+	}
+	return r
+}
+
+func presentOrders(ctx context.Context, orders []domain.SalesOrder) []SalesOrderResponseDTO {
+	out := ToSalesOrderResponseList(orders)
+	if !actor.MaySeePrices(ctx) {
+		for i := range out {
+			redactOrder(&out[i])
+		}
+	}
+	return out
+}
+
+func redactOrder(r *SalesOrderResponseDTO) {
+	r.PricesHidden = true
+	r.TotalAmount, r.BaseAmount, r.DPAmount = 0, 0, 0
+	for i := range r.Lines {
+		r.Lines[i].UnitPrice, r.Lines[i].Subtotal = 0, 0
+	}
+}
+
+func (uc *salesUseCase) LastSalePrice(ctx context.Context, customerName string, productID uuid.UUID) (float64, error) {
+	if !actor.MaySeePrices(ctx) {
+		return 0, nil
+	}
+	p, err := uc.repo.GetLastSalePrice(ctx, customerName, productID)
+	if err != nil {
+		return 0, apperrors.NewInternal(err, "Failed to look up last sale price")
+	}
+	return p, nil
 }

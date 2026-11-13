@@ -3,6 +3,8 @@ package application
 import (
 	"testing"
 
+	"github.com/google/uuid"
+
 	"github.com/divinecoid/one-backend/internal/modules/sales/domain"
 )
 
@@ -53,5 +55,34 @@ func TestSubmitNeedsDocumentOrDP(t *testing.T) {
 	}
 	if err := checkSubmitDocuments(&domain.SalesOrder{Channel: "POS"}); err != nil {
 		t.Fatal("POS orders are exempt")
+	}
+}
+
+func TestOrderFromPI(t *testing.T) {
+	pid := uuid.New()
+	pi := &domain.TradeInvoice{Kind: domain.TradeKindPI, Status: domain.TradeStatusDraft, Number: "PI-1", CustomerName: "Perusahaan A",
+		Total: 1110, DPPercent: 50, DPAmount: 555, CustomerPONumber: "PO-018", VATExempt: true,
+		Lines: []domain.TradeInvoiceLine{{ProductID: &pid, Quantity: 100, UnitPrice: 10}}}
+	if _, err := OrderFromPI(pi, OrderFromPIDTO{}); err == nil {
+		t.Fatal("a draft PI cannot become a Sales Order")
+	}
+	pi.Status = domain.TradeStatusIssued
+	// DP menyusul: the order is created with DP not yet received.
+	so, err := OrderFromPI(pi, OrderFromPIDTO{DPPaid: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if so.DPPaid || so.DPPercent != 50 || so.DPAmount != 555 || so.CustomerPONumber != "PO-018" || !so.VATExempt || len(so.Lines) != 1 || so.Lines[0].UnitPrice != 10 {
+		t.Fatalf("order must mirror the PI: %+v", so)
+	}
+	linked := uuid.New()
+	pi.SalesOrderID = &linked
+	if _, err := OrderFromPI(pi, OrderFromPIDTO{}); err == nil {
+		t.Fatal("a PI can only produce one Sales Order")
+	}
+	pi.SalesOrderID = nil
+	pi.Lines[0].ProductID = nil
+	if _, err := OrderFromPI(pi, OrderFromPIDTO{}); err == nil {
+		t.Fatal("free-text lines cannot become order lines")
 	}
 }
