@@ -42,6 +42,7 @@ type CreateCustomerDTO struct {
 }
 
 type UpdateCustomerDTO struct {
+	Code            *string `json:"code,omitempty"`
 	Name            *string `json:"name,omitempty"`
 	CustomerType    *string `json:"customerType,omitempty"`
 	Email           *string `json:"email,omitempty"`

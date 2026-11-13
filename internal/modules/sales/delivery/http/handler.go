@@ -12,6 +12,7 @@ import (
 	approvalInfra "github.com/divinecoid/one-backend/internal/modules/approval/infrastructure"
 	currencyApp "github.com/divinecoid/one-backend/internal/modules/currency/application"
 	currencyInfra "github.com/divinecoid/one-backend/internal/modules/currency/infrastructure"
+	customerInfra "github.com/divinecoid/one-backend/internal/modules/customer/infrastructure"
 	inventoryApp "github.com/divinecoid/one-backend/internal/modules/inventory/application"
 	inventoryInfra "github.com/divinecoid/one-backend/internal/modules/inventory/infrastructure"
 	productInfra "github.com/divinecoid/one-backend/internal/modules/product/infrastructure"
@@ -52,7 +53,8 @@ func (h *Handler) resolve(c *fiber.Ctx) (application.SalesUseCase, error) {
 		approvalUC.RegisterCallback(docType, cb)
 	}
 	ledger := financeApp.NewLedgerPoster(financeInfra.NewFinanceRepository(tenantDB))
-	return application.NewSalesUseCase(repo, currencyUC, inventoryUC, approvalUC, application.WithLedger(ledger), application.WithProducts(productRepo)), nil
+	customerRepo := customerInfra.NewCustomerRepository(tenantDB)
+	return application.NewSalesUseCase(repo, currencyUC, inventoryUC, approvalUC, application.WithLedger(ledger), application.WithProducts(productRepo), application.WithCustomers(customerRepo)), nil
 }
 
 // actorFromRequest builds a SalesApprovalActionDTO from the caller's JWT

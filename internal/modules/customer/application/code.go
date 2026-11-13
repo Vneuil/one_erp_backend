@@ -17,6 +17,14 @@ const (
 
 var customerCodeRe = regexp.MustCompile(`^(B2B|B2C)-(\d{4,})$`)
 
+func customerCodeType(code string) (string, bool) {
+	m := customerCodeRe.FindStringSubmatch(strings.ToUpper(strings.TrimSpace(code)))
+	if m == nil {
+		return "", false
+	}
+	return m[1], true
+}
+
 // normalizeCustomerType resolves the type from the explicit value, else from an
 // explicit code's prefix, else defaults to B2B.
 func normalizeCustomerType(t, code string) (string, error) {

@@ -104,7 +104,14 @@ func (r *supplierRepository) Count(ctx context.Context) (int64, error) {
 // derived (see each entity's TableName()).
 func (r *supplierRepository) HasReferences(ctx context.Context, id uuid.UUID) (bool, error) {
 	db := r.db.WithContext(ctx)
-	tables := []string{"procurement_purchase_orders", "procurement_purchase_invoices"}
+	tables := []string{
+		"procurement_purchase_orders",
+		"procurement_purchase_invoices",
+		"procurement_purchase_down_payments",
+		"procurement_purchase_returns",
+		"procurement_invoice_receipts",
+		"qc_certificates",
+	}
 	for _, t := range tables {
 		var count int64
 		if err := db.Table(t).Where("supplier_id = ?", id).Count(&count).Error; err != nil {

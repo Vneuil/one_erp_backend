@@ -15,6 +15,7 @@ import (
 	"github.com/divinecoid/one-backend/internal/modules/procurement/domain"
 	productDomain "github.com/divinecoid/one-backend/internal/modules/product/domain"
 	salesDomain "github.com/divinecoid/one-backend/internal/modules/sales/domain"
+	supplierDomain "github.com/divinecoid/one-backend/internal/modules/supplier/domain"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/sod"
 	"github.com/divinecoid/one-backend/internal/shared/types"
@@ -92,13 +93,14 @@ type ProcurementUseCase interface {
 }
 
 type procurementUseCase struct {
-	repo        domain.ProcurementRepository
-	approvalUC  approvalApp.ApprovalUseCase
-	inventoryUC inventoryApp.InventoryUseCase
-	currencyUC  currencyApp.CurrencyUseCase
-	productRepo productDomain.ProductRepository
-	salesRepo   salesDomain.SalesRepository
-	ledger      financeApp.LedgerPoster // optional; nil disables auto-posting to the general ledger
+	repo         domain.ProcurementRepository
+	approvalUC   approvalApp.ApprovalUseCase
+	inventoryUC  inventoryApp.InventoryUseCase
+	currencyUC   currencyApp.CurrencyUseCase
+	productRepo  productDomain.ProductRepository
+	salesRepo    salesDomain.SalesRepository
+	supplierRepo supplierDomain.SupplierRepository
+	ledger       financeApp.LedgerPoster // optional; nil disables auto-posting to the general ledger
 }
 
 // Option customises optional collaborators of the procurement use case.
@@ -117,6 +119,11 @@ func WithProductRepo(pr productDomain.ProductRepository) Option {
 // WithSalesRepo provides access to sales orders for eligibility check (SO -> PR gatekeeping).
 func WithSalesRepo(sr salesDomain.SalesRepository) Option {
 	return func(uc *procurementUseCase) { uc.salesRepo = sr }
+}
+
+// WithSupplierRepo provides access to supplier master data to block inactive vendors on new POs.
+func WithSupplierRepo(sr supplierDomain.SupplierRepository) Option {
+	return func(uc *procurementUseCase) { uc.supplierRepo = sr }
 }
 
 func NewProcurementUseCase(repo domain.ProcurementRepository, approvalUC approvalApp.ApprovalUseCase, inventoryUC inventoryApp.InventoryUseCase, currencyUC currencyApp.CurrencyUseCase, opts ...Option) ProcurementUseCase {
@@ -531,9 +538,26 @@ func (uc *procurementUseCase) FinalizePurchaseRequestRejected(ctx context.Contex
 
 // Purchase orders
 
+func (uc *procurementUseCase) ensureSupplierActive(ctx context.Context, supplierID uuid.UUID) error {
+	if uc.supplierRepo == nil || supplierID == uuid.Nil {
+		return nil
+	}
+	sup, err := uc.supplierRepo.GetByID(ctx, supplierID)
+	if err != nil {
+		return apperrors.NewInternal(err, "Failed to verify supplier status")
+	}
+	if sup != nil && strings.EqualFold(sup.Status, "Inactive") {
+		return apperrors.NewBadRequest(fmt.Sprintf("Vendor %s berstatus Nonaktif dan tidak dapat dipilih untuk transaksi baru", sup.Name))
+	}
+	return nil
+}
+
 func (uc *procurementUseCase) CreatePurchaseOrder(ctx context.Context, dto CreatePurchaseOrderDTO) (*PurchaseOrderResponseDTO, error) {
 	if dto.SupplierID == uuid.Nil {
 		return nil, apperrors.NewBadRequest("supplierId is required")
+	}
+	if err := uc.ensureSupplierActive(ctx, dto.SupplierID); err != nil {
+		return nil, err
 	}
 	if len(dto.Lines) == 0 {
 		return nil, apperrors.NewBadRequest("At least one line item is required")
@@ -671,6 +695,11 @@ func (uc *procurementUseCase) UpdatePurchaseOrder(ctx context.Context, id uuid.U
 		lines[i] = domain.PurchaseOrderLine{ProductID: l.ProductID, Quantity: l.Quantity, UnitPrice: l.UnitPrice, Subtotal: subtotal}
 	}
 	if dto.SupplierID != uuid.Nil {
+		if dto.SupplierID != po.SupplierID {
+			if err := uc.ensureSupplierActive(ctx, dto.SupplierID); err != nil {
+				return nil, err
+			}
+		}
 		po.SupplierID = dto.SupplierID
 	}
 	if dto.SupplierName != "" {

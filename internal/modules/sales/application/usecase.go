@@ -15,6 +15,7 @@ import (
 
 	approvalApp "github.com/divinecoid/one-backend/internal/modules/approval/application"
 	currencyApp "github.com/divinecoid/one-backend/internal/modules/currency/application"
+	customerDomain "github.com/divinecoid/one-backend/internal/modules/customer/domain"
 	financeApp "github.com/divinecoid/one-backend/internal/modules/finance/application"
 	inventoryApp "github.com/divinecoid/one-backend/internal/modules/inventory/application"
 	"github.com/divinecoid/one-backend/internal/modules/sales/domain"
@@ -90,6 +91,7 @@ type salesUseCase struct {
 	currencyUC  currencyApp.CurrencyUseCase
 	inventoryUC inventoryApp.InventoryUseCase
 	products    productDomain.ProductRepository // optional: unit costs for cost of goods sold
+	customers   customerDomain.CustomerRepository // optional: block inactive customers on new orders
 	approvalUC  approvalApp.ApprovalUseCase
 	ledger      financeApp.LedgerPoster // optional; nil disables auto-posting to the general ledger
 }
@@ -100,6 +102,11 @@ type Option func(*salesUseCase)
 // WithProducts supplies product unit costs so stock leaving for a sale books cost of goods sold.
 func WithProducts(p productDomain.ProductRepository) Option {
 	return func(uc *salesUseCase) { uc.products = p }
+}
+
+// WithCustomers supplies customer master data to reject inactive customers on new orders.
+func WithCustomers(c customerDomain.CustomerRepository) Option {
+	return func(uc *salesUseCase) { uc.customers = c }
 }
 
 // WithLedger enables automatic journal posting for invoices and payments.
@@ -118,6 +125,15 @@ func NewSalesUseCase(repo domain.SalesRepository, currencyUC currencyApp.Currenc
 func (uc *salesUseCase) CreateOrder(ctx context.Context, dto CreateSalesOrderDTO) (*SalesOrderResponseDTO, error) {
 	if dto.CustomerName == "" {
 		return nil, apperrors.NewBadRequest("Customer name is required")
+	}
+	if uc.customers != nil {
+		cust, err := uc.customers.GetByName(ctx, dto.CustomerName)
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to verify customer status")
+		}
+		if cust != nil && strings.EqualFold(cust.Status, "Inactive") {
+			return nil, apperrors.NewBadRequest(fmt.Sprintf("Pelanggan %s berstatus Nonaktif dan tidak dapat dipilih untuk transaksi baru", cust.Name))
+		}
 	}
 
 	orderNum := dto.OrderNumber

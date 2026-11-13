@@ -65,6 +65,7 @@ type CustomerRepository interface {
 	Create(ctx context.Context, customer *Customer) error
 	GetByID(ctx context.Context, id uuid.UUID) (*Customer, error)
 	GetByCode(ctx context.Context, code string) (*Customer, error)
+	GetByName(ctx context.Context, name string) (*Customer, error)
 	List(ctx context.Context, query types.PaginationQuery) ([]Customer, int64, error)
 	Update(ctx context.Context, customer *Customer) error
 	Delete(ctx context.Context, id uuid.UUID) error

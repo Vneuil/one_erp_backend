@@ -6,6 +6,7 @@ import (
 
 	"github.com/divinecoid/one-backend/internal/foundation/license"
 	tenant "github.com/divinecoid/one-backend/internal/foundation/tenant"
+	"github.com/divinecoid/one-backend/internal/shared/actor"
 	"github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/utils"
 	"github.com/gofiber/fiber/v2"
@@ -70,7 +71,9 @@ func ProtectedConsultant(jwtSecret string) fiber.Handler {
 	}
 }
 
-// RequireRoles restricts access to users with one of the required roles
+// RequireRoles restricts access to users with one of the required roles,
+// checking both the JWT account role and any resolved RBAC role names attached
+// to the request context by rbac.Enforce.
 func RequireRoles(allowedRoles ...string) fiber.Handler {
 	return func(c *fiber.Ctx) error {
 		claims, ok := c.Locals(ContextKeyUser).(*utils.JWTClaims)
@@ -78,9 +81,14 @@ func RequireRoles(allowedRoles ...string) fiber.Handler {
 			return errors.NewUnauthorized("Authentication required")
 		}
 
-		for _, role := range allowedRoles {
-			if strings.EqualFold(claims.Role, role) {
+		for _, allowed := range allowedRoles {
+			if strings.EqualFold(claims.Role, allowed) {
 				return c.Next()
+			}
+			for _, effective := range actor.RolesFrom(c.UserContext()) {
+				if strings.EqualFold(effective, allowed) {
+					return c.Next()
+				}
 			}
 		}
 

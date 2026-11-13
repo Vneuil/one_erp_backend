@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/divinecoid/one-backend/internal/modules/supplier/domain"
+	"github.com/divinecoid/one-backend/internal/shared/actor"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/taxid"
 	"github.com/divinecoid/one-backend/internal/shared/types"
@@ -52,10 +53,12 @@ func (uc *supplierUseCase) Create(ctx context.Context, dto CreateSupplierDTO) (*
 			return nil, apperrors.NewInternal(err, "Failed to generate supplier code")
 		}
 		code = generated
-	} else if t, valid := vendorCodeType(code); valid {
-		if vendorType == "" {
-			vendorType = t
+	} else {
+		t, valid := vendorCodeType(code)
+		if !valid {
+			return nil, apperrors.NewBadRequest("Vendor code must follow VD-<TYPE>-<NNN>, e.g. VD-PRD-001")
 		}
+		vendorType = t
 	}
 
 	existing, err := uc.repo.GetByCode(ctx, code)
@@ -141,10 +144,20 @@ func (uc *supplierUseCase) Update(ctx context.Context, id uuid.UUID, dto UpdateS
 		return nil, apperrors.NewNotFound("Supplier not found")
 	}
 
+	if dto.VendorType != nil {
+		t, ok := normalizeVendorType(*dto.VendorType)
+		if !ok {
+			return nil, apperrors.NewBadRequest("Vendor type must be 2-4 letters (e.g. PRD, PCK, ATK)")
+		}
+		if t != "" {
+			supplier.VendorType = t
+		}
+	}
 	if dto.Code != nil {
 		newCode := strings.ToUpper(strings.TrimSpace(*dto.Code))
 		if newCode != "" && newCode != supplier.Code {
-			if _, valid := vendorCodeType(newCode); !valid {
+			t, valid := vendorCodeType(newCode)
+			if !valid {
 				return nil, apperrors.NewBadRequest("Vendor code must follow VD-<TYPE>-<NNN>, e.g. VD-PRD-001")
 			}
 			existing, err := uc.repo.GetByCode(ctx, newCode)
@@ -155,17 +168,12 @@ func (uc *supplierUseCase) Update(ctx context.Context, id uuid.UUID, dto UpdateS
 				return nil, apperrors.NewConflict("Supplier with this code already exists")
 			}
 			supplier.Code = newCode
-			if t, _ := vendorCodeType(newCode); t != "" {
+			supplier.VendorType = t
+		} else if newCode != "" && supplier.VendorType == "" {
+			if t, valid := vendorCodeType(newCode); valid {
 				supplier.VendorType = t
 			}
 		}
-	}
-	if dto.VendorType != nil {
-		t, ok := normalizeVendorType(*dto.VendorType)
-		if !ok {
-			return nil, apperrors.NewBadRequest("Vendor type must be 2-4 letters (e.g. PRD, PCK, ATK)")
-		}
-		supplier.VendorType = t
 	}
 	if dto.City != nil {
 		supplier.City = defaultCity(*dto.City)
@@ -218,6 +226,9 @@ func (uc *supplierUseCase) Update(ctx context.Context, id uuid.UUID, dto UpdateS
 		status, err := normalizeStatus(*dto.Status)
 		if err != nil {
 			return nil, err
+		}
+		if status != supplier.Status && !canChangeStatus(ctx) {
+			return nil, apperrors.NewForbidden("Only Manager or Admin can change vendor status")
 		}
 		supplier.Status = status
 	}
@@ -300,6 +311,19 @@ func (uc *supplierUseCase) SetStatus(ctx context.Context, id uuid.UUID, status s
 		return nil, apperrors.NewInternal(err, "Failed to update supplier status")
 	}
 	return ToSupplierResponse(supplier), nil
+}
+
+func canChangeStatus(ctx context.Context) bool {
+	roles := actor.RolesFrom(ctx)
+	if len(roles) == 0 {
+		return true
+	}
+	for _, r := range roles {
+		if strings.EqualFold(r, "admin") || strings.EqualFold(r, "manager") {
+			return true
+		}
+	}
+	return false
 }
 
 func normalizeStatus(s string) (string, error) {

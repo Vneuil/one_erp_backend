@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/divinecoid/one-backend/internal/modules/customer/domain"
+	"github.com/divinecoid/one-backend/internal/shared/actor"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/taxid"
 	"github.com/divinecoid/one-backend/internal/shared/types"
@@ -41,9 +42,6 @@ func (uc *customerUseCase) Create(ctx context.Context, dto CreateCustomerDTO) (*
 	if err != nil {
 		return nil, err
 	}
-	if err := validateB2BContact(ctype, dto.ContactPerson, dto.ContactPhone, dto.ContactMobile, dto.ContactWhatsapp); err != nil {
-		return nil, err
-	}
 	// The code is generated when the client does not supply one, so the UI never
 	// has to guess the next number (and collide with an existing record).
 	if code == "" {
@@ -52,6 +50,15 @@ func (uc *customerUseCase) Create(ctx context.Context, dto CreateCustomerDTO) (*
 			return nil, apperrors.NewInternal(err, "Failed to generate customer code")
 		}
 		code = generated
+	} else {
+		prefixType, valid := customerCodeType(code)
+		if !valid {
+			return nil, apperrors.NewBadRequest("Customer code must follow B2B-NNNN or B2C-NNNN, e.g. B2B-0001")
+		}
+		ctype = prefixType
+	}
+	if err := validateB2BContact(ctype, dto.ContactPerson, dto.ContactPhone, dto.ContactMobile, dto.ContactWhatsapp); err != nil {
+		return nil, err
 	}
 
 	existing, err := uc.repo.GetByCode(ctx, code)
@@ -159,6 +166,28 @@ func (uc *customerUseCase) Update(ctx context.Context, id uuid.UUID, dto UpdateC
 		}
 		customer.CustomerType = t
 	}
+	if dto.Code != nil {
+		newCode := strings.ToUpper(strings.TrimSpace(*dto.Code))
+		if newCode != "" && newCode != customer.Code {
+			prefixType, valid := customerCodeType(newCode)
+			if !valid {
+				return nil, apperrors.NewBadRequest("Customer code must follow B2B-NNNN or B2C-NNNN, e.g. B2B-0001")
+			}
+			existing, err := uc.repo.GetByCode(ctx, newCode)
+			if err != nil {
+				return nil, apperrors.NewInternal(err, "Failed to check existing code")
+			}
+			if existing != nil && existing.ID != customer.ID {
+				return nil, apperrors.NewConflict("Customer with this code already exists")
+			}
+			customer.Code = newCode
+			customer.CustomerType = prefixType
+		} else if newCode != "" && customer.CustomerType == "" {
+			if prefixType, valid := customerCodeType(newCode); valid {
+				customer.CustomerType = prefixType
+			}
+		}
+	}
 	if dto.City != nil {
 		customer.City = defaultCity(*dto.City)
 	}
@@ -210,6 +239,9 @@ func (uc *customerUseCase) Update(ctx context.Context, id uuid.UUID, dto UpdateC
 		status, err := normalizeStatus(*dto.Status)
 		if err != nil {
 			return nil, err
+		}
+		if status != customer.Status && !canChangeStatus(ctx) {
+			return nil, apperrors.NewForbidden("Only Manager or Admin can change customer status")
 		}
 		customer.Status = status
 	}
@@ -321,6 +353,19 @@ func (uc *customerUseCase) SetStatus(ctx context.Context, id uuid.UUID, status s
 		return nil, apperrors.NewInternal(err, "Failed to update customer status")
 	}
 	return ToCustomerResponse(customer), nil
+}
+
+func canChangeStatus(ctx context.Context) bool {
+	roles := actor.RolesFrom(ctx)
+	if len(roles) == 0 {
+		return true
+	}
+	for _, r := range roles {
+		if strings.EqualFold(r, "admin") || strings.EqualFold(r, "superadmin") || strings.EqualFold(r, "owner") || strings.EqualFold(r, "manager") {
+			return true
+		}
+	}
+	return false
 }
 
 // nextCode returns the next free "B2B-NNNN" / "B2C-NNNN" code.

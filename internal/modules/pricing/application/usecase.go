@@ -14,6 +14,7 @@ type PricingUseCase interface {
 	ListPaymentTerms(ctx context.Context) ([]PaymentTermResponseDTO, error)
 	UpdatePaymentTerm(ctx context.Context, id uuid.UUID, dto UpdatePaymentTermDTO) (*PaymentTermResponseDTO, error)
 	DeletePaymentTerm(ctx context.Context, id uuid.UUID) error
+	SeedReferenceData(ctx context.Context) error
 
 	CreateCustomerType(ctx context.Context, dto CreateCustomerTypeDTO) (*CustomerTypeResponseDTO, error)
 	ListCustomerTypes(ctx context.Context) ([]CustomerTypeResponseDTO, error)
@@ -49,10 +50,42 @@ func (uc *pricingUseCase) CreatePaymentTerm(ctx context.Context, dto CreatePayme
 	return &PaymentTermResponseDTO{ID: p.ID, Name: p.Name, Days: p.Days}, nil
 }
 
+var defaultPaymentTerms = []CreatePaymentTermDTO{
+	{Name: "COD", Days: 0},
+	{Name: "Net 7", Days: 7},
+	{Name: "Net 14", Days: 14},
+	{Name: "Net 30", Days: 30},
+	{Name: "Net 45", Days: 45},
+	{Name: "Net 60", Days: 60},
+}
+
+func (uc *pricingUseCase) SeedReferenceData(ctx context.Context) error {
+	items, err := uc.repo.ListPaymentTerms(ctx)
+	if err != nil {
+		return err
+	}
+	if len(items) > 0 {
+		return nil
+	}
+	for _, dt := range defaultPaymentTerms {
+		if _, err := uc.CreatePaymentTerm(ctx, dt); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (uc *pricingUseCase) ListPaymentTerms(ctx context.Context) ([]PaymentTermResponseDTO, error) {
 	items, err := uc.repo.ListPaymentTerms(ctx)
 	if err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to list payment terms")
+	}
+	if len(items) == 0 {
+		if err := uc.SeedReferenceData(ctx); err == nil {
+			if seeded, err := uc.repo.ListPaymentTerms(ctx); err == nil {
+				items = seeded
+			}
+		}
 	}
 	return ToPaymentTermResponseList(items), nil
 }

@@ -50,6 +50,18 @@ func (r *customerRepository) GetByCode(ctx context.Context, code string) (*domai
 	return &customer, nil
 }
 
+func (r *customerRepository) GetByName(ctx context.Context, name string) (*domain.Customer, error) {
+	var customer domain.Customer
+	err := r.db.WithContext(ctx).Where("LOWER(name) = LOWER(?)", strings.TrimSpace(name)).First(&customer).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &customer, nil
+}
+
 func (r *customerRepository) List(ctx context.Context, query types.PaginationQuery) ([]domain.Customer, int64, error) {
 	var customers []domain.Customer
 	var total int64
@@ -119,6 +131,9 @@ func (r *customerRepository) HasReferences(ctx context.Context, name string) (bo
 	}{
 		{"sales_orders", "customer_name"},
 		{"sales_invoices", "customer_name"},
+		{"sales_deliveries", "customer_name"},
+		{"sales_returns", "customer_name"},
+		{"sales_down_payments", "customer_name"},
 		{"quotations", "customer_name"},
 		{"crm_deals", "customer"},
 	}
