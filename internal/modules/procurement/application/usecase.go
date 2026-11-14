@@ -37,6 +37,7 @@ type ProcurementUseCase interface {
 	GetPurchaseRequestByID(ctx context.Context, id uuid.UUID) (*PurchaseRequestResponseDTO, error)
 	ListPurchaseRequests(ctx context.Context, query types.PaginationQuery) ([]PurchaseRequestResponseDTO, types.PaginationMeta, error)
 	UpdatePurchaseRequest(ctx context.Context, id uuid.UUID, dto UpdatePurchaseRequestDTO) (*PurchaseRequestResponseDTO, error)
+	DeletePurchaseRequest(ctx context.Context, id uuid.UUID) error
 	SubmitPurchaseRequest(ctx context.Context, id uuid.UUID) (*PurchaseRequestResponseDTO, error)
 	ApprovePurchaseRequest(ctx context.Context, id uuid.UUID, dto ApprovalActionDTO) (*PurchaseRequestResponseDTO, error)
 	RejectPurchaseRequest(ctx context.Context, id uuid.UUID, dto ApprovalActionDTO) (*PurchaseRequestResponseDTO, error)
@@ -276,8 +277,8 @@ func (uc *procurementUseCase) UpdatePurchaseRequest(ctx context.Context, id uuid
 	if pr == nil {
 		return nil, apperrors.NewNotFound("Purchase request not found")
 	}
-	if pr.Status != "draft" {
-		return nil, apperrors.NewConflict("Only draft purchase requests can be edited")
+	if pr.Status == "converted" {
+		return nil, apperrors.NewConflict("Cannot edit a purchase request that has already been converted to a purchase order")
 	}
 	if len(dto.Lines) == 0 {
 		return nil, apperrors.NewBadRequest("At least one line item is required")
@@ -302,11 +303,29 @@ func (uc *procurementUseCase) UpdatePurchaseRequest(ctx context.Context, id uuid
 		pr.SalesOrderID = dto.SalesOrderID
 		pr.SalesOrderNo = dto.SalesOrderNo
 	}
+	if pr.Status == "rejected" {
+		pr.Status = "draft"
+		pr.RejectionReason = ""
+	}
 	pr.Lines = lines
 	if err := uc.repo.UpdatePurchaseRequest(ctx, pr); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to update purchase request")
 	}
 	return ToPurchaseRequestResponse(pr), nil
+}
+
+func (uc *procurementUseCase) DeletePurchaseRequest(ctx context.Context, id uuid.UUID) error {
+	pr, err := uc.repo.GetPurchaseRequestByID(ctx, id)
+	if err != nil {
+		return apperrors.NewInternal(err, "Failed to get purchase request")
+	}
+	if pr == nil {
+		return apperrors.NewNotFound("Purchase request not found")
+	}
+	if pr.Status == "converted" {
+		return apperrors.NewConflict("Cannot delete a purchase request that has already been converted to a purchase order")
+	}
+	return uc.repo.DeletePurchaseRequest(ctx, id)
 }
 
 func (uc *procurementUseCase) SubmitPurchaseRequest(ctx context.Context, id uuid.UUID) (*PurchaseRequestResponseDTO, error) {

@@ -76,6 +76,15 @@ func (r *procurementRepository) UpdatePurchaseRequest(ctx context.Context, pr *d
 	})
 }
 
+func (r *procurementRepository) DeletePurchaseRequest(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("purchase_request_id = ?", id).Delete(&domain.PurchaseRequestLine{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&domain.PurchaseRequest{}, id).Error
+	})
+}
+
 func (r *procurementRepository) CountPurchaseRequests(ctx context.Context) (int64, error) {
 	var total int64
 	err := r.db.WithContext(ctx).Model(&domain.PurchaseRequest{}).Count(&total).Error

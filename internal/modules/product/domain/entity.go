@@ -21,10 +21,20 @@ type Product struct {
 	Stock        int        `gorm:"default:0" json:"stock"`
 	CostPrice    float64    `gorm:"type:decimal(15,2);default:0" json:"costPrice"`
 	SellingPrice float64    `gorm:"type:decimal(15,2);default:0" json:"sellingPrice"`
+	Currency     string     `gorm:"type:varchar(10);default:'IDR'" json:"currency,omitempty"`
 	Status       string     `gorm:"type:varchar(50);default:'in_stock'" json:"status"`
 	Grade        string     `gorm:"type:varchar(50)" json:"grade,omitempty"`
 	SafetyStock  int        `gorm:"default:0" json:"safetyStock"`
 	OrganicType  string     `gorm:"type:varchar(50);default:'Natural'" json:"organicType,omitempty"`
+	// Certifications holds comma-separated certification codes or names (e.g. "EU, USDA, Halal, Kosher")
+	Certifications string `gorm:"type:text" json:"certifications,omitempty"`
+	// Packaging specific dimensions and specifications (Box: PxLxT, 1/2 gelombang; Sak: 2/3 layer)
+	DimensionLength float64 `gorm:"type:decimal(10,2);default:0" json:"dimensionLength,omitempty"`
+	DimensionWidth  float64 `gorm:"type:decimal(10,2);default:0" json:"dimensionWidth,omitempty"`
+	DimensionHeight float64 `gorm:"type:decimal(10,2);default:0" json:"dimensionHeight,omitempty"`
+	PackagingType   string  `gorm:"type:varchar(50)" json:"packagingType,omitempty"`
+	PackagingSpec   string  `gorm:"type:varchar(100)" json:"packagingSpec,omitempty"`
+	Remarks         string  `gorm:"type:text" json:"remarks,omitempty"`
 	// VariantOf points a variant (e.g. "Merah / L") at its base product; nil for
 	// ordinary products. Variants are one level deep and are sold, priced and
 	// stocked as products in their own right.
@@ -67,6 +77,20 @@ func (UnitOfMeasure) TableName() string {
 	return "units_of_measure"
 }
 
+// Certification represents standard certification masters (EU, USDA, COR, SNI, Fairtrade, Halal, Kosher, etc.)
+type Certification struct {
+	types.BaseEntity
+	CompanyID   *uuid.UUID `gorm:"type:uuid;index" json:"companyId,omitempty"`
+	TenantID    *uuid.UUID `gorm:"type:uuid;index" json:"tenantId,omitempty"`
+	Code        string     `gorm:"type:varchar(50);not null;index" json:"code"`
+	Name        string     `gorm:"type:varchar(150);not null" json:"name"`
+	Description string     `gorm:"type:text" json:"description,omitempty"`
+}
+
+func (Certification) TableName() string {
+	return "product_certifications"
+}
+
 type ProductRepository interface {
 	Create(ctx context.Context, product *Product) error
 	GetByID(ctx context.Context, id uuid.UUID) (*Product, error)
@@ -94,4 +118,11 @@ type ProductRepository interface {
 	ListUnits(ctx context.Context) ([]UnitOfMeasure, error)
 	UpdateUnit(ctx context.Context, u *UnitOfMeasure) error
 	DeleteUnit(ctx context.Context, id uuid.UUID) error
+
+	CreateCertification(ctx context.Context, c *Certification) error
+	GetCertificationByID(ctx context.Context, id uuid.UUID) (*Certification, error)
+	GetCertificationByCode(ctx context.Context, code string) (*Certification, error)
+	ListCertifications(ctx context.Context) ([]Certification, error)
+	UpdateCertification(ctx context.Context, c *Certification) error
+	DeleteCertification(ctx context.Context, id uuid.UUID) error
 }

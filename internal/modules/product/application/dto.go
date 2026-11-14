@@ -8,36 +8,52 @@ import (
 )
 
 type CreateProductDTO struct {
-	Barcode      string  `json:"barcode"`
-	SKU          string  `json:"sku"`
-	Name         string  `json:"name"`
-	Category     string  `json:"category"`
-	Unit         string  `json:"unit"`
-	Stock        int     `json:"stock"`
-	CostPrice    float64 `json:"costPrice"`
-	SellingPrice float64 `json:"sellingPrice"`
-	Status       string  `json:"status"`
-	Grade        string  `json:"grade,omitempty"`
-	SafetyStock  int     `json:"safetyStock"`
-	OrganicType  string  `json:"organicType,omitempty"`
+	Barcode         string  `json:"barcode"`
+	SKU             string  `json:"sku"`
+	Name            string  `json:"name"`
+	Category        string  `json:"category"`
+	Unit            string  `json:"unit"`
+	Stock           int     `json:"stock"`
+	CostPrice       float64 `json:"costPrice"`
+	SellingPrice    float64 `json:"sellingPrice"`
+	Currency        string  `json:"currency,omitempty"`
+	Status          string  `json:"status"`
+	Grade           string  `json:"grade,omitempty"`
+	SafetyStock     int     `json:"safetyStock"`
+	OrganicType     string  `json:"organicType,omitempty"`
+	Certifications  string  `json:"certifications,omitempty"`
+	DimensionLength float64 `json:"dimensionLength,omitempty"`
+	DimensionWidth  float64 `json:"dimensionWidth,omitempty"`
+	DimensionHeight float64 `json:"dimensionHeight,omitempty"`
+	PackagingType   string  `json:"packagingType,omitempty"`
+	PackagingSpec   string  `json:"packagingSpec,omitempty"`
+	Remarks         string  `json:"remarks,omitempty"`
 	// VariantOf/VariantLabel make this product a variant of another.
 	VariantOf    *uuid.UUID `json:"variantOf,omitempty"`
 	VariantLabel string     `json:"variantLabel,omitempty"`
 }
 
 type UpdateProductDTO struct {
-	SKU          *string  `json:"sku,omitempty"`
-	Barcode      *string  `json:"barcode,omitempty"`
-	Name         *string  `json:"name,omitempty"`
-	Category     *string  `json:"category,omitempty"`
-	Unit         *string  `json:"unit,omitempty"`
-	Stock        *int     `json:"stock,omitempty"`
-	CostPrice    *float64 `json:"costPrice,omitempty"`
-	SellingPrice *float64 `json:"sellingPrice,omitempty"`
-	Status       *string  `json:"status,omitempty"`
-	Grade        *string  `json:"grade,omitempty"`
-	SafetyStock  *int     `json:"safetyStock,omitempty"`
-	OrganicType  *string  `json:"organicType,omitempty"`
+	SKU             *string  `json:"sku,omitempty"`
+	Barcode         *string  `json:"barcode,omitempty"`
+	Name            *string  `json:"name,omitempty"`
+	Category        *string  `json:"category,omitempty"`
+	Unit            *string  `json:"unit,omitempty"`
+	Stock           *int     `json:"stock,omitempty"`
+	CostPrice       *float64 `json:"costPrice,omitempty"`
+	SellingPrice    *float64 `json:"sellingPrice,omitempty"`
+	Currency        *string  `json:"currency,omitempty"`
+	Status          *string  `json:"status,omitempty"`
+	Grade           *string  `json:"grade,omitempty"`
+	SafetyStock     *int     `json:"safetyStock,omitempty"`
+	OrganicType     *string  `json:"organicType,omitempty"`
+	Certifications  *string  `json:"certifications,omitempty"`
+	DimensionLength *float64 `json:"dimensionLength,omitempty"`
+	DimensionWidth  *float64 `json:"dimensionWidth,omitempty"`
+	DimensionHeight *float64 `json:"dimensionHeight,omitempty"`
+	PackagingType   *string  `json:"packagingType,omitempty"`
+	PackagingSpec   *string  `json:"packagingSpec,omitempty"`
+	Remarks         *string  `json:"remarks,omitempty"`
 	// VariantOf: send the base product id to make this a variant; send the nil
 	// uuid (all zeros) to turn a variant back into an ordinary product.
 	VariantOf    *uuid.UUID `json:"variantOf,omitempty"`
@@ -54,10 +70,18 @@ type ProductResponseDTO struct {
 	Stock                int        `json:"stock"`
 	CostPrice            float64    `json:"costPrice"`
 	SellingPrice         float64    `json:"sellingPrice"`
+	Currency             string     `json:"currency,omitempty"`
 	Status               string     `json:"status"`
 	Grade                string     `json:"grade,omitempty"`
 	SafetyStock          int        `json:"safetyStock"`
 	OrganicType          string     `json:"organicType,omitempty"`
+	Certifications       string     `json:"certifications,omitempty"`
+	DimensionLength      float64    `json:"dimensionLength,omitempty"`
+	DimensionWidth       float64    `json:"dimensionWidth,omitempty"`
+	DimensionHeight      float64    `json:"dimensionHeight,omitempty"`
+	PackagingType        string     `json:"packagingType,omitempty"`
+	PackagingSpec        string     `json:"packagingSpec,omitempty"`
+	Remarks              string     `json:"remarks,omitempty"`
 	IsBelowSafetyStock   bool       `json:"isBelowSafetyStock"`
 	VariantOf            *uuid.UUID `json:"variantOf,omitempty"`
 	VariantLabel         string     `json:"variantLabel,omitempty"`
@@ -81,10 +105,18 @@ func ToProductResponse(p *domain.Product) *ProductResponseDTO {
 		Stock:                p.Stock,
 		CostPrice:            p.CostPrice,
 		SellingPrice:         p.SellingPrice,
+		Currency:             p.Currency,
 		Status:               p.Status,
 		Grade:                p.Grade,
 		SafetyStock:          p.SafetyStock,
 		OrganicType:          p.OrganicType,
+		Certifications:       p.Certifications,
+		DimensionLength:      p.DimensionLength,
+		DimensionWidth:       p.DimensionWidth,
+		DimensionHeight:      p.DimensionHeight,
+		PackagingType:        p.PackagingType,
+		PackagingSpec:        p.PackagingSpec,
+		Remarks:              p.Remarks,
 		IsBelowSafetyStock:   p.SafetyStock > 0 && p.Stock <= p.SafetyStock,
 		VariantOf:            p.VariantOf,
 		VariantLabel:         p.VariantLabel,
@@ -144,6 +176,33 @@ func ToUnitResponseList(items []domain.UnitOfMeasure) []UnitResponseDTO {
 	result := make([]UnitResponseDTO, len(items))
 	for i, u := range items {
 		result[i] = UnitResponseDTO{ID: u.ID, Name: u.Name, Symbol: u.Symbol}
+	}
+	return result
+}
+
+type CreateCertificationDTO struct {
+	Code        string `json:"code"`
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+}
+
+type UpdateCertificationDTO struct {
+	Code        *string `json:"code,omitempty"`
+	Name        *string `json:"name,omitempty"`
+	Description *string `json:"description,omitempty"`
+}
+
+type CertificationResponseDTO struct {
+	ID          uuid.UUID `json:"id"`
+	Code        string    `json:"code"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
+}
+
+func ToCertificationResponseList(items []domain.Certification) []CertificationResponseDTO {
+	result := make([]CertificationResponseDTO, len(items))
+	for i, c := range items {
+		result[i] = CertificationResponseDTO{ID: c.ID, Code: c.Code, Name: c.Name, Description: c.Description}
 	}
 	return result
 }

@@ -17,6 +17,7 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	requests.Get("/", h.ListPurchaseRequests)
 	requests.Get("/:id", h.GetPurchaseRequestByID)
 	requests.Put("/:id", h.UpdatePurchaseRequest)
+	requests.Delete("/:id", h.DeletePurchaseRequest)
 	requests.Post("/:id/submit", h.SubmitPurchaseRequest)
 	requests.Post("/:id/approve", h.ApprovePurchaseRequest)
 	requests.Post("/:id/reject", h.RejectPurchaseRequest)

@@ -31,7 +31,7 @@ func ensureSchema(db *gorm.DB) error {
 	if _, ok := migrated.Load(db); ok {
 		return nil
 	}
-	if err := db.AutoMigrate(&domain.Product{}, &domain.ProductCategory{}, &domain.UnitOfMeasure{}); err != nil {
+	if err := db.AutoMigrate(&domain.Product{}, &domain.ProductCategory{}, &domain.UnitOfMeasure{}, &domain.Certification{}); err != nil {
 		return err
 	}
 	migrated.Store(db, true)
@@ -285,4 +285,67 @@ func (h *Handler) DeleteUnit(c *fiber.Ctx) error {
 		return err
 	}
 	return response.OK(c, "Unit deleted successfully", nil)
+}
+
+func (h *Handler) CreateCertification(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var dto application.CreateCertificationDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	cert, err := uc.CreateCertification(h.ctx(c), dto)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Certification created successfully", cert)
+}
+
+func (h *Handler) ListCertifications(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	certs, err := uc.ListCertifications(h.ctx(c))
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Certifications retrieved successfully", certs)
+}
+
+func (h *Handler) UpdateCertification(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid certification ID format")
+	}
+	var dto application.UpdateCertificationDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	cert, err := uc.UpdateCertification(h.ctx(c), id, dto)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Certification updated successfully", cert)
+}
+
+func (h *Handler) DeleteCertification(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid certification ID format")
+	}
+	if err := uc.DeleteCertification(h.ctx(c), id); err != nil {
+		return err
+	}
+	return response.OK(c, "Certification deleted successfully", nil)
 }

@@ -213,3 +213,47 @@ func (r *productRepository) CountVariants(ctx context.Context, baseID uuid.UUID)
 	err := r.db.WithContext(ctx).Model(&domain.Product{}).Where("variant_of = ?", baseID).Count(&n).Error
 	return n, err
 }
+
+func (r *productRepository) CreateCertification(ctx context.Context, c *domain.Certification) error {
+	tenantctx.SetTenantID(ctx, &c.TenantID)
+	return r.db.WithContext(ctx).Create(c).Error
+}
+
+func (r *productRepository) ListCertifications(ctx context.Context) ([]domain.Certification, error) {
+	var items []domain.Certification
+	db := tenantctx.Scope(ctx, r.db.WithContext(ctx).Model(&domain.Certification{}))
+	err := db.Order("code asc").Find(&items).Error
+	return items, err
+}
+
+func (r *productRepository) GetCertificationByID(ctx context.Context, id uuid.UUID) (*domain.Certification, error) {
+	var c domain.Certification
+	err := r.db.WithContext(ctx).Where("id = ?", id).First(&c).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &c, nil
+}
+
+func (r *productRepository) GetCertificationByCode(ctx context.Context, code string) (*domain.Certification, error) {
+	var c domain.Certification
+	err := tenantctx.Scope(ctx, r.db.WithContext(ctx)).Where("UPPER(code) = UPPER(?)", code).First(&c).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &c, nil
+}
+
+func (r *productRepository) UpdateCertification(ctx context.Context, c *domain.Certification) error {
+	return r.db.WithContext(ctx).Save(c).Error
+}
+
+func (r *productRepository) DeleteCertification(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.Certification{}, id).Error
+}

@@ -294,6 +294,7 @@ type ProcurementRepository interface {
 	GetPurchaseRequestByID(ctx context.Context, id uuid.UUID) (*PurchaseRequest, error)
 	ListPurchaseRequests(ctx context.Context, query types.PaginationQuery) ([]PurchaseRequest, int64, error)
 	UpdatePurchaseRequest(ctx context.Context, pr *PurchaseRequest) error
+	DeletePurchaseRequest(ctx context.Context, id uuid.UUID) error
 	CountPurchaseRequests(ctx context.Context) (int64, error)
 
 	// Purchase orders

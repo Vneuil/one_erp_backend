@@ -27,6 +27,11 @@ type ProductUseCase interface {
 	ListUnits(ctx context.Context) ([]UnitResponseDTO, error)
 	UpdateUnit(ctx context.Context, id uuid.UUID, dto UpdateUnitDTO) (*UnitResponseDTO, error)
 	DeleteUnit(ctx context.Context, id uuid.UUID) error
+
+	CreateCertification(ctx context.Context, dto CreateCertificationDTO) (*CertificationResponseDTO, error)
+	ListCertifications(ctx context.Context) ([]CertificationResponseDTO, error)
+	UpdateCertification(ctx context.Context, id uuid.UUID, dto UpdateCertificationDTO) (*CertificationResponseDTO, error)
+	DeleteCertification(ctx context.Context, id uuid.UUID) error
 }
 
 type productUseCase struct {
@@ -69,21 +74,48 @@ func (uc *productUseCase) Create(ctx context.Context, dto CreateProductDTO) (*Pr
 		return nil, err
 	}
 
+	currency := strings.ToUpper(strings.TrimSpace(dto.Currency))
+	if currency == "" {
+		currency = "IDR"
+	}
+	certifications := strings.TrimSpace(dto.Certifications)
+	organicType := strings.TrimSpace(dto.OrganicType)
+	if organicType == "" {
+		upperCert := strings.ToUpper(certifications)
+		if strings.Contains(upperCert, "EU") ||
+			strings.Contains(upperCert, "USDA") ||
+			strings.Contains(upperCert, "COR") ||
+			strings.Contains(upperCert, "ORGANIC") ||
+			strings.Contains(upperCert, "ORGANIK") {
+			organicType = "Organic"
+		} else {
+			organicType = "Natural"
+		}
+	}
+
 	product := &domain.Product{
-		VariantOf:    variantOf,
-		VariantLabel: variantLabel,
-		SKU:          sku,
-		Barcode:      strings.TrimSpace(dto.Barcode),
-		Name:         name,
-		Category:     dto.Category,
-		Unit:         dto.Unit,
-		Stock:        dto.Stock,
-		CostPrice:    dto.CostPrice,
-		SellingPrice: dto.SellingPrice,
-		Status:       status,
-		Grade:        strings.TrimSpace(dto.Grade),
-		SafetyStock:  dto.SafetyStock,
-		OrganicType:  strings.TrimSpace(dto.OrganicType),
+		VariantOf:       variantOf,
+		VariantLabel:    variantLabel,
+		SKU:             sku,
+		Barcode:         strings.TrimSpace(dto.Barcode),
+		Name:            name,
+		Category:        dto.Category,
+		Unit:            dto.Unit,
+		Stock:           dto.Stock,
+		CostPrice:       dto.CostPrice,
+		SellingPrice:    dto.SellingPrice,
+		Currency:        currency,
+		Status:          status,
+		Grade:           strings.TrimSpace(dto.Grade),
+		SafetyStock:     dto.SafetyStock,
+		OrganicType:     organicType,
+		Certifications:  certifications,
+		DimensionLength: dto.DimensionLength,
+		DimensionWidth:  dto.DimensionWidth,
+		DimensionHeight: dto.DimensionHeight,
+		PackagingType:   strings.TrimSpace(dto.PackagingType),
+		PackagingSpec:   strings.TrimSpace(dto.PackagingSpec),
+		Remarks:         strings.TrimSpace(dto.Remarks),
 	}
 
 	if err := uc.repo.Create(ctx, product); err != nil {
@@ -174,6 +206,44 @@ func (uc *productUseCase) Update(ctx context.Context, id uuid.UUID, dto UpdatePr
 	}
 	if dto.OrganicType != nil {
 		product.OrganicType = strings.TrimSpace(*dto.OrganicType)
+	}
+	if dto.Currency != nil {
+		c := strings.ToUpper(strings.TrimSpace(*dto.Currency))
+		if c == "" {
+			c = "IDR"
+		}
+		product.Currency = c
+	}
+	if dto.Certifications != nil {
+		product.Certifications = strings.TrimSpace(*dto.Certifications)
+		upperCert := strings.ToUpper(product.Certifications)
+		if product.OrganicType == "" || product.OrganicType == "Natural" || product.OrganicType == "Organic" {
+			if strings.Contains(upperCert, "EU") ||
+				strings.Contains(upperCert, "USDA") ||
+				strings.Contains(upperCert, "COR") ||
+				strings.Contains(upperCert, "ORGANIC") ||
+				strings.Contains(upperCert, "ORGANIK") {
+				product.OrganicType = "Organic"
+			}
+		}
+	}
+	if dto.DimensionLength != nil {
+		product.DimensionLength = *dto.DimensionLength
+	}
+	if dto.DimensionWidth != nil {
+		product.DimensionWidth = *dto.DimensionWidth
+	}
+	if dto.DimensionHeight != nil {
+		product.DimensionHeight = *dto.DimensionHeight
+	}
+	if dto.PackagingType != nil {
+		product.PackagingType = strings.TrimSpace(*dto.PackagingType)
+	}
+	if dto.PackagingSpec != nil {
+		product.PackagingSpec = strings.TrimSpace(*dto.PackagingSpec)
+	}
+	if dto.Remarks != nil {
+		product.Remarks = strings.TrimSpace(*dto.Remarks)
 	}
 	if dto.VariantOf != nil || dto.VariantLabel != nil {
 		of, label := product.VariantOf, product.VariantLabel
@@ -387,7 +457,118 @@ func (uc *productUseCase) SeedInitialData(ctx context.Context) error {
 	for _, item := range initial {
 		_, _ = uc.Create(ctx, item)
 	}
+
+	// Seed default certifications if none exist
+	existingCerts, _ := uc.repo.ListCertifications(ctx)
+	if len(existingCerts) == 0 {
+		for _, def := range defaultCertifications {
+			item := def
+			_ = uc.repo.CreateCertification(ctx, &item)
+		}
+	}
+
 	return nil
+}
+
+var defaultCertifications = []domain.Certification{
+	{Code: "EU", Name: "EU Organic", Description: "Standar Sertifikasi Organik Uni Eropa (European Union Organic Regulations)"},
+	{Code: "USDA", Name: "USDA Organic", Description: "National Organic Program (NOP) Departemen Pertanian Amerika Serikat"},
+	{Code: "COR", Name: "Canada Organic Regime (COR)", Description: "Standar Sertifikasi Pangan Organik Kanada"},
+	{Code: "SNI", Name: "SNI Organik & Mutu", Description: "Standar Nasional Indonesia untuk Pangan dan Produk Industri"},
+	{Code: "Fairtrade", Name: "Fairtrade International", Description: "Sertifikasi Perdagangan Berkeadilan untuk Petani & Pekerja"},
+	{Code: "Halal", Name: "Halal (BPJPH / MUI)", Description: "Sertifikasi Halal Resmi Republik Indonesia"},
+	{Code: "Kosher", Name: "Kosher Certification", Description: "Sertifikasi Standar Pangan Kosher Internasional"},
+}
+
+func (uc *productUseCase) ListCertifications(ctx context.Context) ([]CertificationResponseDTO, error) {
+	items, err := uc.repo.ListCertifications(ctx)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to list certifications")
+	}
+	if len(items) == 0 {
+		for _, def := range defaultCertifications {
+			item := def
+			_ = uc.repo.CreateCertification(ctx, &item)
+		}
+		items, err = uc.repo.ListCertifications(ctx)
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to list certifications after seed")
+		}
+	}
+	return ToCertificationResponseList(items), nil
+}
+
+func (uc *productUseCase) CreateCertification(ctx context.Context, dto CreateCertificationDTO) (*CertificationResponseDTO, error) {
+	code := strings.ToUpper(strings.TrimSpace(dto.Code))
+	name := strings.TrimSpace(dto.Name)
+	if code == "" || name == "" {
+		return nil, apperrors.NewBadRequest("Certification code and name are required")
+	}
+	existing, err := uc.repo.GetCertificationByCode(ctx, code)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to check existing certification")
+	}
+	if existing != nil {
+		return nil, apperrors.NewConflict("Certification with this code already exists")
+	}
+	c := &domain.Certification{
+		Code:        code,
+		Name:        name,
+		Description: strings.TrimSpace(dto.Description),
+	}
+	if err := uc.repo.CreateCertification(ctx, c); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to create certification")
+	}
+	return &CertificationResponseDTO{ID: c.ID, Code: c.Code, Name: c.Name, Description: c.Description}, nil
+}
+
+func (uc *productUseCase) UpdateCertification(ctx context.Context, id uuid.UUID, dto UpdateCertificationDTO) (*CertificationResponseDTO, error) {
+	c, err := uc.repo.GetCertificationByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get certification")
+	}
+	if c == nil {
+		return nil, apperrors.NewNotFound("Certification not found")
+	}
+	if dto.Code != nil {
+		code := strings.ToUpper(strings.TrimSpace(*dto.Code))
+		if code == "" {
+			return nil, apperrors.NewBadRequest("Certification code is required")
+		}
+		existing, err := uc.repo.GetCertificationByCode(ctx, code)
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to check existing certification")
+		}
+		if existing != nil && existing.ID != id {
+			return nil, apperrors.NewConflict("Certification with this code already exists")
+		}
+		c.Code = code
+	}
+	if dto.Name != nil {
+		name := strings.TrimSpace(*dto.Name)
+		if name == "" {
+			return nil, apperrors.NewBadRequest("Certification name is required")
+		}
+		c.Name = name
+	}
+	if dto.Description != nil {
+		c.Description = strings.TrimSpace(*dto.Description)
+	}
+	if err := uc.repo.UpdateCertification(ctx, c); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to update certification")
+	}
+	return &CertificationResponseDTO{ID: c.ID, Code: c.Code, Name: c.Name, Description: c.Description}, nil
+}
+
+func (uc *productUseCase) DeleteCertification(ctx context.Context, id uuid.UUID) error {
+	c, err := uc.repo.GetCertificationByID(ctx, id)
+	if err != nil {
+		return apperrors.NewInternal(err, "Failed to get certification")
+	}
+	if c == nil {
+		return apperrors.NewNotFound("Certification not found")
+	}
+	return uc.repo.DeleteCertification(ctx, id)
 }
 
 // checkVariant validates a variant link: the base product must exist and be an

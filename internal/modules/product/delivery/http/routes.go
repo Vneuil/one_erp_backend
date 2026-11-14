@@ -32,4 +32,10 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	units.Get("/", h.ListUnits)
 	units.Put("/:id", h.UpdateUnit)
 	units.Delete("/:id", h.DeleteUnit)
+
+	certs := router.Group("/product-certifications", protected, tenantCtx)
+	certs.Post("/", h.CreateCertification)
+	certs.Get("/", h.ListCertifications)
+	certs.Put("/:id", h.UpdateCertification)
+	certs.Delete("/:id", h.DeleteCertification)
 }

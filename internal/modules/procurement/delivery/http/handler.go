@@ -184,6 +184,21 @@ func (h *Handler) UpdatePurchaseRequest(c *fiber.Ctx) error {
 	return response.OK(c, "Purchase request updated successfully", pr)
 }
 
+func (h *Handler) DeletePurchaseRequest(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	if err := uc.DeletePurchaseRequest(h.ctx(c), id); err != nil {
+		return err
+	}
+	return response.OK(c, "Purchase request deleted successfully", nil)
+}
+
 func (h *Handler) ApprovePurchaseRequest(c *fiber.Ctx) error {
 	uc, err := h.resolve(c)
 	if err != nil {
