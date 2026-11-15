@@ -21,4 +21,11 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	suppliers.Patch("/:id/status", middleware.RequireRoles("admin", "manager"), h.SetStatus)
 	// Hard delete is reserved for Manager/Admin and is blocked once the vendor is referenced.
 	suppliers.Delete("/:id", middleware.RequireRoles("admin", "manager"), h.Delete)
+
+	supplierCodes := router.Group("/supplier-codes", protected, tenantCtx)
+	supplierCodes.Get("/", h.ListCodes)
+	supplierCodes.Post("/", h.CreateCode)
+	supplierCodes.Put("/:id", h.UpdateCode)
+	supplierCodes.Patch("/:id/status", middleware.RequireRoles("admin", "manager"), h.SetCodeStatus)
+	supplierCodes.Delete("/:id", middleware.RequireRoles("admin", "manager"), h.DeleteCode)
 }

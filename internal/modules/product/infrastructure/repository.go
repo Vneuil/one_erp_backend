@@ -176,6 +176,11 @@ func (r *productRepository) DeleteCategory(ctx context.Context, id uuid.UUID) er
 	return r.db.WithContext(ctx).Delete(&domain.ProductCategory{}, id).Error
 }
 
+func (r *productRepository) UpdateProductCategoryName(ctx context.Context, oldName, newName string) error {
+	db := tenantctx.Scope(ctx, r.db.WithContext(ctx).Model(&domain.Product{}))
+	return db.Where("category = ?", oldName).Update("category", newName).Error
+}
+
 func (r *productRepository) CreateUnit(ctx context.Context, u *domain.UnitOfMeasure) error {
 	tenantctx.SetTenantID(ctx, &u.TenantID)
 	return r.db.WithContext(ctx).Create(u).Error

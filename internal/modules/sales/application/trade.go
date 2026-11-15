@@ -34,6 +34,8 @@ type CreateTradeInvoiceDTO struct {
 	Kind                 string         `json:"kind"` // PI | CI
 	SalesOrderID         *uuid.UUID     `json:"salesOrderId,omitempty"`
 	QuotationID          *uuid.UUID     `json:"quotationId,omitempty"`
+	QuotationNumber      string         `json:"quotationNumber,omitempty"`
+	CustomerPOID         *uuid.UUID     `json:"customerPoId,omitempty"`
 	ParentID             *uuid.UUID     `json:"parentId,omitempty"`
 	CustomerName         string         `json:"customerName,omitempty"`
 	CustomerPONumber     string         `json:"customerPoNumber,omitempty"`
@@ -42,7 +44,10 @@ type CreateTradeInvoiceDTO struct {
 	BillingAddress       string         `json:"billingAddress,omitempty"`
 	ShippingAddress      string         `json:"shippingAddress,omitempty"`
 	Currency             string         `json:"currency,omitempty"`
+	PaymentTermID        *uuid.UUID     `json:"paymentTermId,omitempty"`
 	PaymentTerm          string         `json:"paymentTerm,omitempty"`
+	TaxRateID            *uuid.UUID     `json:"taxRateId,omitempty"`
+	VATRate              *float64       `json:"vatRate,omitempty"`
 	Incoterm             string         `json:"incoterm,omitempty"`
 	Notes                string         `json:"notes,omitempty"`
 	VATExempt            *bool          `json:"vatExempt,omitempty"`
@@ -96,6 +101,8 @@ func OrderFromPI(pi *domain.TradeInvoice, dto OrderFromPIDTO) (CreateSalesOrderD
 	return CreateSalesOrderDTO{
 		CustomerName: pi.CustomerName, TotalAmount: pi.Total, Currency: pi.Currency,
 		CustomerPONumber: poNumber, CustomerPOAttachment: pi.CustomerPOAttachment,
+		PaymentTermID: pi.PaymentTermID, PaymentTerm: pi.PaymentTerm,
+		TaxRateID: pi.TaxRateID, VATRate: pi.VATRate, VATAmount: pi.VATAmount,
 		DPPaid: dto.DPPaid, DPPercent: pi.DPPercent, DPAmount: pi.DPAmount,
 		ShippingAddress: pi.ShippingAddr, ShippingCourier: dto.ShippingCourier, DeliveryDate: dto.DeliveryDate,
 		VATExempt: pi.VATExempt, WarehouseID: dto.WarehouseID, Lines: lines, Status: "draft",
@@ -130,16 +137,52 @@ func (uc *tradeInvoiceUseCase) Create(ctx context.Context, dto CreateTradeInvoic
 		return nil, apperrors.NewBadRequest("dpPercent must be between 0 and 100")
 	}
 
+	vatRate := DefaultTradeVATRate
+	if dto.VATRate != nil && *dto.VATRate >= 0 {
+		vatRate = *dto.VATRate
+	}
+
 	t := &domain.TradeInvoice{
 		Kind: kind, Status: domain.TradeStatusDraft, IssueDate: time.Now().Format("2006-01-02"),
 		CustomerName: strings.TrimSpace(dto.CustomerName), BillingAddr: dto.BillingAddress, ShippingAddr: dto.ShippingAddress,
-		Currency: dto.Currency, PaymentTerm: dto.PaymentTerm, Incoterm: dto.Incoterm, Notes: dto.Notes,
-		VATRate: DefaultTradeVATRate, CreatedBy: actor.EmailFrom(ctx),
+		Currency: dto.Currency, PaymentTermID: dto.PaymentTermID, PaymentTerm: dto.PaymentTerm,
+		TaxRateID: dto.TaxRateID, Incoterm: dto.Incoterm, Notes: dto.Notes,
+		VATRate: vatRate, CreatedBy: actor.EmailFrom(ctx),
 		CustomerPONumber: strings.TrimSpace(dto.CustomerPONumber), CustomerPOAttachment: strings.TrimSpace(dto.CustomerPOAttachment),
 		DPPercent:    dto.DPPercent,
-		SalesOrderID: dto.SalesOrderID, QuotationID: dto.QuotationID, ParentID: dto.ParentID,
+		SalesOrderID: dto.SalesOrderID, QuotationID: dto.QuotationID, QuotationNumber: strings.TrimSpace(dto.QuotationNumber),
+		CustomerPOID: dto.CustomerPOID, ParentID: dto.ParentID,
 	}
 	var lines []domain.TradeInvoiceLine
+
+	// If direct CustomerPO reference is passed
+	if dto.CustomerPOID != nil {
+		if po, err := uc.sales.GetCustomerPOByID(ctx, *dto.CustomerPOID); err == nil && po != nil {
+			if t.CustomerPONumber == "" {
+				t.CustomerPONumber = po.PoNumber
+			}
+			if t.CustomerPOAttachment == "" {
+				t.CustomerPOAttachment = po.Attachment
+			}
+			if t.CustomerName == "" {
+				t.CustomerName = po.CustomerName
+			}
+			if t.Currency == "" {
+				t.Currency = po.Currency
+			}
+			if len(dto.Lines) == 0 && len(po.Lines) > 0 {
+				for _, l := range po.Lines {
+					lines = append(lines, domain.TradeInvoiceLine{
+						ProductID:   l.ProductID,
+						Description: l.ProductName,
+						Unit:        l.Unit,
+						Quantity:    l.Quantity,
+						UnitPrice:   l.UnitPrice,
+					})
+				}
+			}
+		}
+	}
 
 	switch {
 	case dto.SalesOrderID != nil:
@@ -182,8 +225,19 @@ func (uc *tradeInvoiceUseCase) Create(ctx context.Context, dto CreateTradeInvoic
 		if q == nil {
 			return nil, apperrors.NewNotFound("Quotation not found")
 		}
+		t.QuotationID = dto.QuotationID
+		t.QuotationNumber = q.QuotationNumber
+		if q.CustomerPOID != nil {
+			t.CustomerPOID = q.CustomerPOID
+			t.CustomerPONumber = q.CustomerPONumber
+		} else if q.CustomerPONumber != "" && t.CustomerPONumber == "" {
+			t.CustomerPONumber = q.CustomerPONumber
+		}
 		if t.CustomerName == "" {
 			t.CustomerName = q.CustomerName
+		}
+		if t.Currency == "" {
+			t.Currency = q.Currency
 		}
 		for _, l := range q.Lines {
 			lines = append(lines, domain.TradeInvoiceLine{ProductID: l.ProductID, Description: l.Description, Unit: l.Unit, Quantity: l.Quantity, UnitPrice: l.UnitPrice})
@@ -274,6 +328,38 @@ func (uc *tradeInvoiceUseCase) Create(ctx context.Context, dto CreateTradeInvoic
 	if err := uc.repo.Create(ctx, t); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to create invoice")
 	}
+
+	// Synchronize with Customer PO: mark status as Agreed and store generated PI number & ID
+	if t.CustomerPOID != nil {
+		if po, err := uc.sales.GetCustomerPOByID(ctx, *t.CustomerPOID); err == nil && po != nil {
+			po.Status = "Agreed"
+			po.TradeInvoiceID = &t.ID
+			po.TradeInvoiceNumber = t.Number
+			if t.QuotationID != nil && po.QuotationID == nil {
+				po.QuotationID = t.QuotationID
+				po.QuotationNumber = t.QuotationNumber
+			}
+			_ = uc.sales.UpdateCustomerPO(ctx, po)
+		}
+	} else if t.CustomerPONumber != "" {
+		pos, _, err := uc.sales.ListCustomerPOs(ctx, types.PaginationQuery{Search: t.CustomerPONumber, Page: 1, PerPage: 10})
+		if err == nil {
+			for _, po := range pos {
+				if strings.EqualFold(strings.TrimSpace(po.PoNumber), t.CustomerPONumber) {
+					po.Status = "Agreed"
+					po.TradeInvoiceID = &t.ID
+					po.TradeInvoiceNumber = t.Number
+					if t.QuotationID != nil && po.QuotationID == nil {
+						po.QuotationID = t.QuotationID
+						po.QuotationNumber = t.QuotationNumber
+					}
+					_ = uc.sales.UpdateCustomerPO(ctx, &po)
+					break
+				}
+			}
+		}
+	}
+
 	return t, nil
 }
 

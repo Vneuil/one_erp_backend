@@ -216,6 +216,7 @@ type ReceivableResponseDTO struct {
 	TotalInvoice float64    `json:"totalInvoice"`
 	PaidAmount   float64    `json:"paidAmount"`
 	Outstanding  float64    `json:"outstanding"`
+	PaymentTerms string     `json:"paymentTerms"`
 	Aging        string     `json:"aging"`
 	Status       string     `json:"status"`
 	// SourceDoc is set when the receivable was created from a sales invoice.
@@ -237,6 +238,7 @@ func ToReceivableResponse(r *domain.Receivable, asOf time.Time) *ReceivableRespo
 		TotalInvoice: r.TotalInvoice,
 		PaidAmount:   r.PaidAmount,
 		Outstanding:  r.TotalInvoice - r.PaidAmount,
+		PaymentTerms: r.PaymentTerms,
 		Aging:        agingBracket(r.DueDate, asOf),
 		Status:       r.Status,
 		SourceDoc:    r.SourceDoc,

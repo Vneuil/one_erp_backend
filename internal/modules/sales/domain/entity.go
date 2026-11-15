@@ -18,6 +18,7 @@ type SalesOrder struct {
 	TenantID     *uuid.UUID `gorm:"type:uuid;index" json:"tenantId,omitempty"`
 	OrderNumber  string     `gorm:"type:varchar(50);not null;index" json:"orderNumber"`
 	CustomerName string     `gorm:"type:varchar(255);not null" json:"customerName"`
+	CustomerID   *uuid.UUID `gorm:"type:uuid;index" json:"customerId,omitempty"`
 	TotalAmount  float64    `gorm:"type:decimal(15,2);not null" json:"totalAmount"`
 	// Currency/BaseAmount support multi-currency orders (see
 	// modules/currency): Currency is the code TotalAmount is denominated
@@ -26,11 +27,17 @@ type SalesOrder struct {
 	// once at creation time so later rate changes never shift a past
 	// order's reported value. A company that never uses another currency
 	// simply has Currency == base and BaseAmount == TotalAmount always.
-	Currency             string  `gorm:"type:varchar(10);default:'IDR'" json:"currency"`
-	BaseAmount           float64 `gorm:"type:decimal(15,2);not null;default:0" json:"baseAmount"`
-	CreatedByEmail       string  `gorm:"type:varchar(255);index" json:"createdByEmail,omitempty"`
-	Status               string  `gorm:"type:varchar(50);default:'Confirmed'" json:"status"`
-	PaymentStatus        string  `gorm:"type:varchar(50);default:'Unpaid'" json:"paymentStatus"`
+	Currency             string     `gorm:"type:varchar(10);default:'IDR'" json:"currency"`
+	BaseAmount           float64    `gorm:"type:decimal(15,2);not null;default:0" json:"baseAmount"`
+	CreatedByEmail       string     `gorm:"type:varchar(255);index" json:"createdByEmail,omitempty"`
+	Status               string     `gorm:"type:varchar(50);default:'Confirmed'" json:"status"`
+	PaymentStatus        string     `gorm:"type:varchar(50);default:'Unpaid'" json:"paymentStatus"`
+	PaymentTermID        *uuid.UUID `gorm:"type:uuid;index" json:"paymentTermId,omitempty"`
+	PaymentTerm          string     `gorm:"type:varchar(100)" json:"paymentTerm,omitempty"`
+	DueDate              string     `gorm:"type:varchar(50)" json:"dueDate,omitempty"`
+	TaxRateID            *uuid.UUID `gorm:"type:uuid;index" json:"taxRateId,omitempty"`
+	VATRate              float64    `gorm:"type:decimal(5,2);default:0" json:"vatRate"`
+	VATAmount            float64    `gorm:"type:decimal(15,2);default:0" json:"vatAmount"`
 	Channel              string  `gorm:"type:varchar(50);default:'Direct B2B'" json:"channel"`
 	OrderDate            string  `gorm:"type:varchar(50)" json:"orderDate"`
 	CustomerPONumber     string  `gorm:"type:varchar(100)" json:"customerPoNumber,omitempty"`
@@ -112,14 +119,24 @@ type QuotationLine struct {
 func (QuotationLine) TableName() string { return "quotation_lines" }
 
 type Quotation struct {
-	LeadID *uuid.UUID      `gorm:"type:uuid;index" json:"leadId,omitempty"`
-	Lines  []QuotationLine `gorm:"foreignKey:QuotationID" json:"lines"`
+	LeadID                *uuid.UUID      `gorm:"type:uuid;index" json:"leadId,omitempty"`
+	CustomerID            *uuid.UUID      `gorm:"type:uuid;index" json:"customerId,omitempty"`
+	CustomerPOID          *uuid.UUID      `gorm:"type:uuid;index" json:"customerPoId,omitempty"`
+	CustomerPONumber      string          `gorm:"type:varchar(100)" json:"customerPoNumber,omitempty"`
+	PaymentTermID         *uuid.UUID      `gorm:"type:uuid;index" json:"paymentTermId,omitempty"`
+	PaymentTerm           string          `gorm:"type:varchar(100)" json:"paymentTerm,omitempty"`
+	TaxRateID             *uuid.UUID      `gorm:"type:uuid;index" json:"taxRateId,omitempty"`
+	VATRate               float64         `gorm:"type:decimal(5,2);default:0" json:"vatRate"`
+	VATAmount             float64         `gorm:"type:decimal(15,2);default:0" json:"vatAmount"`
+	VATExempt             bool            `gorm:"default:false" json:"vatExempt"`
+	Lines                 []QuotationLine `gorm:"foreignKey:QuotationID" json:"lines"`
 	types.BaseEntity
 	CompanyID             *uuid.UUID `gorm:"type:uuid;index" json:"companyId,omitempty"`
 	TenantID              *uuid.UUID `gorm:"type:uuid;index" json:"tenantId,omitempty"`
 	QuotationNumber       string     `gorm:"type:varchar(50);not null;index" json:"quotationNumber"`
 	CustomerName          string     `gorm:"type:varchar(255);not null" json:"customerName"`
 	TotalAmount           float64    `gorm:"type:decimal(15,2);not null" json:"totalAmount"`
+	Currency              string     `gorm:"type:varchar(10);default:'IDR'" json:"currency"`
 	Status                string     `gorm:"type:varchar(50);default:'Sent'" json:"status"`
 	ValidUntil            string     `gorm:"type:varchar(50)" json:"validUntil"`
 	Notes                 string     `gorm:"type:text" json:"notes,omitempty"`
@@ -155,15 +172,22 @@ type CustomerPO struct {
 	PoNumber       string           `gorm:"type:varchar(100);not null;index" json:"poNumber"`
 	CustomerID     *uuid.UUID       `gorm:"type:uuid;index" json:"customerId,omitempty"`
 	CustomerName   string           `gorm:"type:varchar(255);not null" json:"customerName"`
+	PaymentTermID  *uuid.UUID       `gorm:"type:uuid;index" json:"paymentTermId,omitempty"`
+	PaymentTerm    string           `gorm:"type:varchar(100)" json:"paymentTerm,omitempty"`
+	TaxRateID      *uuid.UUID       `gorm:"type:uuid;index" json:"taxRateId,omitempty"`
+	VATRate        float64          `gorm:"type:decimal(5,2);default:0" json:"vatRate"`
+	VATAmount      float64          `gorm:"type:decimal(15,2);default:0" json:"vatAmount"`
 	PoDate         string           `gorm:"type:varchar(20)" json:"poDate"`
 	Attachment     string           `gorm:"type:text" json:"attachment,omitempty"`
 	Currency       string           `gorm:"type:varchar(10);default:'IDR'" json:"currency"`
 	TotalAmount    float64          `gorm:"type:decimal(15,2);not null;default:0" json:"totalAmount"`
 	Status         string           `gorm:"type:varchar(50);default:'Pending'" json:"status"` // Pending | Agreed | Negotiating | Cancelled
-	Notes          string           `gorm:"type:text" json:"notes,omitempty"`
-	QuotationID    *uuid.UUID       `gorm:"type:uuid;index" json:"quotationId,omitempty"`
-	TradeInvoiceID *uuid.UUID       `gorm:"type:uuid;index" json:"tradeInvoiceId,omitempty"`
-	Lines          []CustomerPOLine `gorm:"foreignKey:CustomerPOID;constraint:OnDelete:CASCADE" json:"lines"`
+	Notes              string           `gorm:"type:text" json:"notes,omitempty"`
+	QuotationID        *uuid.UUID       `gorm:"type:uuid;index" json:"quotationId,omitempty"`
+	QuotationNumber    string           `gorm:"type:varchar(100)" json:"quotationNumber,omitempty"`
+	TradeInvoiceID     *uuid.UUID       `gorm:"type:uuid;index" json:"tradeInvoiceId,omitempty"`
+	TradeInvoiceNumber string           `gorm:"type:varchar(100)" json:"tradeInvoiceNumber,omitempty"`
+	Lines              []CustomerPOLine `gorm:"foreignKey:CustomerPOID;constraint:OnDelete:CASCADE" json:"lines"`
 }
 
 func (CustomerPO) TableName() string { return "customer_pos" }
@@ -173,7 +197,11 @@ type Invoice struct {
 	CompanyID     *uuid.UUID `gorm:"type:uuid;index" json:"companyId,omitempty"`
 	TenantID      *uuid.UUID `gorm:"type:uuid;index" json:"tenantId,omitempty"`
 	InvoiceNumber string     `gorm:"type:varchar(50);not null;index" json:"invoiceNumber"`
+	CustomerID    *uuid.UUID `gorm:"type:uuid;index" json:"customerId,omitempty"`
 	CustomerName  string     `gorm:"type:varchar(255);not null" json:"customerName"`
+	PaymentTermID *uuid.UUID `gorm:"type:uuid;index" json:"paymentTermId,omitempty"`
+	PaymentTerm   string     `gorm:"type:varchar(100)" json:"paymentTerm,omitempty"`
+	TaxRateID     *uuid.UUID `gorm:"type:uuid;index" json:"taxRateId,omitempty"`
 	InvoiceDate   string     `gorm:"type:varchar(50)" json:"invoiceDate"`
 	DueDate       string     `gorm:"type:varchar(50)" json:"dueDate"`
 	TotalAmount   float64    `gorm:"type:decimal(15,2);not null" json:"totalAmount"`

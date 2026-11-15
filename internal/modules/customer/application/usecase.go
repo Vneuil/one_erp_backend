@@ -91,9 +91,13 @@ func (uc *customerUseCase) Create(ctx context.Context, dto CreateCustomerDTO) (*
 	}
 
 	customer := &domain.Customer{
-		Code:          code,
-		CustomerType:  ctype,
-		Name:          name,
+		Code:             code,
+		CustomerType:     ctype,
+		CustomerTypeID:   dto.CustomerTypeID,
+		CustomerTypeName: strings.TrimSpace(dto.CustomerTypeName),
+		PaymentTermID:    dto.PaymentTermID,
+		PaymentTermName:  strings.TrimSpace(dto.PaymentTermName),
+		Name:             name,
 		Email:         dto.Email,
 		Phone:         dto.Phone,
 		Address:       dto.Address,
@@ -165,6 +169,18 @@ func (uc *customerUseCase) Update(ctx context.Context, id uuid.UUID, dto UpdateC
 			return nil, err
 		}
 		customer.CustomerType = t
+	}
+	if dto.CustomerTypeID != nil {
+		customer.CustomerTypeID = dto.CustomerTypeID
+	}
+	if dto.CustomerTypeName != nil {
+		customer.CustomerTypeName = strings.TrimSpace(*dto.CustomerTypeName)
+	}
+	if dto.PaymentTermID != nil {
+		customer.PaymentTermID = dto.PaymentTermID
+	}
+	if dto.PaymentTermName != nil {
+		customer.PaymentTermName = strings.TrimSpace(*dto.PaymentTermName)
 	}
 	if dto.Code != nil {
 		newCode := strings.ToUpper(strings.TrimSpace(*dto.Code))

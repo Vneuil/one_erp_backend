@@ -80,11 +80,13 @@ func (UnitOfMeasure) TableName() string {
 // Certification represents standard certification masters (EU, USDA, COR, SNI, Fairtrade, Halal, Kosher, etc.)
 type Certification struct {
 	types.BaseEntity
-	CompanyID   *uuid.UUID `gorm:"type:uuid;index" json:"companyId,omitempty"`
-	TenantID    *uuid.UUID `gorm:"type:uuid;index" json:"tenantId,omitempty"`
-	Code        string     `gorm:"type:varchar(50);not null;index" json:"code"`
-	Name        string     `gorm:"type:varchar(150);not null" json:"name"`
-	Description string     `gorm:"type:text" json:"description,omitempty"`
+	CompanyID      *uuid.UUID `gorm:"type:uuid;index" json:"companyId,omitempty"`
+	TenantID       *uuid.UUID `gorm:"type:uuid;index" json:"tenantId,omitempty"`
+	Code           string     `gorm:"type:varchar(50);not null;index" json:"code"`
+	Name           string     `gorm:"type:varchar(150);not null" json:"name"`
+	Description    string     `gorm:"type:text" json:"description,omitempty"`
+	Attachment     string     `gorm:"type:text" json:"attachment,omitempty"`
+	AttachmentName string     `gorm:"type:varchar(255)" json:"attachmentName,omitempty"`
 }
 
 func (Certification) TableName() string {
@@ -112,6 +114,7 @@ type ProductRepository interface {
 	ListCategories(ctx context.Context) ([]ProductCategory, error)
 	UpdateCategory(ctx context.Context, c *ProductCategory) error
 	DeleteCategory(ctx context.Context, id uuid.UUID) error
+	UpdateProductCategoryName(ctx context.Context, oldName, newName string) error
 
 	CreateUnit(ctx context.Context, u *UnitOfMeasure) error
 	GetUnitByID(ctx context.Context, id uuid.UUID) (*UnitOfMeasure, error)

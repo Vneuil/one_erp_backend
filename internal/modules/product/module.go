@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 
+	"github.com/divinecoid/one-backend/internal/foundation/storage"
 	tenantMgr "github.com/divinecoid/one-backend/internal/foundation/tenant"
 
 	"github.com/divinecoid/one-backend/internal/modules/product/application"
@@ -18,7 +19,7 @@ type Module struct {
 	Handler *http.Handler
 }
 
-func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager) *Module {
+func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager, store ...storage.Storage) *Module {
 	tenantMgr.RegisterSchema(tenantMgr.SchemaMigrator{
 		Name: "product",
 		Migrate: func(tenantDB *gorm.DB) error {
@@ -31,7 +32,11 @@ func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager
 		},
 	})
 
-	handler := http.NewHandler()
+	var s storage.Storage
+	if len(store) > 0 {
+		s = store[0]
+	}
+	handler := http.NewHandler(s)
 	handler.RegisterRoutes(router, jwtSecret, manager)
 
 	slog.Info("product module initialized (tenant-scoped)")

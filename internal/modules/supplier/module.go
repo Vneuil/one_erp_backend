@@ -22,7 +22,7 @@ func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager
 	tenantMgr.RegisterSchema(tenantMgr.SchemaMigrator{
 		Name: "supplier",
 		Migrate: func(tenantDB *gorm.DB) error {
-			return tenantDB.AutoMigrate(&domain.Supplier{})
+			return tenantDB.AutoMigrate(&domain.Supplier{}, &domain.SupplierCode{})
 		},
 		Seed: func(tenantDB *gorm.DB) error {
 			repo := infrastructure.NewSupplierRepository(tenantDB)

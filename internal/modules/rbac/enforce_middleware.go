@@ -112,16 +112,54 @@ func Enforce(db *gorm.DB) fiber.Handler {
 			return errors.NewForbidden("Your role does not have access to this module")
 		}
 
-		isMutating := c.Method() != fiber.MethodGet && c.Method() != fiber.MethodHead && c.Method() != fiber.MethodOptions
-		if isMutating && !perm.CanManage {
-			return errors.NewForbidden("Your role does not have permission to modify this module")
+		// Confidential price endpoint check
+		if strings.Contains(path, "/last-price") {
+			if !perm.CanViewPrices && !perm.CanManage && !strings.EqualFold(claims.Role, "admin") {
+				return errors.NewForbidden("Your role does not have permission to view pricing in this module")
+			}
 		}
-		if !isMutating && !perm.CanView {
-			return errors.NewForbidden("Your role does not have permission to view this module")
+
+		switch c.Method() {
+		case fiber.MethodGet, fiber.MethodHead, fiber.MethodOptions:
+			if !perm.CanView {
+				return errors.NewForbidden("Your role does not have permission to view this module")
+			}
+		case fiber.MethodDelete:
+			if !perm.CanDelete && !perm.CanManage {
+				return errors.NewForbidden("Your role does not have permission to delete records in this module")
+			}
+		case fiber.MethodPut, fiber.MethodPatch:
+			if !perm.CanEdit && !perm.CanManage {
+				return errors.NewForbidden("Your role does not have permission to edit records in this module")
+			}
+		case fiber.MethodPost:
+			// Check if this action is an approval operation
+			if _, isApproval := approvalModuleFor(c.Method(), path); isApproval {
+				if !perm.CanApprove && !perm.CanManage {
+					return errors.NewForbidden("Your role does not have permission to approve documents in this module")
+				}
+			} else if isSubmitPath(path) {
+				if !perm.CanSubmit && !perm.CanManage {
+					return errors.NewForbidden("Your role does not have permission to submit documents in this module")
+				}
+			} else {
+				if !perm.CanCreate && !perm.CanManage {
+					return errors.NewForbidden("Your role does not have permission to create records in this module")
+				}
+			}
+		default:
+			if !perm.CanManage {
+				return errors.NewForbidden("Your role does not have permission to modify this module")
+			}
 		}
 
 		return c.Next()
 	}
+}
+
+func isSubmitPath(path string) bool {
+	clean := strings.TrimRight(path, "/")
+	return strings.HasSuffix(clean, "/submit")
 }
 
 // restrictedForPlainStaff are areas an account with no custom role and the
@@ -171,6 +209,10 @@ var moduleAliases = map[string]string{
 	"exchange-rates":        "finance",
 	"commission":            "commission",
 	"warehouse":             "warehouse",
+	// Master Data TOP & Pricing
+	"payment-terms":  "pricing",
+	"customer-types": "pricing",
+	"tax-rates":      "pricing",
 	// Certification and lot tracing belong to the quality function.
 	"certifications": "qc",
 	"traceability":   "qc",

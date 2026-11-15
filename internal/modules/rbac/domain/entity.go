@@ -27,7 +27,8 @@ func (Role) TableName() string {
 }
 
 // Permission is one (role, module) grant: whether the role can view
-// (GET) and/or manage (POST/PUT/PATCH/DELETE) that module's endpoints.
+// (GET), create (POST), edit (PUT/PATCH), delete (DELETE), submit,
+// approve, view prices, and edit prices for that module.
 // One row per module the role has ANY access to - a module with no row
 // for a given role is fully denied once that role is assigned to a user
 // (see rbac.Enforce middleware).
@@ -36,13 +37,18 @@ type Permission struct {
 	RoleID    uuid.UUID `gorm:"type:uuid;not null;index:idx_permission_role_module,unique" json:"roleId"`
 	Module    string    `gorm:"type:varchar(100);not null;index:idx_permission_role_module,unique" json:"module"`
 	CanView   bool      `gorm:"default:false" json:"canView"`
-	CanManage bool      `gorm:"default:false" json:"canManage"`
+	CanCreate bool      `gorm:"default:false" json:"canCreate"`
+	CanEdit   bool      `gorm:"default:false" json:"canEdit"`
+	CanDelete bool      `gorm:"default:false" json:"canDelete"`
+	CanSubmit bool      `gorm:"default:false" json:"canSubmit"`
+	// CanManage is preserved for backward compatibility (equivalent to CanCreate && CanEdit).
+	CanManage bool `gorm:"default:false" json:"canManage"`
 	// CanApprove is a separate, stronger grant than CanManage: it allows the
 	// role to approve/reject/pay/post documents in this module (see
-	// ApprovalGate). Managing a module (creating and editing records) does not
-	// imply being allowed to approve them.
+	// ApprovalGate).
 	CanApprove    bool `gorm:"default:false" json:"canApprove"`
 	CanViewPrices bool `gorm:"default:false" json:"canViewPrices"`
+	CanEditPrices bool `gorm:"default:false" json:"canEditPrices"`
 }
 
 func (Permission) TableName() string {

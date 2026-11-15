@@ -11,11 +11,14 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	tenantCtx := middleware.TenantContext(manager)
 
 	certs := router.Group("/certifications", protected, tenantCtx)
+	certs.Post("/upload-attachment", h.UploadAttachment)
+	certs.Get("/attachment/download", h.DownloadAttachmentByKey)
 	certs.Get("/schemes", h.Schemes)
 	certs.Get("/eligibility", h.Eligibility)
 	certs.Post("/", h.Create)
 	certs.Get("/", h.List)
 	certs.Get("/:id", h.Get)
+	certs.Get("/:id/attachment", h.DownloadAttachment)
 	certs.Put("/:id", h.Update)
 	// Suspending / resuming / revoking changes what can be procured: Manager or Admin.
 	certs.Post("/:id/suspend", middleware.RequireRoles("admin", "manager"), h.Suspend)

@@ -83,13 +83,14 @@ func DownPaymentLedgerEntry(dp *domain.PurchaseDownPayment) financeApp.LedgerEnt
 func PurchaseInvoiceSubledgerDoc(inv *domain.PurchaseInvoice) financeApp.SubledgerDoc {
 	supplierID := inv.SupplierID
 	return financeApp.SubledgerDoc{
-		SourceDoc: PurchaseInvoiceSourcePrefix + inv.ID.String(),
-		PartyID:   &supplierID,
-		PartyName: inv.SupplierName,
-		DocNo:     inv.InvoiceNumber,
-		IssueDate: inv.InvoiceDate,
-		DueDate:   inv.DueDate,
-		Total:     inv.TotalAmount - inv.CreditedAmount,
-		Paid:      inv.PaidAmount,
+		SourceDoc:    PurchaseInvoiceSourcePrefix + inv.ID.String(),
+		PartyID:      &supplierID,
+		PartyName:    inv.SupplierName,
+		DocNo:        inv.InvoiceNumber,
+		IssueDate:    inv.InvoiceDate,
+		DueDate:      inv.DueDate,
+		PaymentTerms: inv.PaymentTerm,
+		Total:        inv.TotalAmount - inv.CreditedAmount,
+		Paid:         inv.PaidAmount,
 	}
 }

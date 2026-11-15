@@ -165,7 +165,9 @@ func main() {
 		cfg.JWT.Secret, cfg.JWT.ExpiresIn, cfg.Internal.ProvisioningToken,
 	)
 
-	product.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
+	objectStore := storage.NewWithLocalFallback(cfg.R2, cfg.Storage.LocalDir)
+
+	product.NewModule(server.V1, cfg.JWT.Secret, tenantManager, objectStore)
 	customer.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	salesman.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	pricing.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
@@ -175,7 +177,6 @@ func main() {
 	aiassistant.NewModule(server.V1, cfg.JWT.Secret, tenantManager, db)
 	shipping.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	supplier.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
-	objectStore := storage.NewWithLocalFallback(cfg.R2, cfg.Storage.LocalDir)
 	sales.NewModule(server.V1, cfg.JWT.Secret, tenantManager, objectStore)
 	marketplace.NewModule(server.V1, cfg.JWT.Secret, tenantManager, cfg.Frontend.BaseURL, cfg.TikTokShop, cfg.Shopee, cfg.Blibli, cfg.Lazada)
 	omnichannel.NewModule(server.V1, cfg.JWT.Secret, tenantManager, notifier, cfg.WhatsApp, db)
@@ -204,7 +205,7 @@ func main() {
 	banking.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	manufacturing.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	qc.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
-	certification.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
+	certification.NewModule(server.V1, cfg.JWT.Secret, tenantManager, objectStore)
 	warehouse.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	assets.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	contracts.NewModule(server.V1, cfg.JWT.Secret, tenantManager)

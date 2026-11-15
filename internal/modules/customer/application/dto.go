@@ -23,6 +23,10 @@ type AddressDTO struct {
 type CreateCustomerDTO struct {
 	Code              string       `json:"code"`
 	CustomerType      string       `json:"customerType"` // B2B | B2C
+	CustomerTypeID    *uuid.UUID   `json:"customerTypeId,omitempty"`
+	CustomerTypeName  string       `json:"customerTypeName,omitempty"`
+	PaymentTermID     *uuid.UUID   `json:"paymentTermId,omitempty"`
+	PaymentTermName   string       `json:"paymentTermName,omitempty"`
 	Name              string       `json:"name"`
 	Email             string       `json:"email"`
 	Phone             string       `json:"phone"`
@@ -45,6 +49,10 @@ type UpdateCustomerDTO struct {
 	Code            *string `json:"code,omitempty"`
 	Name            *string `json:"name,omitempty"`
 	CustomerType    *string `json:"customerType,omitempty"`
+	CustomerTypeID  *uuid.UUID `json:"customerTypeId,omitempty"`
+	CustomerTypeName *string `json:"customerTypeName,omitempty"`
+	PaymentTermID   *uuid.UUID `json:"paymentTermId,omitempty"`
+	PaymentTermName *string `json:"paymentTermName,omitempty"`
 	Email           *string `json:"email,omitempty"`
 	Phone           *string `json:"phone,omitempty"`
 	Address         *string `json:"address,omitempty"`
@@ -71,6 +79,10 @@ type CustomerResponseDTO struct {
 	ID                uuid.UUID    `json:"id"`
 	Code              string       `json:"code"`
 	CustomerType      string       `json:"customerType"`
+	CustomerTypeID    *uuid.UUID   `json:"customerTypeId,omitempty"`
+	CustomerTypeName  string       `json:"customerTypeName,omitempty"`
+	PaymentTermID     *uuid.UUID   `json:"paymentTermId,omitempty"`
+	PaymentTermName   string       `json:"paymentTermName,omitempty"`
 	Name              string       `json:"name"`
 	Email             string       `json:"email"`
 	Phone             string       `json:"phone"`
@@ -109,7 +121,10 @@ func ToCustomerResponse(c *domain.Customer) *CustomerResponseDTO {
 		ctype = CustomerTypeB2B
 	}
 	return &CustomerResponseDTO{
-		ID: c.ID, Code: c.Code, CustomerType: ctype, Name: c.Name, Email: c.Email, Phone: c.Phone,
+		ID: c.ID, Code: c.Code, CustomerType: ctype,
+		CustomerTypeID: c.CustomerTypeID, CustomerTypeName: c.CustomerTypeName,
+		PaymentTermID: c.PaymentTermID, PaymentTermName: c.PaymentTermName,
+		Name: c.Name, Email: c.Email, Phone: c.Phone,
 		Address: c.Address, City: c.City, Province: c.Province, PostalCode: c.PostalCode,
 		NPWP: c.NPWP, NIK: c.NIK, Segment: c.Segment, Status: c.Status,
 		ContactPerson: c.ContactPerson, ContactPhone: c.ContactPhone, ContactMobile: c.ContactMobile, ContactWhatsapp: c.ContactWA,

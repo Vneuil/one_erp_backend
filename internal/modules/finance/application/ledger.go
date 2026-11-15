@@ -124,14 +124,15 @@ type LedgerPoster interface {
 // SubledgerDoc describes an invoice to mirror into the AR/AP sub-ledger.
 // SourceDoc is the stable key of the originating document.
 type SubledgerDoc struct {
-	SourceDoc string
-	PartyID   *uuid.UUID
-	PartyName string
-	DocNo     string
-	IssueDate string
-	DueDate   string
-	Total     float64
-	Paid      float64
+	SourceDoc    string
+	PartyID      *uuid.UUID
+	PartyName    string
+	DocNo        string
+	IssueDate    string
+	DueDate      string
+	PaymentTerms string
+	Total        float64
+	Paid         float64
 }
 
 // LedgerEntry is a document-derived posting: builders in each module return
@@ -283,6 +284,7 @@ func (p *ledgerPoster) UpsertReceivable(ctx context.Context, d SubledgerDoc) err
 	}
 	rec.CustomerID, rec.CustomerName, rec.InvoiceNo = d.PartyID, d.PartyName, d.DocNo
 	rec.IssueDate, rec.DueDate = d.IssueDate, d.DueDate
+	rec.PaymentTerms = d.PaymentTerms
 	rec.TotalInvoice, rec.PaidAmount = d.Total, d.Paid
 	rec.Status = paymentStatus(d.Total, d.Paid, d.DueDate)
 	if rec.ID == uuid.Nil {
@@ -304,6 +306,7 @@ func (p *ledgerPoster) UpsertPayable(ctx context.Context, d SubledgerDoc) error 
 	}
 	pay.SupplierID, pay.VendorName, pay.InvoiceNo = d.PartyID, d.PartyName, d.DocNo
 	pay.IssueDate, pay.DueDate = d.IssueDate, d.DueDate
+	pay.PaymentTerms = d.PaymentTerms
 	pay.TotalInvoice, pay.PaidAmount = d.Total, d.Paid
 	pay.Status = paymentStatus(d.Total, d.Paid, d.DueDate)
 	if pay.ID == uuid.Nil {

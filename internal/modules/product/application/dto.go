@@ -181,28 +181,41 @@ func ToUnitResponseList(items []domain.UnitOfMeasure) []UnitResponseDTO {
 }
 
 type CreateCertificationDTO struct {
-	Code        string `json:"code"`
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
+	Code           string `json:"code"`
+	Name           string `json:"name"`
+	Description    string `json:"description,omitempty"`
+	Attachment     string `json:"attachment,omitempty"`
+	AttachmentName string `json:"attachmentName,omitempty"`
 }
 
 type UpdateCertificationDTO struct {
-	Code        *string `json:"code,omitempty"`
-	Name        *string `json:"name,omitempty"`
-	Description *string `json:"description,omitempty"`
+	Code           *string `json:"code,omitempty"`
+	Name           *string `json:"name,omitempty"`
+	Description    *string `json:"description,omitempty"`
+	Attachment     *string `json:"attachment,omitempty"`
+	AttachmentName *string `json:"attachmentName,omitempty"`
 }
 
 type CertificationResponseDTO struct {
-	ID          uuid.UUID `json:"id"`
-	Code        string    `json:"code"`
-	Name        string    `json:"name"`
-	Description string    `json:"description,omitempty"`
+	ID             uuid.UUID `json:"id"`
+	Code           string    `json:"code"`
+	Name           string    `json:"name"`
+	Description    string    `json:"description,omitempty"`
+	Attachment     string    `json:"attachment,omitempty"`
+	AttachmentName string    `json:"attachmentName,omitempty"`
 }
 
 func ToCertificationResponseList(items []domain.Certification) []CertificationResponseDTO {
 	result := make([]CertificationResponseDTO, len(items))
 	for i, c := range items {
-		result[i] = CertificationResponseDTO{ID: c.ID, Code: c.Code, Name: c.Name, Description: c.Description}
+		result[i] = CertificationResponseDTO{
+			ID:             c.ID,
+			Code:           c.Code,
+			Name:           c.Name,
+			Description:    c.Description,
+			Attachment:     c.Attachment,
+			AttachmentName: c.AttachmentName,
+		}
 	}
 	return result
 }

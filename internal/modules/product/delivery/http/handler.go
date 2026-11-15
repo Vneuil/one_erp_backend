@@ -2,14 +2,21 @@ package http
 
 import (
 	"context"
+	"fmt"
+	"io"
+	"mime/multipart"
+	"path/filepath"
+	"strings"
 	"sync"
 
 	"github.com/divinecoid/one-backend/internal/foundation/middleware"
 	"github.com/divinecoid/one-backend/internal/foundation/response"
+	"github.com/divinecoid/one-backend/internal/foundation/storage"
 	"github.com/divinecoid/one-backend/internal/foundation/tenantctx"
 	"github.com/divinecoid/one-backend/internal/modules/product/application"
 	"github.com/divinecoid/one-backend/internal/modules/product/domain"
 	"github.com/divinecoid/one-backend/internal/modules/product/infrastructure"
+	"github.com/divinecoid/one-backend/internal/shared/attachment"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/gofiber/fiber/v2"
@@ -17,10 +24,16 @@ import (
 	"gorm.io/gorm"
 )
 
-type Handler struct{}
+type Handler struct {
+	store storage.Storage
+}
 
-func NewHandler() *Handler {
-	return &Handler{}
+func NewHandler(store ...storage.Storage) *Handler {
+	var s storage.Storage
+	if len(store) > 0 {
+		s = store[0]
+	}
+	return &Handler{store: s}
 }
 
 // migrated remembers tenant DBs whose tables were verified, ensuring any newly
@@ -348,4 +361,149 @@ func (h *Handler) DeleteCertification(c *fiber.Ctx) error {
 		return err
 	}
 	return response.OK(c, "Certification deleted successfully", nil)
+}
+
+// readUpload reads a multipart file, refusing anything over the size limit (10MB).
+func readUpload(fh *multipart.FileHeader) ([]byte, error) {
+	if fh.Size > attachment.MaxBytes {
+		return nil, apperrors.NewBadRequest("The file is larger than 10 MB")
+	}
+	f, err := fh.Open()
+	if err != nil {
+		return nil, apperrors.NewBadRequest("Failed to read the uploaded file")
+	}
+	defer f.Close()
+	return io.ReadAll(io.LimitReader(f, attachment.MaxBytes+1))
+}
+
+// UploadAttachment uploads a certification proof file to Cloudflare R2 or local storage.
+func (h *Handler) UploadAttachment(c *fiber.Ctx) error {
+	if h.store == nil || !h.store.Enabled() {
+		return apperrors.NewServiceUnavailable("File storage is not configured. Please ensure R2 credentials or LOCAL_STORAGE_DIR are set.")
+	}
+
+	fh, err := c.FormFile("file")
+	if err != nil || fh == nil {
+		return apperrors.NewBadRequest("No file uploaded. Please include a 'file' field.")
+	}
+
+	content, err := readUpload(fh)
+	if err != nil {
+		return err
+	}
+
+	tenantID := middleware.CurrentTenantID(c)
+	prefix := "product-certifications"
+	if tenantID != nil {
+		prefix = fmt.Sprintf("tenants/%s/product-certifications", tenantID.String())
+	}
+
+	saved, err := attachment.Save(h.ctx(c), h.store, prefix, fh.Filename, content)
+	if err != nil {
+		return err
+	}
+
+	return response.Created(c, "File uploaded successfully", fiber.Map{
+		"key":         saved.Key,
+		"filename":    saved.Name,
+		"size":        saved.Size,
+		"contentType": saved.ContentType,
+	})
+}
+
+// DownloadAttachment streams the proof document attached to a specific certification.
+func (h *Handler) DownloadAttachment(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid certification ID format")
+	}
+
+	certs, err := uc.ListCertifications(h.ctx(c))
+	if err != nil {
+		return err
+	}
+
+	var target *application.CertificationResponseDTO
+	for i := range certs {
+		if certs[i].ID == id {
+			target = &certs[i]
+			break
+		}
+	}
+
+	if target == nil {
+		return apperrors.NewNotFound("Certification not found")
+	}
+
+	if target.Attachment == "" {
+		return apperrors.NewNotFound("No proof document found for this certification")
+	}
+
+	if strings.HasPrefix(target.Attachment, "http://") || strings.HasPrefix(target.Attachment, "https://") {
+		return c.Redirect(target.Attachment, fiber.StatusTemporaryRedirect)
+	}
+
+	if h.store == nil || !h.store.Enabled() {
+		return apperrors.NewServiceUnavailable("File storage is not configured.")
+	}
+
+	data, err := attachment.Load(h.ctx(c), h.store, target.Attachment)
+	if err != nil {
+		return err
+	}
+
+	filename := target.AttachmentName
+	if filename == "" {
+		filename = filepath.Base(target.Attachment)
+	}
+	f, _ := attachment.Check(filename, []byte{0})
+
+	contentType := f.ContentType
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	c.Set("Content-Type", contentType)
+	c.Set("X-Content-Type-Options", "nosniff")
+	c.Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filename))
+	return c.Send(data)
+}
+
+// DownloadAttachmentByKey streams any file by storage key (used for preview or direct key access).
+func (h *Handler) DownloadAttachmentByKey(c *fiber.Ctx) error {
+	key := c.Query("key")
+	if key == "" {
+		return apperrors.NewBadRequest("Key parameter is required")
+	}
+
+	if strings.HasPrefix(key, "http://") || strings.HasPrefix(key, "https://") {
+		return c.Redirect(key, fiber.StatusTemporaryRedirect)
+	}
+
+	if h.store == nil || !h.store.Enabled() {
+		return apperrors.NewServiceUnavailable("File storage is not configured.")
+	}
+
+	data, err := attachment.Load(h.ctx(c), h.store, key)
+	if err != nil {
+		return err
+	}
+
+	filename := filepath.Base(key)
+	f, _ := attachment.Check(filename, []byte{0})
+
+	contentType := f.ContentType
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	c.Set("Content-Type", contentType)
+	c.Set("X-Content-Type-Options", "nosniff")
+	c.Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filename))
+	return c.Send(data)
 }

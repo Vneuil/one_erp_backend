@@ -32,8 +32,11 @@ func (s *localStorage) Enabled() bool { return true }
 // path maps a key to a file inside root and refuses anything that would
 // escape it (absolute paths, "..").
 func (s *localStorage) path(key string) (string, error) {
+	if key == "" || strings.HasPrefix(key, "/") || strings.HasPrefix(key, "\\") {
+		return "", fmt.Errorf("invalid storage key")
+	}
 	clean := filepath.Clean(filepath.FromSlash(key))
-	if key == "" || filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+	if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("invalid storage key")
 	}
 	return filepath.Join(s.root, clean), nil

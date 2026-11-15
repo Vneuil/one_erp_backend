@@ -14,13 +14,20 @@ type SalesOrderLineDTO struct {
 }
 
 type CreateSalesOrderDTO struct {
-	OrderNumber           string  `json:"orderNumber"`
-	CustomerName          string  `json:"customerName"`
-	TotalAmount           float64 `json:"totalAmount"`
-	Currency              string  `json:"currency"`
-	Channel               string  `json:"channel"`
-	PaymentStatus         string  `json:"paymentStatus"`
-	Status                string  `json:"status"`
+	OrderNumber           string      `json:"orderNumber"`
+	CustomerID            *uuid.UUID  `json:"customerId,omitempty"`
+	CustomerName          string      `json:"customerName"`
+	TotalAmount           float64     `json:"totalAmount"`
+	Currency              string      `json:"currency"`
+	Channel               string      `json:"channel"`
+	PaymentStatus         string      `json:"paymentStatus"`
+	PaymentTermID         *uuid.UUID  `json:"paymentTermId,omitempty"`
+	PaymentTerm           string      `json:"paymentTerm,omitempty"`
+	DueDate               string      `json:"dueDate,omitempty"`
+	TaxRateID             *uuid.UUID  `json:"taxRateId,omitempty"`
+	VATRate               float64     `json:"vatRate,omitempty"`
+	VATAmount             float64     `json:"vatAmount,omitempty"`
+	Status                string      `json:"status"`
 	CustomerPONumber      string  `json:"customerPoNumber,omitempty"`
 	CustomerPOAttachment  string  `json:"customerPoAttachment,omitempty"`
 	DPPaid                bool    `json:"dpPaid"`
@@ -53,8 +60,15 @@ type CreateSalesOrderDTO struct {
 // whose stock effect either never happened (quotation conversions, which
 // carry no warehouse) or is corrected separately.
 type UpdateSalesOrderDTO struct {
-	CustomerName          string   `json:"customerName"`
-	CustomerPONumber      *string  `json:"customerPoNumber,omitempty"`
+	CustomerID            *uuid.UUID          `json:"customerId,omitempty"`
+	CustomerName          string              `json:"customerName"`
+	PaymentTermID         *uuid.UUID          `json:"paymentTermId,omitempty"`
+	PaymentTerm           *string             `json:"paymentTerm,omitempty"`
+	DueDate               *string             `json:"dueDate,omitempty"`
+	TaxRateID             *uuid.UUID          `json:"taxRateId,omitempty"`
+	VATRate               *float64            `json:"vatRate,omitempty"`
+	VATAmount             *float64            `json:"vatAmount,omitempty"`
+	CustomerPONumber      *string             `json:"customerPoNumber,omitempty"`
 	CustomerPOAttachment  *string  `json:"customerPoAttachment,omitempty"`
 	DPPaid                *bool    `json:"dpPaid,omitempty"`
 	DPPercent             *float64 `json:"dpPercent,omitempty"`
@@ -103,6 +117,7 @@ type SalesOrderLineResponseDTO struct {
 type SalesOrderResponseDTO struct {
 	ID                    uuid.UUID `json:"id"`
 	OrderNumber           string    `json:"orderNumber"`
+	CustomerID            *uuid.UUID `json:"customerId,omitempty"`
 	CustomerName          string    `json:"customerName"`
 	TotalAmount           float64   `json:"totalAmount"`
 	Currency              string    `json:"currency"`
@@ -110,6 +125,12 @@ type SalesOrderResponseDTO struct {
 	Status                string    `json:"status"`
 	CreatedByEmail        string    `json:"createdByEmail,omitempty"`
 	PaymentStatus         string    `json:"paymentStatus"`
+	PaymentTermID         *uuid.UUID `json:"paymentTermId,omitempty"`
+	PaymentTerm           string    `json:"paymentTerm,omitempty"`
+	DueDate               string    `json:"dueDate,omitempty"`
+	TaxRateID             *uuid.UUID `json:"taxRateId,omitempty"`
+	VATRate               float64   `json:"vatRate"`
+	VATAmount             float64   `json:"vatAmount"`
 	Channel               string    `json:"channel"`
 	OrderDate             string    `json:"orderDate"`
 	CustomerPONumber      string    `json:"customerPoNumber,omitempty"`
@@ -148,10 +169,20 @@ type QuotationLineDTO struct {
 
 type CreateQuotationDTO struct {
 	LeadID                *uuid.UUID         `json:"leadId"`
+	CustomerID            *uuid.UUID         `json:"customerId,omitempty"`
+	CustomerPOID          *uuid.UUID         `json:"customerPoId,omitempty"`
+	CustomerPONumber      string             `json:"customerPoNumber,omitempty"`
+	PaymentTermID         *uuid.UUID         `json:"paymentTermId,omitempty"`
+	PaymentTerm           string             `json:"paymentTerm,omitempty"`
+	TaxRateID             *uuid.UUID         `json:"taxRateId,omitempty"`
+	VATRate               float64            `json:"vatRate,omitempty"`
+	VATAmount             float64            `json:"vatAmount,omitempty"`
+	VATExempt             bool               `json:"vatExempt,omitempty"`
 	Lines                 []QuotationLineDTO `json:"lines"`
 	QuotationNumber       string             `json:"quotationNumber"`
 	CustomerName          string             `json:"customerName"`
 	TotalAmount           float64            `json:"totalAmount"`
+	Currency              string             `json:"currency,omitempty"`
 	ValidUntil            string             `json:"validUntil"`
 	Notes                 string             `json:"notes,omitempty"`
 	ParentQuotationID     *uuid.UUID         `json:"parentQuotationId,omitempty"`
@@ -163,8 +194,18 @@ type CreateQuotationDTO struct {
 // Quotation. LeadID is intentionally omitted - the linked CRM lead cannot be
 // changed after creation, only the customer's items and validity.
 type UpdateQuotationDTO struct {
+	CustomerID            *uuid.UUID         `json:"customerId,omitempty"`
+	CustomerPOID          *uuid.UUID         `json:"customerPoId,omitempty"`
+	CustomerPONumber      string             `json:"customerPoNumber,omitempty"`
+	PaymentTermID         *uuid.UUID         `json:"paymentTermId,omitempty"`
+	PaymentTerm           string             `json:"paymentTerm,omitempty"`
+	TaxRateID             *uuid.UUID         `json:"taxRateId,omitempty"`
+	VATRate               *float64           `json:"vatRate,omitempty"`
+	VATAmount             *float64           `json:"vatAmount,omitempty"`
+	VATExempt             *bool              `json:"vatExempt,omitempty"`
 	Lines                 []QuotationLineDTO `json:"lines"`
 	CustomerName          string             `json:"customerName"`
+	Currency              string             `json:"currency,omitempty"`
 	ValidUntil            string             `json:"validUntil"`
 	Status                string             `json:"status,omitempty"`
 	Notes                 string             `json:"notes,omitempty"`
@@ -176,11 +217,21 @@ type UpdateQuotationDTO struct {
 
 type QuotationResponseDTO struct {
 	LeadID                *uuid.UUID             `json:"leadId,omitempty"`
+	CustomerID            *uuid.UUID             `json:"customerId,omitempty"`
+	CustomerPOID          *uuid.UUID             `json:"customerPoId,omitempty"`
+	CustomerPONumber      string                 `json:"customerPoNumber,omitempty"`
+	PaymentTermID         *uuid.UUID             `json:"paymentTermId,omitempty"`
+	PaymentTerm           string                 `json:"paymentTerm,omitempty"`
+	TaxRateID             *uuid.UUID             `json:"taxRateId,omitempty"`
+	VATRate               float64                `json:"vatRate"`
+	VATAmount             float64                `json:"vatAmount"`
+	VATExempt             bool                   `json:"vatExempt"`
 	Lines                 []domain.QuotationLine `json:"lines"`
 	ID                    uuid.UUID              `json:"id"`
 	QuotationNumber       string                 `json:"quotationNumber"`
 	CustomerName          string                 `json:"customerName"`
 	TotalAmount           float64                `json:"totalAmount"`
+	Currency              string                 `json:"currency"`
 	Status                string                 `json:"status"`
 	ValidUntil            string                 `json:"validUntil"`
 	Notes                 string                 `json:"notes,omitempty"`
@@ -204,44 +255,61 @@ type CustomerPOLineDTO struct {
 }
 
 type CreateCustomerPODTO struct {
-	PoNumber     string              `json:"poNumber"`
-	CustomerID   *uuid.UUID          `json:"customerId,omitempty"`
-	CustomerName string              `json:"customerName"`
-	PoDate       string              `json:"poDate"`
-	Attachment   string              `json:"attachment,omitempty"`
-	Currency     string              `json:"currency,omitempty"`
-	Notes        string              `json:"notes,omitempty"`
-	Lines        []CustomerPOLineDTO `json:"lines"`
+	PoNumber      string              `json:"poNumber"`
+	CustomerID    *uuid.UUID          `json:"customerId,omitempty"`
+	CustomerName  string              `json:"customerName"`
+	PaymentTermID *uuid.UUID          `json:"paymentTermId,omitempty"`
+	PaymentTerm   string              `json:"paymentTerm,omitempty"`
+	TaxRateID     *uuid.UUID          `json:"taxRateId,omitempty"`
+	VATRate       float64             `json:"vatRate,omitempty"`
+	VATAmount     float64             `json:"vatAmount,omitempty"`
+	PoDate        string              `json:"poDate"`
+	Attachment    string              `json:"attachment,omitempty"`
+	Currency      string              `json:"currency,omitempty"`
+	Notes         string              `json:"notes,omitempty"`
+	Lines         []CustomerPOLineDTO `json:"lines"`
 }
 
 type UpdateCustomerPODTO struct {
-	PoNumber     string              `json:"poNumber"`
-	CustomerID   *uuid.UUID          `json:"customerId,omitempty"`
-	CustomerName string              `json:"customerName"`
-	PoDate       string              `json:"poDate"`
-	Attachment   string              `json:"attachment,omitempty"`
-	Currency     string              `json:"currency,omitempty"`
-	Notes        string              `json:"notes,omitempty"`
-	Status       string              `json:"status,omitempty"`
-	Lines        []CustomerPOLineDTO `json:"lines"`
+	PoNumber      string              `json:"poNumber"`
+	CustomerID    *uuid.UUID          `json:"customerId,omitempty"`
+	CustomerName  string              `json:"customerName"`
+	PaymentTermID *uuid.UUID          `json:"paymentTermId,omitempty"`
+	PaymentTerm   string              `json:"paymentTerm,omitempty"`
+	TaxRateID     *uuid.UUID          `json:"taxRateId,omitempty"`
+	VATRate       *float64            `json:"vatRate,omitempty"`
+	VATAmount     *float64            `json:"vatAmount,omitempty"`
+	PoDate        string              `json:"poDate"`
+	Attachment    string              `json:"attachment,omitempty"`
+	Currency      string              `json:"currency,omitempty"`
+	Notes         string              `json:"notes,omitempty"`
+	Status        string              `json:"status,omitempty"`
+	Lines         []CustomerPOLineDTO `json:"lines"`
 }
 
 type CustomerPOResponseDTO struct {
-	ID             uuid.UUID               `json:"id"`
-	PoNumber       string                  `json:"poNumber"`
-	CustomerID     *uuid.UUID              `json:"customerId,omitempty"`
-	CustomerName   string                  `json:"customerName"`
-	PoDate         string                  `json:"poDate"`
-	Attachment     string                  `json:"attachment,omitempty"`
-	Currency       string                  `json:"currency"`
-	TotalAmount    float64                 `json:"totalAmount"`
-	Status         string                  `json:"status"`
-	Notes          string                  `json:"notes,omitempty"`
-	QuotationID    *uuid.UUID              `json:"quotationId,omitempty"`
-	TradeInvoiceID *uuid.UUID              `json:"tradeInvoiceId,omitempty"`
-	Lines          []domain.CustomerPOLine `json:"lines"`
-	CreatedAt      time.Time               `json:"createdAt"`
-	UpdatedAt      time.Time               `json:"updatedAt"`
+	ID                 uuid.UUID               `json:"id"`
+	PoNumber           string                  `json:"poNumber"`
+	CustomerID         *uuid.UUID              `json:"customerId,omitempty"`
+	CustomerName       string                  `json:"customerName"`
+	PaymentTermID      *uuid.UUID              `json:"paymentTermId,omitempty"`
+	PaymentTerm        string                  `json:"paymentTerm,omitempty"`
+	TaxRateID          *uuid.UUID              `json:"taxRateId,omitempty"`
+	VATRate            float64                 `json:"vatRate"`
+	VATAmount          float64                 `json:"vatAmount"`
+	PoDate             string                  `json:"poDate"`
+	Attachment         string                  `json:"attachment,omitempty"`
+	Currency           string                  `json:"currency"`
+	TotalAmount        float64                 `json:"totalAmount"`
+	Status             string                  `json:"status"`
+	Notes              string                  `json:"notes,omitempty"`
+	QuotationID        *uuid.UUID              `json:"quotationId,omitempty"`
+	QuotationNumber    string                  `json:"quotationNumber,omitempty"`
+	TradeInvoiceID     *uuid.UUID              `json:"tradeInvoiceId,omitempty"`
+	TradeInvoiceNumber string                  `json:"tradeInvoiceNumber,omitempty"`
+	Lines              []domain.CustomerPOLine `json:"lines"`
+	CreatedAt          time.Time               `json:"createdAt"`
+	UpdatedAt          time.Time               `json:"updatedAt"`
 }
 
 func ToCustomerPOResponse(p *domain.CustomerPO) *CustomerPOResponseDTO {
@@ -249,21 +317,28 @@ func ToCustomerPOResponse(p *domain.CustomerPO) *CustomerPOResponseDTO {
 		return nil
 	}
 	return &CustomerPOResponseDTO{
-		ID:             p.ID,
-		PoNumber:       p.PoNumber,
-		CustomerID:     p.CustomerID,
-		CustomerName:   p.CustomerName,
-		PoDate:         p.PoDate,
-		Attachment:     p.Attachment,
-		Currency:       p.Currency,
-		TotalAmount:    p.TotalAmount,
-		Status:         p.Status,
-		Notes:          p.Notes,
-		QuotationID:    p.QuotationID,
-		TradeInvoiceID: p.TradeInvoiceID,
-		Lines:          p.Lines,
-		CreatedAt:      p.CreatedAt,
-		UpdatedAt:      p.UpdatedAt,
+		ID:                 p.ID,
+		PoNumber:           p.PoNumber,
+		CustomerID:         p.CustomerID,
+		CustomerName:       p.CustomerName,
+		PaymentTermID:      p.PaymentTermID,
+		PaymentTerm:        p.PaymentTerm,
+		TaxRateID:          p.TaxRateID,
+		VATRate:            p.VATRate,
+		VATAmount:          p.VATAmount,
+		PoDate:             p.PoDate,
+		Attachment:         p.Attachment,
+		Currency:           p.Currency,
+		TotalAmount:        p.TotalAmount,
+		Status:             p.Status,
+		Notes:              p.Notes,
+		QuotationID:        p.QuotationID,
+		QuotationNumber:    p.QuotationNumber,
+		TradeInvoiceID:     p.TradeInvoiceID,
+		TradeInvoiceNumber: p.TradeInvoiceNumber,
+		Lines:              p.Lines,
+		CreatedAt:          p.CreatedAt,
+		UpdatedAt:          p.UpdatedAt,
 	}
 }
 
@@ -286,6 +361,7 @@ func ToSalesOrderResponse(o *domain.SalesOrder) *SalesOrderResponseDTO {
 	return &SalesOrderResponseDTO{
 		ID:                    o.ID,
 		OrderNumber:           o.OrderNumber,
+		CustomerID:            o.CustomerID,
 		CustomerName:          o.CustomerName,
 		TotalAmount:           o.TotalAmount,
 		Currency:              o.Currency,
@@ -293,6 +369,12 @@ func ToSalesOrderResponse(o *domain.SalesOrder) *SalesOrderResponseDTO {
 		Status:                o.Status,
 		CreatedByEmail:        o.CreatedByEmail,
 		PaymentStatus:         o.PaymentStatus,
+		PaymentTermID:         o.PaymentTermID,
+		PaymentTerm:           o.PaymentTerm,
+		DueDate:               o.DueDate,
+		TaxRateID:             o.TaxRateID,
+		VATRate:               o.VATRate,
+		VATAmount:             o.VATAmount,
 		Channel:               o.Channel,
 		OrderDate:             o.OrderDate,
 		CustomerPONumber:      o.CustomerPONumber,
@@ -336,9 +418,19 @@ func ToQuotationResponse(q *domain.Quotation) *QuotationResponseDTO {
 		ID:                    q.ID,
 		QuotationNumber:       q.QuotationNumber,
 		LeadID:                q.LeadID,
+		CustomerID:            q.CustomerID,
+		CustomerPOID:          q.CustomerPOID,
+		CustomerPONumber:      q.CustomerPONumber,
+		PaymentTermID:         q.PaymentTermID,
+		PaymentTerm:           q.PaymentTerm,
+		TaxRateID:             q.TaxRateID,
+		VATRate:               q.VATRate,
+		VATAmount:             q.VATAmount,
+		VATExempt:             q.VATExempt,
 		Lines:                 q.Lines,
 		CustomerName:          q.CustomerName,
 		TotalAmount:           q.TotalAmount,
+		Currency:              q.Currency,
 		Status:                q.Status,
 		ValidUntil:            q.ValidUntil,
 		Notes:                 q.Notes,
@@ -360,8 +452,12 @@ func ToQuotationResponseList(quotations []domain.Quotation) []QuotationResponseD
 }
 
 type CreateInvoiceDTO struct {
-	InvoiceNumber string `json:"invoiceNumber"`
-	CustomerName  string `json:"customerName"`
+	InvoiceNumber string     `json:"invoiceNumber"`
+	CustomerID    *uuid.UUID `json:"customerId,omitempty"`
+	CustomerName  string     `json:"customerName"`
+	PaymentTermID *uuid.UUID `json:"paymentTermId,omitempty"`
+	PaymentTerm   string     `json:"paymentTerm,omitempty"`
+	TaxRateID     *uuid.UUID `json:"taxRateId,omitempty"`
 	// TotalAmount is the invoice amount before adjustments. With none of the
 	// fields below it is also the final total (the original behaviour).
 	TotalAmount     float64 `json:"totalAmount"`
@@ -390,7 +486,11 @@ type RecordSalesPaymentDTO struct {
 type InvoiceResponseDTO struct {
 	ID                uuid.UUID  `json:"id"`
 	InvoiceNumber     string     `json:"invoiceNumber"`
+	CustomerID        *uuid.UUID `json:"customerId,omitempty"`
 	CustomerName      string     `json:"customerName"`
+	PaymentTermID     *uuid.UUID `json:"paymentTermId,omitempty"`
+	PaymentTerm       string     `json:"paymentTerm,omitempty"`
+	TaxRateID         *uuid.UUID `json:"taxRateId,omitempty"`
 	InvoiceDate       string     `json:"invoiceDate"`
 	DueDate           string     `json:"dueDate"`
 	TotalAmount       float64    `json:"totalAmount"`
@@ -416,7 +516,8 @@ func ToInvoiceResponse(inv *domain.Invoice) *InvoiceResponseDTO {
 		return nil
 	}
 	return &InvoiceResponseDTO{
-		ID: inv.ID, InvoiceNumber: inv.InvoiceNumber, CustomerName: inv.CustomerName,
+		ID: inv.ID, InvoiceNumber: inv.InvoiceNumber, CustomerID: inv.CustomerID, CustomerName: inv.CustomerName,
+		PaymentTermID: inv.PaymentTermID, PaymentTerm: inv.PaymentTerm, TaxRateID: inv.TaxRateID,
 		InvoiceDate: inv.InvoiceDate, DueDate: inv.DueDate, TotalAmount: inv.TotalAmount,
 		Subtotal: inv.Subtotal, DiscountAmount: inv.DiscountAmount, AdditionalCost: inv.AdditionalCost, RoundingAmount: inv.RoundingAmount,
 		TaxBase: inv.TaxBase, DPPOtherValue: inv.DPPOtherValue, VATRate: inv.VATRate, VATOtherValueBase: inv.VATOtherValueBase, VATAmount: inv.VATAmount,

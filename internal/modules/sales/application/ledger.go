@@ -63,12 +63,14 @@ func InvoicePaymentLedgerEntry(inv *domain.Invoice, amount float64) financeApp.L
 // InvoiceSubledgerDoc mirrors a sales invoice into finance's receivables.
 func InvoiceSubledgerDoc(inv *domain.Invoice) financeApp.SubledgerDoc {
 	return financeApp.SubledgerDoc{
-		SourceDoc: SalesInvoiceSourcePrefix + inv.ID.String(),
-		PartyName: inv.CustomerName,
-		DocNo:     inv.InvoiceNumber,
-		IssueDate: inv.InvoiceDate,
-		DueDate:   inv.DueDate,
-		Total:     inv.TotalAmount - inv.CreditedAmount,
-		Paid:      inv.PaidAmount,
+		SourceDoc:    SalesInvoiceSourcePrefix + inv.ID.String(),
+		PartyID:      inv.CustomerID,
+		PartyName:    inv.CustomerName,
+		DocNo:        inv.InvoiceNumber,
+		IssueDate:    inv.InvoiceDate,
+		DueDate:      inv.DueDate,
+		PaymentTerms: inv.PaymentTerm,
+		Total:        inv.TotalAmount - inv.CreditedAmount,
+		Paid:         inv.PaidAmount,
 	}
 }

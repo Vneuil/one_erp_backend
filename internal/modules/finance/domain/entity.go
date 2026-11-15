@@ -96,6 +96,7 @@ type Receivable struct {
 	DueDate      string     `gorm:"type:varchar(50)" json:"dueDate"`
 	TotalInvoice float64    `gorm:"type:decimal(15,2);not null" json:"totalInvoice"`
 	PaidAmount   float64    `gorm:"type:decimal(15,2);default:0" json:"paidAmount"`
+	PaymentTerms string     `gorm:"type:varchar(50)" json:"paymentTerms"`
 	Status       string     `gorm:"type:varchar(50);default:'pending'" json:"status"`
 	// SourceDoc links a receivable created automatically from a sales invoice;
 	// empty for manually entered receivables. Linked receivables are paid via the source invoice.

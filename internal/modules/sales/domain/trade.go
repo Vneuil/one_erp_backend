@@ -46,6 +46,8 @@ type TradeInvoice struct {
 	Number       string     `gorm:"type:varchar(50);not null;index" json:"number"`
 	SalesOrderID *uuid.UUID `gorm:"type:uuid;index" json:"salesOrderId,omitempty"`
 	QuotationID  *uuid.UUID `gorm:"type:uuid;index" json:"quotationId,omitempty"`
+	QuotationNumber string  `gorm:"type:varchar(100)" json:"quotationNumber,omitempty"`
+	CustomerPOID *uuid.UUID `gorm:"type:uuid;index" json:"customerPoId,omitempty"`
 	ParentID     *uuid.UUID `gorm:"type:uuid;index" json:"parentId,omitempty"` // PI this CI was made from
 	CustomerName string     `gorm:"type:varchar(255);not null" json:"customerName"`
 	// CustomerPO* reference the incoming PO (PO Masuk) the customer issued to us;
@@ -59,7 +61,9 @@ type TradeInvoice struct {
 	ShippingAddr string  `gorm:"type:text" json:"shippingAddress,omitempty"`
 	Currency     string  `gorm:"type:varchar(10);default:'IDR'" json:"currency"`
 	IssueDate    string  `gorm:"type:varchar(10)" json:"issueDate"`
-	PaymentTerm  string  `gorm:"type:varchar(100)" json:"paymentTerm,omitempty"`
+	PaymentTermID *uuid.UUID `gorm:"type:uuid;index" json:"paymentTermId,omitempty"`
+	PaymentTerm   string     `gorm:"type:varchar(100)" json:"paymentTerm,omitempty"`
+	TaxRateID     *uuid.UUID `gorm:"type:uuid;index" json:"taxRateId,omitempty"`
 	Incoterm     string  `gorm:"type:varchar(20)" json:"incoterm,omitempty"`
 	Notes        string  `gorm:"type:text" json:"notes,omitempty"`
 	// VATExempt turns PPN off (export). When false, VATRate (default 11) applies.

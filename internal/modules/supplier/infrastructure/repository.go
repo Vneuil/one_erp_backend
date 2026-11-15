@@ -28,7 +28,7 @@ func (r *supplierRepository) Create(ctx context.Context, supplier *domain.Suppli
 
 func (r *supplierRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Supplier, error) {
 	var supplier domain.Supplier
-	err := r.db.WithContext(ctx).Where("id = ?", id).First(&supplier).Error
+	err := r.db.WithContext(ctx).Preload("Codes").Where("id = ?", id).First(&supplier).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -40,7 +40,7 @@ func (r *supplierRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain
 
 func (r *supplierRepository) GetByCode(ctx context.Context, code string) (*domain.Supplier, error) {
 	var supplier domain.Supplier
-	err := r.db.WithContext(ctx).Where("code = ?", code).First(&supplier).Error
+	err := r.db.WithContext(ctx).Preload("Codes").Where("code = ?", code).First(&supplier).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -76,6 +76,7 @@ func (r *supplierRepository) List(ctx context.Context, query types.PaginationQue
 
 	offset := (query.Page - 1) * query.PerPage
 	err := db.Order(fmt.Sprintf("%s %s", sortField, sortDir)).
+		Preload("Codes").
 		Offset(offset).
 		Limit(query.PerPage).
 		Find(&suppliers).Error
@@ -129,7 +130,71 @@ func (r *supplierRepository) HasReferences(ctx context.Context, id uuid.UUID) (b
 
 func (r *supplierRepository) CodesWithPrefix(ctx context.Context, prefix string) ([]string, error) {
 	var codes []string
-	err := r.db.WithContext(ctx).Model(&domain.Supplier{}).
+	_ = r.db.WithContext(ctx).Model(&domain.Supplier{}).
 		Where("code LIKE ?", prefix+"%").Pluck("code", &codes).Error
-	return codes, err
+	var scCodes []string
+	_ = r.db.WithContext(ctx).Model(&domain.SupplierCode{}).
+		Where("code LIKE ?", prefix+"%").Pluck("code", &scCodes).Error
+	codes = append(codes, scCodes...)
+	return codes, nil
+}
+
+func (r *supplierRepository) CreateCode(ctx context.Context, sc *domain.SupplierCode) error {
+	tenantctx.SetTenantID(ctx, &sc.TenantID)
+	return r.db.WithContext(ctx).Create(sc).Error
+}
+
+func (r *supplierRepository) GetCodeByID(ctx context.Context, id uuid.UUID) (*domain.SupplierCode, error) {
+	var sc domain.SupplierCode
+	err := r.db.WithContext(ctx).Table("supplier_codes sc").
+		Select("sc.*, s.name as supplier_name").
+		Joins("LEFT JOIN suppliers s ON s.id = sc.supplier_id").
+		Where("sc.id = ?", id).First(&sc).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &sc, nil
+}
+
+func (r *supplierRepository) GetCodeByCode(ctx context.Context, code string) (*domain.SupplierCode, error) {
+	var sc domain.SupplierCode
+	err := r.db.WithContext(ctx).Table("supplier_codes sc").
+		Select("sc.*, s.name as supplier_name").
+		Joins("LEFT JOIN suppliers s ON s.id = sc.supplier_id").
+		Where("sc.code = ?", code).First(&sc).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &sc, nil
+}
+
+func (r *supplierRepository) ListCodes(ctx context.Context, supplierID *uuid.UUID, vendorType string) ([]domain.SupplierCode, error) {
+	var items []domain.SupplierCode
+	db := tenantctx.Scope(ctx, r.db.WithContext(ctx).Table("supplier_codes sc").
+		Select("sc.*, s.name as supplier_name").
+		Joins("LEFT JOIN suppliers s ON s.id = sc.supplier_id"))
+
+	if supplierID != nil && *supplierID != uuid.Nil {
+		db = db.Where("sc.supplier_id = ?", *supplierID)
+	}
+	if vendorType != "" {
+		db = db.Where("sc.vendor_type = ?", vendorType)
+	}
+
+	err := db.Order("sc.code asc").Find(&items).Error
+	return items, err
+}
+
+func (r *supplierRepository) UpdateCode(ctx context.Context, sc *domain.SupplierCode) error {
+	return r.db.WithContext(ctx).Save(sc).Error
+}
+
+func (r *supplierRepository) DeleteCode(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.SupplierCode{}, id).Error
 }

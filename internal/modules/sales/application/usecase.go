@@ -133,6 +133,24 @@ func NewSalesUseCase(repo domain.SalesRepository, currencyUC currencyApp.Currenc
 	return uc
 }
 
+func parseDaysFromTerm(term string) int {
+	clean := strings.ToLower(strings.TrimSpace(term))
+	if clean == "cod" || clean == "cash" || clean == "cash on delivery" {
+		return 0
+	}
+	if strings.HasPrefix(clean, "net ") || strings.HasPrefix(clean, "net-") {
+		var d int
+		if _, err := fmt.Sscanf(clean[4:], "%d", &d); err == nil && d >= 0 {
+			return d
+		}
+	}
+	var d int
+	if _, err := fmt.Sscanf(clean, "%d", &d); err == nil && d >= 0 {
+		return d
+	}
+	return 30
+}
+
 func (uc *salesUseCase) CreateOrder(ctx context.Context, dto CreateSalesOrderDTO) (*SalesOrderResponseDTO, error) {
 	if dto.CustomerName == "" {
 		return nil, apperrors.NewBadRequest("Customer name is required")
@@ -142,8 +160,18 @@ func (uc *salesUseCase) CreateOrder(ctx context.Context, dto CreateSalesOrderDTO
 		if err != nil {
 			return nil, apperrors.NewInternal(err, "Failed to verify customer status")
 		}
-		if cust != nil && strings.EqualFold(cust.Status, "Inactive") {
-			return nil, apperrors.NewBadRequest(fmt.Sprintf("Pelanggan %s berstatus Nonaktif dan tidak dapat dipilih untuk transaksi baru", cust.Name))
+		if cust != nil {
+			if strings.EqualFold(cust.Status, "Inactive") {
+				return nil, apperrors.NewBadRequest(fmt.Sprintf("Pelanggan %s berstatus Nonaktif dan tidak dapat dipilih untuk transaksi baru", cust.Name))
+			}
+			if dto.CustomerID == nil {
+				cid := cust.ID
+				dto.CustomerID = &cid
+			}
+			if dto.PaymentTerm == "" && cust.PaymentTermName != "" {
+				dto.PaymentTerm = cust.PaymentTermName
+				dto.PaymentTermID = cust.PaymentTermID
+			}
 		}
 	}
 
@@ -166,6 +194,13 @@ func (uc *salesUseCase) CreateOrder(ctx context.Context, dto CreateSalesOrderDTO
 	}
 
 	orderDate := time.Now().Format("2006-01-02")
+	dueDate := dto.DueDate
+	if dueDate == "" && dto.PaymentTerm != "" {
+		days := parseDaysFromTerm(dto.PaymentTerm)
+		if parsedDate, err := time.Parse("2006-01-02", orderDate); err == nil {
+			dueDate = parsedDate.AddDate(0, 0, days).Format("2006-01-02")
+		}
+	}
 
 	packaging, err := normalizeState("packagingAvailability", dto.PackagingAvailability, "pending", packagingStates)
 	if err != nil {
@@ -212,7 +247,14 @@ func (uc *salesUseCase) CreateOrder(ctx context.Context, dto CreateSalesOrderDTO
 
 	order := &domain.SalesOrder{
 		OrderNumber:          orderNum,
+		CustomerID:           dto.CustomerID,
 		CustomerName:         dto.CustomerName,
+		PaymentTermID:        dto.PaymentTermID,
+		PaymentTerm:          dto.PaymentTerm,
+		DueDate:              dueDate,
+		TaxRateID:            dto.TaxRateID,
+		VATRate:              dto.VATRate,
+		VATAmount:            dto.VATAmount,
 		TotalAmount:          dto.TotalAmount,
 		Currency:             currency,
 		BaseAmount:           baseAmount,
@@ -685,6 +727,27 @@ func (uc *salesUseCase) UpdateOrder(ctx context.Context, id uuid.UUID, dto Updat
 	if dto.VATExempt != nil {
 		order.VATExempt = *dto.VATExempt
 	}
+	if dto.CustomerID != nil {
+		order.CustomerID = dto.CustomerID
+	}
+	if dto.PaymentTermID != nil {
+		order.PaymentTermID = dto.PaymentTermID
+	}
+	if dto.PaymentTerm != nil {
+		order.PaymentTerm = *dto.PaymentTerm
+	}
+	if dto.DueDate != nil {
+		order.DueDate = *dto.DueDate
+	}
+	if dto.TaxRateID != nil {
+		order.TaxRateID = dto.TaxRateID
+	}
+	if dto.VATRate != nil {
+		order.VATRate = *dto.VATRate
+	}
+	if dto.VATAmount != nil {
+		order.VATAmount = *dto.VATAmount
+	}
 	if dto.CustomerPONumber != nil {
 		order.CustomerPONumber = *dto.CustomerPONumber
 	}
@@ -805,11 +868,17 @@ func (uc *salesUseCase) CreateQuotation(ctx context.Context, dto CreateQuotation
 	parentQuoID := dto.ParentQuotationID
 	parentQuoNum := dto.ParentQuotationNumber
 	revNum := dto.RevisionNumber
+	customerPOID := dto.CustomerPOID
+	customerPONumber := strings.TrimSpace(dto.CustomerPONumber)
 
 	// If this is a revision of an existing quotation
 	if parentQuoID != nil {
 		parentQuo, err := uc.repo.GetQuotationByID(ctx, *parentQuoID)
 		if err == nil && parentQuo != nil {
+			if customerPOID == nil && parentQuo.CustomerPOID != nil {
+				customerPOID = parentQuo.CustomerPOID
+				customerPONumber = parentQuo.CustomerPONumber
+			}
 			if parentQuoNum == "" {
 				parentQuoNum = parentQuo.QuotationNumber
 			}
@@ -842,11 +911,26 @@ func (uc *salesUseCase) CreateQuotation(ctx context.Context, dto CreateQuotation
 		validUntil = time.Now().AddDate(0, 1, 0).Format("2006-01-02")
 	}
 
+	currency := strings.TrimSpace(dto.Currency)
+	if currency == "" {
+		currency = "IDR"
+	}
+
 	quo := &domain.Quotation{
 		LeadID:                dto.LeadID,
+		CustomerID:            dto.CustomerID,
+		CustomerPOID:          customerPOID,
+		CustomerPONumber:      customerPONumber,
+		PaymentTermID:         dto.PaymentTermID,
+		PaymentTerm:           strings.TrimSpace(dto.PaymentTerm),
+		TaxRateID:             dto.TaxRateID,
+		VATRate:               dto.VATRate,
+		VATAmount:             dto.VATAmount,
+		VATExempt:             dto.VATExempt,
 		QuotationNumber:       quoNum,
 		CustomerName:          strings.TrimSpace(dto.CustomerName),
 		TotalAmount:           total,
+		Currency:              currency,
 		Lines:                 lines,
 		Status:                "Sent",
 		ValidUntil:            validUntil,
@@ -863,6 +947,29 @@ func (uc *salesUseCase) CreateQuotation(ctx context.Context, dto CreateQuotation
 			return nil, appErr
 		}
 		return nil, apperrors.NewInternal(err, "Failed to create quotation")
+	}
+
+	// Update Customer PO if linked: set status to Negotiating and link to this active quotation
+	if customerPOID != nil {
+		if po, err := uc.repo.GetCustomerPOByID(ctx, *customerPOID); err == nil && po != nil {
+			po.Status = "Negotiating"
+			po.QuotationID = &quo.ID
+			po.QuotationNumber = quo.QuotationNumber
+			_ = uc.repo.UpdateCustomerPO(ctx, po)
+		}
+	} else if customerPONumber != "" {
+		pos, _, err := uc.repo.ListCustomerPOs(ctx, types.PaginationQuery{Search: customerPONumber, Page: 1, PerPage: 10})
+		if err == nil {
+			for _, po := range pos {
+				if strings.EqualFold(strings.TrimSpace(po.PoNumber), customerPONumber) {
+					po.Status = "Negotiating"
+					po.QuotationID = &quo.ID
+					po.QuotationNumber = quo.QuotationNumber
+					_ = uc.repo.UpdateCustomerPO(ctx, &po)
+					break
+				}
+			}
+		}
 	}
 
 	return ToQuotationResponse(quo), nil
@@ -909,9 +1016,33 @@ func (uc *salesUseCase) UpdateQuotation(ctx context.Context, id uuid.UUID, dto U
 	}
 
 	quo.CustomerName = strings.TrimSpace(dto.CustomerName)
+	if dto.CustomerID != nil {
+		quo.CustomerID = dto.CustomerID
+	}
+	if dto.PaymentTermID != nil {
+		quo.PaymentTermID = dto.PaymentTermID
+	}
+	if dto.PaymentTerm != "" {
+		quo.PaymentTerm = strings.TrimSpace(dto.PaymentTerm)
+	}
+	if dto.TaxRateID != nil {
+		quo.TaxRateID = dto.TaxRateID
+	}
+	if dto.VATRate != nil {
+		quo.VATRate = *dto.VATRate
+	}
+	if dto.VATAmount != nil {
+		quo.VATAmount = *dto.VATAmount
+	}
+	if dto.VATExempt != nil {
+		quo.VATExempt = *dto.VATExempt
+	}
 	quo.ValidUntil = validUntil
 	quo.TotalAmount = total
 	quo.Lines = lines
+	if dto.Currency != "" {
+		quo.Currency = strings.TrimSpace(dto.Currency)
+	}
 	if dto.Status != "" {
 		quo.Status = strings.TrimSpace(dto.Status)
 	}
@@ -1011,10 +1142,19 @@ func (uc *salesUseCase) ConvertQuotationToOrder(ctx context.Context, id uuid.UUI
 	}
 
 	order, err := uc.CreateOrder(ctx, CreateSalesOrderDTO{
-		CustomerName: quo.CustomerName,
-		TotalAmount:  quo.TotalAmount,
-		Status:       "Confirmed",
-		Lines:        lines,
+		CustomerID:       quo.CustomerID,
+		CustomerName:     quo.CustomerName,
+		TotalAmount:      quo.TotalAmount,
+		Currency:         quo.Currency,
+		CustomerPONumber: quo.CustomerPONumber,
+		Status:           "Confirmed",
+		PaymentTermID:    quo.PaymentTermID,
+		PaymentTerm:      quo.PaymentTerm,
+		TaxRateID:        quo.TaxRateID,
+		VATRate:          quo.VATRate,
+		VATAmount:        quo.VATAmount,
+		VATExempt:        quo.VATExempt,
+		Lines:            lines,
 	})
 	if err != nil {
 		return nil, err
@@ -1023,6 +1163,16 @@ func (uc *salesUseCase) ConvertQuotationToOrder(ctx context.Context, id uuid.UUI
 	quo.Status = "Converted"
 	if err := uc.repo.UpdateQuotation(ctx, quo); err != nil {
 		return nil, apperrors.NewInternal(err, "Sales order created but failed to mark quotation as converted")
+	}
+
+	// If linked to Customer PO, mark PO as Agreed
+	if quo.CustomerPOID != nil {
+		if po, err := uc.repo.GetCustomerPOByID(ctx, *quo.CustomerPOID); err == nil && po != nil {
+			po.Status = "Agreed"
+			po.QuotationID = &quo.ID
+			po.QuotationNumber = quo.QuotationNumber
+			_ = uc.repo.UpdateCustomerPO(ctx, po)
+		}
 	}
 
 	return order, nil
@@ -1039,9 +1189,10 @@ func (uc *salesUseCase) CreateInvoice(ctx context.Context, dto CreateInvoiceDTO)
 	}
 
 	dueDate := dto.DueDate
-	if dueDate == "" {
-		dueDate = time.Now().AddDate(0, 1, 0).Format("2006-01-02")
-	}
+	paymentTermID := dto.PaymentTermID
+	paymentTerm := strings.TrimSpace(dto.PaymentTerm)
+	taxRateID := dto.TaxRateID
+	customerID := dto.CustomerID
 
 	if dto.SalesOrderID != nil {
 		order, err := uc.repo.GetOrderByID(ctx, *dto.SalesOrderID)
@@ -1054,6 +1205,27 @@ func (uc *salesUseCase) CreateInvoice(ctx context.Context, dto CreateInvoiceDTO)
 		// PPN switched off on the order (e.g. export): never add VAT to its invoices.
 		if order.VATExempt {
 			dto.ApplyVAT = false
+		}
+		if customerID == nil {
+			customerID = order.CustomerID
+		}
+		if paymentTermID == nil {
+			paymentTermID = order.PaymentTermID
+		}
+		if paymentTerm == "" {
+			paymentTerm = order.PaymentTerm
+		}
+		if taxRateID == nil {
+			taxRateID = order.TaxRateID
+		}
+	}
+
+	if dueDate == "" {
+		days := parseDaysFromTerm(paymentTerm)
+		if days > 0 {
+			dueDate = time.Now().AddDate(0, 0, days).Format("2006-01-02")
+		} else {
+			dueDate = time.Now().AddDate(0, 1, 0).Format("2006-01-02")
 		}
 	}
 
@@ -1073,7 +1245,11 @@ func (uc *salesUseCase) CreateInvoice(ctx context.Context, dto CreateInvoiceDTO)
 		VATOtherValueBase: amounts.VAT.OtherValueBase,
 		VATAmount:         amounts.VAT.Amount,
 		InvoiceNumber:     invNum,
+		CustomerID:        customerID,
 		CustomerName:      dto.CustomerName,
+		PaymentTermID:     paymentTermID,
+		PaymentTerm:       paymentTerm,
+		TaxRateID:         taxRateID,
 		TotalAmount:       amounts.Total,
 		Subtotal:          amounts.Subtotal,
 		DiscountAmount:    amounts.Discount,
@@ -1635,16 +1811,21 @@ func (uc *salesUseCase) CreateCustomerPO(ctx context.Context, dto CreateCustomer
 	}
 
 	po := &domain.CustomerPO{
-		PoNumber:     poNumber,
-		CustomerID:   dto.CustomerID,
-		CustomerName: customerName,
-		PoDate:       poDate,
-		Attachment:   strings.TrimSpace(dto.Attachment),
-		Currency:     cur,
-		TotalAmount:  math.Round(total*100) / 100,
-		Status:       "Pending",
-		Notes:        strings.TrimSpace(dto.Notes),
-		Lines:        lines,
+		PoNumber:      poNumber,
+		CustomerID:    dto.CustomerID,
+		CustomerName:  customerName,
+		PoDate:        poDate,
+		Attachment:    strings.TrimSpace(dto.Attachment),
+		Currency:      cur,
+		TotalAmount:   math.Round(total*100) / 100,
+		Status:        "Pending",
+		PaymentTermID: dto.PaymentTermID,
+		PaymentTerm:   strings.TrimSpace(dto.PaymentTerm),
+		TaxRateID:     dto.TaxRateID,
+		VATRate:       dto.VATRate,
+		VATAmount:     dto.VATAmount,
+		Notes:         strings.TrimSpace(dto.Notes),
+		Lines:         lines,
 	}
 
 	if err := uc.repo.CreateCustomerPO(ctx, po); err != nil {
@@ -1697,6 +1878,21 @@ func (uc *salesUseCase) UpdateCustomerPO(ctx context.Context, id uuid.UUID, dto 
 	}
 	if dto.Status != "" {
 		po.Status = strings.TrimSpace(dto.Status)
+	}
+	if dto.PaymentTermID != nil {
+		po.PaymentTermID = dto.PaymentTermID
+	}
+	if dto.PaymentTerm != "" {
+		po.PaymentTerm = strings.TrimSpace(dto.PaymentTerm)
+	}
+	if dto.TaxRateID != nil {
+		po.TaxRateID = dto.TaxRateID
+	}
+	if dto.VATRate != nil {
+		po.VATRate = *dto.VATRate
+	}
+	if dto.VATAmount != nil {
+		po.VATAmount = *dto.VATAmount
 	}
 
 	if len(dto.Lines) > 0 {

@@ -61,6 +61,11 @@ type PurchaseOrder struct {
 	OrderDate         string     `gorm:"type:varchar(50)" json:"orderDate"`
 	ExpectedDate      string     `gorm:"type:varchar(50)" json:"expectedDate"`
 	Status            string     `gorm:"type:varchar(50);default:'draft'" json:"status"`
+	PaymentTermID     *uuid.UUID `gorm:"type:uuid;index" json:"paymentTermId,omitempty"`
+	PaymentTerm       string     `gorm:"type:varchar(100)" json:"paymentTerm,omitempty"`
+	TaxRateID         *uuid.UUID `gorm:"type:uuid;index" json:"taxRateId,omitempty"`
+	VATRate           float64    `gorm:"type:decimal(5,2);default:0" json:"vatRate"`
+	VATAmount         float64    `gorm:"type:decimal(15,2);default:0" json:"vatAmount"`
 	TotalAmount       float64    `gorm:"type:decimal(15,2);default:0" json:"totalAmount"`
 	FreightScheme     string     `gorm:"type:varchar(50);default:'franco'" json:"freightScheme"` // franco | loco
 	FreightCost       float64    `gorm:"type:decimal(15,2);default:0" json:"freightCost"`
@@ -161,6 +166,9 @@ type PurchaseInvoice struct {
 	SupplierName    string     `gorm:"type:varchar(255)" json:"supplierName"`
 	PurchaseOrderID *uuid.UUID `gorm:"type:uuid;index" json:"purchaseOrderId,omitempty"`
 	InvoiceNumber   string     `gorm:"type:varchar(50);not null;index" json:"invoiceNumber"`
+	PaymentTermID   *uuid.UUID `gorm:"type:uuid;index" json:"paymentTermId,omitempty"`
+	PaymentTerm     string     `gorm:"type:varchar(100)" json:"paymentTerm,omitempty"`
+	TaxRateID       *uuid.UUID `gorm:"type:uuid;index" json:"taxRateId,omitempty"`
 	InvoiceDate     string     `gorm:"type:varchar(50)" json:"invoiceDate"`
 	DueDate         string     `gorm:"type:varchar(50)" json:"dueDate"`
 	TotalAmount     float64    `gorm:"type:decimal(15,2);not null" json:"totalAmount"`

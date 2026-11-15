@@ -100,6 +100,11 @@ type PurchaseOrderLineDTO struct {
 type CreatePurchaseOrderDTO struct {
 	SupplierID        uuid.UUID  `json:"supplierId"`
 	SupplierName      string     `json:"supplierName"`
+	PaymentTermID     *uuid.UUID `json:"paymentTermId,omitempty"`
+	PaymentTerm       string     `json:"paymentTerm,omitempty"`
+	TaxRateID         *uuid.UUID `json:"taxRateId,omitempty"`
+	VATRate           float64    `json:"vatRate,omitempty"`
+	VATAmount         float64    `json:"vatAmount,omitempty"`
 	PurchaseRequestID *uuid.UUID `json:"purchaseRequestId,omitempty"`
 	SalesOrderID      *uuid.UUID `json:"salesOrderId,omitempty"`
 	SalesOrderNo      string     `json:"salesOrderNo,omitempty"`
@@ -119,6 +124,11 @@ type CreatePurchaseOrderDTO struct {
 type UpdatePurchaseOrderDTO struct {
 	SupplierID        uuid.UUID              `json:"supplierId"`
 	SupplierName      string                 `json:"supplierName"`
+	PaymentTermID     *uuid.UUID             `json:"paymentTermId,omitempty"`
+	PaymentTerm       string                 `json:"paymentTerm,omitempty"`
+	TaxRateID         *uuid.UUID             `json:"taxRateId,omitempty"`
+	VATRate           *float64               `json:"vatRate,omitempty"`
+	VATAmount         *float64               `json:"vatAmount,omitempty"`
 	PurchaseRequestID *uuid.UUID             `json:"purchaseRequestId,omitempty"`
 	SalesOrderID      *uuid.UUID             `json:"salesOrderId,omitempty"`
 	SalesOrderNo      string                 `json:"salesOrderNo,omitempty"`
@@ -157,6 +167,11 @@ type PurchaseOrderResponseDTO struct {
 	SalesOrderNo      string                         `json:"salesOrderNo,omitempty"`
 	OrderDate         string                         `json:"orderDate"`
 	ExpectedDate      string                         `json:"expectedDate"`
+	PaymentTermID     *uuid.UUID                     `json:"paymentTermId,omitempty"`
+	PaymentTerm       string                         `json:"paymentTerm,omitempty"`
+	TaxRateID         *uuid.UUID                     `json:"taxRateId,omitempty"`
+	VATRate           float64                        `json:"vatRate"`
+	VATAmount         float64                        `json:"vatAmount"`
 	Status            string                         `json:"status"`
 	TotalAmount       float64                        `json:"totalAmount"`
 	FreightScheme     string                         `json:"freightScheme"`
@@ -184,6 +199,7 @@ func ToPurchaseOrderResponse(po *domain.PurchaseOrder) *PurchaseOrderResponseDTO
 		ID: po.ID, OrderNo: po.OrderNo, SupplierID: po.SupplierID, SupplierName: po.SupplierName, PurchaseRequestID: po.PurchaseRequestID,
 		SalesOrderID: po.SalesOrderID, SalesOrderNo: po.SalesOrderNo,
 		OrderDate: po.OrderDate, ExpectedDate: po.ExpectedDate, Status: po.Status, TotalAmount: po.TotalAmount,
+		PaymentTermID: po.PaymentTermID, PaymentTerm: po.PaymentTerm, TaxRateID: po.TaxRateID, VATRate: po.VATRate, VATAmount: po.VATAmount,
 		Currency: po.Currency, BaseAmount: po.BaseAmount, CreatedByEmail: po.CreatedByEmail,
 		FreightScheme: po.FreightScheme, FreightCost: po.FreightCost, QualityNotes: po.QualityNotes,
 		Lines: lines, CreatedAt: po.CreatedAt,
@@ -302,12 +318,15 @@ func ToGoodsReceiptResponseList(items []domain.GoodsReceipt) []GoodsReceiptRespo
 // Purchase invoices
 
 type CreatePurchaseInvoiceDTO struct {
-	SupplierID      uuid.UUID  `json:"supplierId"`
-	SupplierName    string     `json:"supplierName"`
-	PurchaseOrderID *uuid.UUID `json:"purchaseOrderId,omitempty"`
-	InvoiceNumber   string     `json:"invoiceNumber"`
-	InvoiceDate     string     `json:"invoiceDate"`
-	DueDate         string     `json:"dueDate"`
+	SupplierID        uuid.UUID  `json:"supplierId"`
+	SupplierName      string     `json:"supplierName"`
+	PaymentTermID     *uuid.UUID `json:"paymentTermId,omitempty"`
+	PaymentTerm       string     `json:"paymentTerm,omitempty"`
+	TaxRateID         *uuid.UUID `json:"taxRateId,omitempty"`
+	PurchaseOrderID   *uuid.UUID `json:"purchaseOrderId,omitempty"`
+	InvoiceNumber     string     `json:"invoiceNumber"`
+	InvoiceDate       string     `json:"invoiceDate"`
+	DueDate           string     `json:"dueDate"`
 	// TotalAmount is the amount before adjustments; with none of the fields
 	// below it is also the final total (the original behaviour).
 	TotalAmount     float64 `json:"totalAmount"`
@@ -335,6 +354,9 @@ type PurchaseInvoiceResponseDTO struct {
 	PurchaseOrderID     *uuid.UUID `json:"purchaseOrderId,omitempty"`
 	PurchaseOrderNumber string     `json:"purchaseOrderNumber,omitempty"`
 	InvoiceNumber       string     `json:"invoiceNumber"`
+	PaymentTermID       *uuid.UUID `json:"paymentTermId,omitempty"`
+	PaymentTerm         string     `json:"paymentTerm,omitempty"`
+	TaxRateID           *uuid.UUID `json:"taxRateId,omitempty"`
 	InvoiceDate         string     `json:"invoiceDate"`
 	DueDate             string     `json:"dueDate"`
 	TotalAmount         float64    `json:"totalAmount"`
@@ -362,6 +384,9 @@ func ToPurchaseInvoiceResponse(inv *domain.PurchaseInvoice, poNumber string) *Pu
 	return &PurchaseInvoiceResponseDTO{
 		ID: inv.ID, SupplierID: inv.SupplierID, SupplierName: inv.SupplierName, PurchaseOrderID: inv.PurchaseOrderID,
 		PurchaseOrderNumber: poNumber,
+		PaymentTermID:       inv.PaymentTermID,
+		PaymentTerm:         inv.PaymentTerm,
+		TaxRateID:           inv.TaxRateID,
 		InvoiceNumber:       inv.InvoiceNumber, InvoiceDate: inv.InvoiceDate, DueDate: inv.DueDate,
 		TotalAmount: inv.TotalAmount, PaidAmount: inv.PaidAmount, CreditedAmount: inv.CreditedAmount, Outstanding: inv.TotalAmount - inv.CreditedAmount - inv.PaidAmount,
 		Subtotal: inv.Subtotal, DiscountAmount: inv.DiscountAmount, AdditionalCost: inv.AdditionalCost, RoundingAmount: inv.RoundingAmount,

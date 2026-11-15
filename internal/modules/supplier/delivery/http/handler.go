@@ -166,3 +166,93 @@ func (h *Handler) SetStatus(c *fiber.Ctx) error {
 	}
 	return response.OK(c, "Supplier status updated successfully", supplier)
 }
+
+func (h *Handler) ListCodes(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var supplierIDPtr *uuid.UUID
+	if sId := c.Query("supplierId"); sId != "" {
+		if parsed, err := uuid.Parse(sId); err == nil {
+			supplierIDPtr = &parsed
+		}
+	}
+	vendorType := c.Query("vendorType")
+	codes, err := uc.ListCodes(h.ctx(c), supplierIDPtr, vendorType)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Supplier codes retrieved successfully", codes)
+}
+
+func (h *Handler) CreateCode(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var dto application.CreateSupplierCodeDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	code, err := uc.CreateCode(h.ctx(c), dto)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Supplier code created successfully", code)
+}
+
+func (h *Handler) UpdateCode(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid supplier code ID format")
+	}
+	var dto application.UpdateSupplierCodeDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	code, err := uc.UpdateCode(h.ctx(c), id, dto)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Supplier code updated successfully", code)
+}
+
+func (h *Handler) DeleteCode(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid supplier code ID format")
+	}
+	if err := uc.DeleteCode(h.ctx(c), id); err != nil {
+		return err
+	}
+	return response.OK(c, "Supplier code deleted successfully", nil)
+}
+
+func (h *Handler) SetCodeStatus(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid supplier code ID format")
+	}
+	var dto application.SetStatusDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	code, err := uc.SetCodeStatus(h.ctx(c), id, dto.Status)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Supplier code status updated successfully", code)
+}

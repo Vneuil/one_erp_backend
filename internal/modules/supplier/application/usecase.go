@@ -21,6 +21,13 @@ type SupplierUseCase interface {
 	Delete(ctx context.Context, id uuid.UUID) error
 	SetStatus(ctx context.Context, id uuid.UUID, status string) (*SupplierResponseDTO, error)
 	SeedInitialData(ctx context.Context) error
+
+	// SupplierCode operations
+	CreateCode(ctx context.Context, dto CreateSupplierCodeDTO) (*SupplierCodeResponseDTO, error)
+	ListCodes(ctx context.Context, supplierID *uuid.UUID, vendorType string) ([]SupplierCodeResponseDTO, error)
+	UpdateCode(ctx context.Context, id uuid.UUID, dto UpdateSupplierCodeDTO) (*SupplierCodeResponseDTO, error)
+	DeleteCode(ctx context.Context, id uuid.UUID) error
+	SetCodeStatus(ctx context.Context, id uuid.UUID, status string) (*SupplierCodeResponseDTO, error)
 }
 
 type supplierUseCase struct {
@@ -38,16 +45,15 @@ func (uc *supplierUseCase) Create(ctx context.Context, dto CreateSupplierDTO) (*
 	if name == "" {
 		return nil, apperrors.NewBadRequest("Supplier Name is required")
 	}
-	// The code is generated when the client does not supply one, so the UI never
-	// has to guess the next number (and collide with an existing record).
+
 	vendorType, ok := normalizeVendorType(dto.VendorType)
 	if !ok {
 		return nil, apperrors.NewBadRequest("Vendor type must be 2-4 letters (e.g. PRD, PCK, ATK)")
 	}
-	if code == "" {
-		if vendorType == "" {
-			return nil, apperrors.NewBadRequest("Vendor type is required (PRD, PCK, ATK) to generate the vendor code")
-		}
+
+	if code == "" && vendorType == "" {
+		// Vendor code is optional when creating vendor, since vendor codes can be added separately
+	} else if code == "" {
 		generated, err := uc.nextCode(ctx, vendorType)
 		if err != nil {
 			return nil, apperrors.NewInternal(err, "Failed to generate supplier code")
@@ -61,12 +67,14 @@ func (uc *supplierUseCase) Create(ctx context.Context, dto CreateSupplierDTO) (*
 		vendorType = t
 	}
 
-	existing, err := uc.repo.GetByCode(ctx, code)
-	if err != nil {
-		return nil, apperrors.NewInternal(err, "Failed to check existing code")
-	}
-	if existing != nil {
-		return nil, apperrors.NewConflict("Supplier with this code already exists")
+	if code != "" {
+		existing, err := uc.repo.GetByCode(ctx, code)
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to check existing code")
+		}
+		if existing != nil {
+			return nil, apperrors.NewConflict("Supplier with this code already exists")
+		}
 	}
 
 	status := dto.Status
@@ -108,6 +116,19 @@ func (uc *supplierUseCase) Create(ctx context.Context, dto CreateSupplierDTO) (*
 
 	if err := uc.repo.Create(ctx, supplier); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to create supplier")
+	}
+
+	if code != "" {
+		sc := &domain.SupplierCode{
+			SupplierID:  supplier.ID,
+			Code:        code,
+			VendorType:  vendorType,
+			BatchCode:   supplier.BatchCode,
+			Description: "Kode Awal",
+			Status:      status,
+		}
+		_ = uc.repo.CreateCode(ctx, sc)
+		supplier.Codes = []domain.SupplierCode{*sc}
 	}
 
 	return ToSupplierResponse(supplier), nil
@@ -361,4 +382,180 @@ func (uc *supplierUseCase) nextCode(ctx context.Context, vendorType string) (str
 		}
 	}
 	return "", fmt.Errorf("no free supplier code found")
+}
+
+func (uc *supplierUseCase) CreateCode(ctx context.Context, dto CreateSupplierCodeDTO) (*SupplierCodeResponseDTO, error) {
+	if dto.SupplierID == uuid.Nil {
+		return nil, apperrors.NewBadRequest("Supplier ID is required")
+	}
+	supplier, err := uc.repo.GetByID(ctx, dto.SupplierID)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get supplier")
+	}
+	if supplier == nil {
+		return nil, apperrors.NewNotFound("Supplier not found")
+	}
+
+	vendorType, ok := normalizeVendorType(dto.VendorType)
+	if !ok || vendorType == "" {
+		return nil, apperrors.NewBadRequest("Vendor type must be 2-4 letters (e.g. PRD, PCK, ATK)")
+	}
+
+	code := strings.ToUpper(strings.TrimSpace(dto.Code))
+	if code == "" {
+		generated, err := uc.nextCode(ctx, vendorType)
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to generate supplier code")
+		}
+		code = generated
+	} else {
+		t, valid := vendorCodeType(code)
+		if !valid {
+			return nil, apperrors.NewBadRequest("Vendor code must follow VD-<TYPE>-<NNN>, e.g. VD-PRD-001")
+		}
+		vendorType = t
+	}
+
+	existingCode, err := uc.repo.GetCodeByCode(ctx, code)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to check existing code")
+	}
+	if existingCode != nil {
+		return nil, apperrors.NewConflict("Vendor code already exists")
+	}
+
+	status := dto.Status
+	if status == "" {
+		status = "Active"
+	}
+
+	sc := &domain.SupplierCode{
+		SupplierID:   supplier.ID,
+		Code:         code,
+		VendorType:   vendorType,
+		BatchCode:    strings.ToUpper(strings.TrimSpace(dto.BatchCode)),
+		Description:  strings.TrimSpace(dto.Description),
+		Status:       status,
+		SupplierName: supplier.Name,
+	}
+
+	if err := uc.repo.CreateCode(ctx, sc); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to create supplier code")
+	}
+
+	if supplier.Code == "" {
+		supplier.Code = code
+		supplier.VendorType = vendorType
+		supplier.BatchCode = sc.BatchCode
+		_ = uc.repo.Update(ctx, supplier)
+	}
+
+	return ToSupplierCodeResponse(sc), nil
+}
+
+func (uc *supplierUseCase) ListCodes(ctx context.Context, supplierID *uuid.UUID, vendorType string) ([]SupplierCodeResponseDTO, error) {
+	items, err := uc.repo.ListCodes(ctx, supplierID, vendorType)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to list supplier codes")
+	}
+
+	if len(items) == 0 && supplierID != nil {
+		s, err := uc.repo.GetByID(ctx, *supplierID)
+		if err == nil && s != nil && s.Code != "" {
+			sc := &domain.SupplierCode{
+				SupplierID:   s.ID,
+				Code:         s.Code,
+				VendorType:   s.VendorType,
+				BatchCode:    s.BatchCode,
+				Status:       s.Status,
+				SupplierName: s.Name,
+			}
+			_ = uc.repo.CreateCode(ctx, sc)
+			items = append(items, *sc)
+		}
+	}
+
+	return ToSupplierCodeResponseList(items), nil
+}
+
+func (uc *supplierUseCase) UpdateCode(ctx context.Context, id uuid.UUID, dto UpdateSupplierCodeDTO) (*SupplierCodeResponseDTO, error) {
+	sc, err := uc.repo.GetCodeByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get supplier code")
+	}
+	if sc == nil {
+		return nil, apperrors.NewNotFound("Supplier code not found")
+	}
+
+	if dto.VendorType != nil {
+		t, ok := normalizeVendorType(*dto.VendorType)
+		if !ok || t == "" {
+			return nil, apperrors.NewBadRequest("Vendor type must be 2-4 letters (e.g. PRD, PCK, ATK)")
+		}
+		sc.VendorType = t
+	}
+
+	if dto.Code != nil {
+		newCode := strings.ToUpper(strings.TrimSpace(*dto.Code))
+		if newCode != "" && newCode != sc.Code {
+			t, valid := vendorCodeType(newCode)
+			if !valid {
+				return nil, apperrors.NewBadRequest("Vendor code must follow VD-<TYPE>-<NNN>, e.g. VD-PRD-001")
+			}
+			existing, err := uc.repo.GetCodeByCode(ctx, newCode)
+			if err != nil {
+				return nil, apperrors.NewInternal(err, "Failed to check existing code")
+			}
+			if existing != nil && existing.ID != sc.ID {
+				return nil, apperrors.NewConflict("Vendor code already exists")
+			}
+			sc.Code = newCode
+			sc.VendorType = t
+		}
+	}
+
+	if dto.BatchCode != nil {
+		sc.BatchCode = strings.ToUpper(strings.TrimSpace(*dto.BatchCode))
+	}
+	if dto.Description != nil {
+		sc.Description = strings.TrimSpace(*dto.Description)
+	}
+	if dto.Status != nil {
+		sc.Status = *dto.Status
+	}
+
+	if err := uc.repo.UpdateCode(ctx, sc); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to update supplier code")
+	}
+
+	return ToSupplierCodeResponse(sc), nil
+}
+
+func (uc *supplierUseCase) DeleteCode(ctx context.Context, id uuid.UUID) error {
+	sc, err := uc.repo.GetCodeByID(ctx, id)
+	if err != nil {
+		return apperrors.NewInternal(err, "Failed to get supplier code")
+	}
+	if sc == nil {
+		return apperrors.NewNotFound("Supplier code not found")
+	}
+	if err := uc.repo.DeleteCode(ctx, id); err != nil {
+		return apperrors.NewInternal(err, "Failed to delete supplier code")
+	}
+	return nil
+}
+
+func (uc *supplierUseCase) SetCodeStatus(ctx context.Context, id uuid.UUID, status string) (*SupplierCodeResponseDTO, error) {
+	sc, err := uc.repo.GetCodeByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get supplier code")
+	}
+	if sc == nil {
+		return nil, apperrors.NewNotFound("Supplier code not found")
+	}
+	sc.Status = status
+	if err := uc.repo.UpdateCode(ctx, sc); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to update supplier code status")
+	}
+	return ToSupplierCodeResponse(sc), nil
 }

@@ -557,6 +557,24 @@ func (uc *procurementUseCase) FinalizePurchaseRequestRejected(ctx context.Contex
 
 // Purchase orders
 
+func parseDaysFromTerm(term string) int {
+	clean := strings.ToLower(strings.TrimSpace(term))
+	if clean == "cod" || clean == "cash" || clean == "cash on delivery" {
+		return 0
+	}
+	if strings.HasPrefix(clean, "net ") || strings.HasPrefix(clean, "net-") {
+		var d int
+		if _, err := fmt.Sscanf(clean[4:], "%d", &d); err == nil && d >= 0 {
+			return d
+		}
+	}
+	var d int
+	if _, err := fmt.Sscanf(clean, "%d", &d); err == nil && d >= 0 {
+		return d
+	}
+	return 30
+}
+
 func (uc *procurementUseCase) ensureSupplierActive(ctx context.Context, supplierID uuid.UUID) error {
 	if uc.supplierRepo == nil || supplierID == uuid.Nil {
 		return nil
@@ -643,10 +661,23 @@ func (uc *procurementUseCase) CreatePurchaseOrder(ctx context.Context, dto Creat
 		freightScheme = "franco"
 	}
 
+	paymentTermID := dto.PaymentTermID
+	paymentTerm := strings.TrimSpace(dto.PaymentTerm)
+	if paymentTerm == "" && uc.supplierRepo != nil {
+		if sup, err := uc.supplierRepo.GetByID(ctx, dto.SupplierID); err == nil && sup != nil && sup.PaymentTerm != "" {
+			paymentTerm = sup.PaymentTerm
+		}
+	}
+
 	po := &domain.PurchaseOrder{
 		OrderNo:           orderNo,
 		SupplierID:        dto.SupplierID,
 		SupplierName:      dto.SupplierName,
+		PaymentTermID:     paymentTermID,
+		PaymentTerm:       paymentTerm,
+		TaxRateID:         dto.TaxRateID,
+		VATRate:           dto.VATRate,
+		VATAmount:         dto.VATAmount,
 		PurchaseRequestID: dto.PurchaseRequestID,
 		SalesOrderID:      inheritedSalesOrderID,
 		SalesOrderNo:      inheritedSalesOrderNo,
@@ -736,6 +767,21 @@ func (uc *procurementUseCase) UpdatePurchaseOrder(ctx context.Context, id uuid.U
 	}
 	if dto.FreightScheme != "" {
 		po.FreightScheme = dto.FreightScheme
+	}
+	if dto.PaymentTermID != nil {
+		po.PaymentTermID = dto.PaymentTermID
+	}
+	if dto.PaymentTerm != "" {
+		po.PaymentTerm = strings.TrimSpace(dto.PaymentTerm)
+	}
+	if dto.TaxRateID != nil {
+		po.TaxRateID = dto.TaxRateID
+	}
+	if dto.VATRate != nil {
+		po.VATRate = *dto.VATRate
+	}
+	if dto.VATAmount != nil {
+		po.VATAmount = *dto.VATAmount
 	}
 	po.FreightCost = dto.FreightCost
 	po.QualityNotes = dto.QualityNotes
@@ -1189,13 +1235,50 @@ func (uc *procurementUseCase) CreatePurchaseInvoice(ctx context.Context, dto Cre
 	if invoiceDate == "" {
 		invoiceDate = time.Now().Format("2006-01-02")
 	}
+
+	paymentTermID := dto.PaymentTermID
+	paymentTerm := strings.TrimSpace(dto.PaymentTerm)
+	taxRateID := dto.TaxRateID
+
+	if dto.PurchaseOrderID != nil {
+		if po, err := uc.repo.GetPurchaseOrderByID(ctx, *dto.PurchaseOrderID); err == nil && po != nil {
+			if paymentTermID == nil {
+				paymentTermID = po.PaymentTermID
+			}
+			if paymentTerm == "" {
+				paymentTerm = po.PaymentTerm
+			}
+			if taxRateID == nil {
+				taxRateID = po.TaxRateID
+			}
+		}
+	}
+	if paymentTerm == "" && uc.supplierRepo != nil {
+		if sup, err := uc.supplierRepo.GetByID(ctx, dto.SupplierID); err == nil && sup != nil && sup.PaymentTerm != "" {
+			paymentTerm = sup.PaymentTerm
+		}
+	}
+
+	dueDate := dto.DueDate
+	if dueDate == "" {
+		days := parseDaysFromTerm(paymentTerm)
+		if parsedDate, err := time.Parse("2006-01-02", invoiceDate); err == nil {
+			dueDate = parsedDate.AddDate(0, 0, days).Format("2006-01-02")
+		} else {
+			dueDate = time.Now().AddDate(0, 1, 0).Format("2006-01-02")
+		}
+	}
+
 	inv := &domain.PurchaseInvoice{
 		SupplierID:        dto.SupplierID,
 		SupplierName:      dto.SupplierName,
 		PurchaseOrderID:   dto.PurchaseOrderID,
+		PaymentTermID:     paymentTermID,
+		PaymentTerm:       paymentTerm,
+		TaxRateID:         taxRateID,
 		InvoiceNumber:     invoiceNumber,
 		InvoiceDate:       invoiceDate,
-		DueDate:           dto.DueDate,
+		DueDate:           dueDate,
 		TotalAmount:       amounts.Total,
 		Subtotal:          amounts.Subtotal,
 		DiscountAmount:    amounts.Discount,

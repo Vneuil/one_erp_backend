@@ -311,10 +311,28 @@ func (uc *productUseCase) CreateCategory(ctx context.Context, dto CreateCategory
 	return &CategoryResponseDTO{ID: c.ID, Name: c.Name}, nil
 }
 
+var defaultCategories = []string{
+	"Raw Material",
+	"Packaging",
+	"Finished Goods",
+	"WIP / Setengah Jadi",
+	"Consumables",
+}
+
 func (uc *productUseCase) ListCategories(ctx context.Context) ([]CategoryResponseDTO, error) {
 	items, err := uc.repo.ListCategories(ctx)
 	if err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to list categories")
+	}
+	if len(items) == 0 {
+		for _, catName := range defaultCategories {
+			c := &domain.ProductCategory{Name: catName}
+			_ = uc.repo.CreateCategory(ctx, c)
+		}
+		items, err = uc.repo.ListCategories(ctx)
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to list categories after seed")
+		}
 	}
 	return ToCategoryResponseList(items), nil
 }
@@ -331,9 +349,13 @@ func (uc *productUseCase) UpdateCategory(ctx context.Context, id uuid.UUID, dto 
 	if name == "" {
 		return nil, apperrors.NewBadRequest("Category name is required")
 	}
+	oldName := c.Name
 	c.Name = name
 	if err := uc.repo.UpdateCategory(ctx, c); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to update category")
+	}
+	if oldName != "" && oldName != name {
+		_ = uc.repo.UpdateProductCategoryName(ctx, oldName, name)
 	}
 	return &CategoryResponseDTO{ID: c.ID, Name: c.Name}, nil
 }
@@ -343,6 +365,19 @@ func (uc *productUseCase) DeleteCategory(ctx context.Context, id uuid.UUID) erro
 		return apperrors.NewInternal(err, "Failed to delete category")
 	}
 	return nil
+}
+
+var defaultUnits = []struct {
+	Name   string
+	Symbol string
+}{
+	{Name: "Kilogram", Symbol: "KG"},
+	{Name: "Pieces", Symbol: "Pcs"},
+	{Name: "Box", Symbol: "Box"},
+	{Name: "Roll", Symbol: "Roll"},
+	{Name: "Unit", Symbol: "Unit"},
+	{Name: "Gram", Symbol: "G"},
+	{Name: "Liter", Symbol: "L"},
 }
 
 func (uc *productUseCase) CreateUnit(ctx context.Context, dto CreateUnitDTO) (*UnitResponseDTO, error) {
@@ -361,6 +396,16 @@ func (uc *productUseCase) ListUnits(ctx context.Context) ([]UnitResponseDTO, err
 	items, err := uc.repo.ListUnits(ctx)
 	if err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to list units")
+	}
+	if len(items) == 0 {
+		for _, def := range defaultUnits {
+			u := &domain.UnitOfMeasure{Name: def.Name, Symbol: def.Symbol}
+			_ = uc.repo.CreateUnit(ctx, u)
+		}
+		items, err = uc.repo.ListUnits(ctx)
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to list units after seed")
+		}
 	}
 	return ToUnitResponseList(items), nil
 }
@@ -512,14 +557,16 @@ func (uc *productUseCase) CreateCertification(ctx context.Context, dto CreateCer
 		return nil, apperrors.NewConflict("Certification with this code already exists")
 	}
 	c := &domain.Certification{
-		Code:        code,
-		Name:        name,
-		Description: strings.TrimSpace(dto.Description),
+		Code:           code,
+		Name:           name,
+		Description:    strings.TrimSpace(dto.Description),
+		Attachment:     strings.TrimSpace(dto.Attachment),
+		AttachmentName: strings.TrimSpace(dto.AttachmentName),
 	}
 	if err := uc.repo.CreateCertification(ctx, c); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to create certification")
 	}
-	return &CertificationResponseDTO{ID: c.ID, Code: c.Code, Name: c.Name, Description: c.Description}, nil
+	return &CertificationResponseDTO{ID: c.ID, Code: c.Code, Name: c.Name, Description: c.Description, Attachment: c.Attachment, AttachmentName: c.AttachmentName}, nil
 }
 
 func (uc *productUseCase) UpdateCertification(ctx context.Context, id uuid.UUID, dto UpdateCertificationDTO) (*CertificationResponseDTO, error) {
@@ -554,10 +601,16 @@ func (uc *productUseCase) UpdateCertification(ctx context.Context, id uuid.UUID,
 	if dto.Description != nil {
 		c.Description = strings.TrimSpace(*dto.Description)
 	}
+	if dto.Attachment != nil {
+		c.Attachment = strings.TrimSpace(*dto.Attachment)
+	}
+	if dto.AttachmentName != nil {
+		c.AttachmentName = strings.TrimSpace(*dto.AttachmentName)
+	}
 	if err := uc.repo.UpdateCertification(ctx, c); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to update certification")
 	}
-	return &CertificationResponseDTO{ID: c.ID, Code: c.Code, Name: c.Name, Description: c.Description}, nil
+	return &CertificationResponseDTO{ID: c.ID, Code: c.Code, Name: c.Name, Description: c.Description, Attachment: c.Attachment, AttachmentName: c.AttachmentName}, nil
 }
 
 func (uc *productUseCase) DeleteCertification(ctx context.Context, id uuid.UUID) error {

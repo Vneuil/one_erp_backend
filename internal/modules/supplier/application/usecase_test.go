@@ -84,6 +84,13 @@ func (m *memSupplierRepo) HasReferences(_ context.Context, _ uuid.UUID) (bool, e
 	return false, nil
 }
 
+func (m *memSupplierRepo) CreateCode(_ context.Context, _ *domain.SupplierCode) error { return nil }
+func (m *memSupplierRepo) GetCodeByID(_ context.Context, _ uuid.UUID) (*domain.SupplierCode, error) { return nil, nil }
+func (m *memSupplierRepo) GetCodeByCode(_ context.Context, _ string) (*domain.SupplierCode, error) { return nil, nil }
+func (m *memSupplierRepo) ListCodes(_ context.Context, _ *uuid.UUID, _ string) ([]domain.SupplierCode, error) { return nil, nil }
+func (m *memSupplierRepo) UpdateCode(_ context.Context, _ *domain.SupplierCode) error { return nil }
+func (m *memSupplierRepo) DeleteCode(_ context.Context, _ uuid.UUID) error { return nil }
+
 func TestUpdateLegacyCodePreservesDerivedVendorType(t *testing.T) {
 	repo := newMemSupplierRepo()
 	uc := NewSupplierUseCase(repo)

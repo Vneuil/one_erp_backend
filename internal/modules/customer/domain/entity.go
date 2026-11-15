@@ -27,6 +27,12 @@ type Customer struct {
 	// CustomerType is B2B (company) or B2C (individual); the code is built from it:
 	// B2B-0001 / B2C-0001.
 	CustomerType string `gorm:"type:varchar(10);index" json:"customerType,omitempty"`
+	// CustomerTypeID and CustomerTypeName link to master data customer_types (TOP module)
+	CustomerTypeID   *uuid.UUID `gorm:"type:uuid;index" json:"customerTypeId,omitempty"`
+	CustomerTypeName string     `gorm:"type:varchar(100)" json:"customerTypeName,omitempty"`
+	// PaymentTermID and PaymentTermName link to master data payment_terms (TOP module)
+	PaymentTermID   *uuid.UUID `gorm:"type:uuid;index" json:"paymentTermId,omitempty"`
+	PaymentTermName string     `gorm:"type:varchar(100)" json:"paymentTermName,omitempty"`
 	// Contact person block - required for B2B customers.
 	ContactPerson string `gorm:"type:varchar(150)" json:"contactPerson,omitempty"`
 	ContactPhone  string `gorm:"type:varchar(50)" json:"contactPhone,omitempty"`

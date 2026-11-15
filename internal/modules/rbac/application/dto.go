@@ -39,12 +39,16 @@ func ToRoleResponseList(items []domain.Role) []RoleResponseDTO {
 }
 
 type PermissionDTO struct {
-	Module    string `json:"module"`
-	CanView   bool   `json:"canView"`
-	CanManage bool   `json:"canManage"`
-	// CanApprove allows approving/rejecting/paying/posting documents of this module.
-	CanApprove    bool `json:"canApprove"`
-	CanViewPrices bool `json:"canViewPrices"`
+	Module        string `json:"module"`
+	CanView       bool   `json:"canView"`
+	CanCreate     bool   `json:"canCreate"`
+	CanEdit       bool   `json:"canEdit"`
+	CanDelete     bool   `json:"canDelete"`
+	CanSubmit     bool   `json:"canSubmit"`
+	CanManage     bool   `json:"canManage"`
+	CanApprove    bool   `json:"canApprove"`
+	CanViewPrices bool   `json:"canViewPrices"`
+	CanEditPrices bool   `json:"canEditPrices"`
 }
 
 type SetPermissionsDTO struct {
@@ -54,7 +58,19 @@ type SetPermissionsDTO struct {
 func ToPermissionDTOList(items []domain.Permission) []PermissionDTO {
 	result := make([]PermissionDTO, len(items))
 	for i, p := range items {
-		result[i] = PermissionDTO{Module: p.Module, CanView: p.CanView, CanManage: p.CanManage, CanApprove: p.CanApprove, CanViewPrices: p.CanViewPrices}
+		canManage := p.CanManage || (p.CanCreate && p.CanEdit)
+		result[i] = PermissionDTO{
+			Module:        p.Module,
+			CanView:       p.CanView,
+			CanCreate:     p.CanCreate || p.CanManage,
+			CanEdit:       p.CanEdit || p.CanManage,
+			CanDelete:     p.CanDelete,
+			CanSubmit:     p.CanSubmit || p.CanManage,
+			CanManage:     canManage,
+			CanApprove:    p.CanApprove,
+			CanViewPrices: p.CanViewPrices,
+			CanEditPrices: p.CanEditPrices,
+		}
 	}
 	return result
 }
