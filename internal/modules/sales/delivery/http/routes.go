@@ -35,7 +35,18 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	sales.Get("/quotations", h.ListQuotations)
 	sales.Get("/quotations/:id", h.GetQuotationByID)
 	sales.Put("/quotations/:id", h.UpdateQuotation)
+	sales.Post("/quotations/:id/cancel", h.CancelQuotation)
 	sales.Post("/quotations/:id/convert", h.ConvertQuotationToOrder)
+
+	// Customer POs (PO Masuk dari Pelanggan)
+	sales.Post("/customer-pos", h.CreateCustomerPO)
+	sales.Get("/customer-pos", h.ListCustomerPOs)
+	sales.Get("/customer-pos/:id", h.GetCustomerPOByID)
+	sales.Put("/customer-pos/:id", h.UpdateCustomerPO)
+	sales.Delete("/customer-pos/:id", h.DeleteCustomerPO)
+	sales.Post("/customer-pos/:id/agree", h.AgreeCustomerPO)
+	sales.Post("/customer-pos/:id/negotiate", h.NegotiateCustomerPO)
+	sales.Post("/customer-pos/:id/cancel", h.CancelCustomerPO)
 
 	// PI / CI menu: superadmin, admin and the accountants (see actor.TradeDocRoles).
 	trade := sales.Group("/trade-invoices", middleware.RequireRoles(actor.TradeDocRoles...))

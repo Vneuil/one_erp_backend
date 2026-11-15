@@ -147,33 +147,132 @@ type QuotationLineDTO struct {
 }
 
 type CreateQuotationDTO struct {
-	LeadID          *uuid.UUID         `json:"leadId"`
-	Lines           []QuotationLineDTO `json:"lines"`
-	QuotationNumber string             `json:"quotationNumber"`
-	CustomerName    string             `json:"customerName"`
-	TotalAmount     float64            `json:"totalAmount"`
-	ValidUntil      string             `json:"validUntil"`
+	LeadID                *uuid.UUID         `json:"leadId"`
+	Lines                 []QuotationLineDTO `json:"lines"`
+	QuotationNumber       string             `json:"quotationNumber"`
+	CustomerName          string             `json:"customerName"`
+	TotalAmount           float64            `json:"totalAmount"`
+	ValidUntil            string             `json:"validUntil"`
+	Notes                 string             `json:"notes,omitempty"`
+	ParentQuotationID     *uuid.UUID         `json:"parentQuotationId,omitempty"`
+	ParentQuotationNumber string             `json:"parentQuotationNumber,omitempty"`
+	RevisionNumber        int                `json:"revisionNumber,omitempty"`
 }
 
 // UpdateQuotationDTO carries the editable fields of an existing, not-yet-converted
 // Quotation. LeadID is intentionally omitted - the linked CRM lead cannot be
 // changed after creation, only the customer's items and validity.
 type UpdateQuotationDTO struct {
-	Lines        []QuotationLineDTO `json:"lines"`
-	CustomerName string             `json:"customerName"`
-	ValidUntil   string             `json:"validUntil"`
+	Lines                 []QuotationLineDTO `json:"lines"`
+	CustomerName          string             `json:"customerName"`
+	ValidUntil            string             `json:"validUntil"`
+	Status                string             `json:"status,omitempty"`
+	Notes                 string             `json:"notes,omitempty"`
+	IsSuperseded          *bool              `json:"isSuperseded,omitempty"`
+	ParentQuotationID     *uuid.UUID         `json:"parentQuotationId,omitempty"`
+	ParentQuotationNumber string             `json:"parentQuotationNumber,omitempty"`
+	RevisionNumber        *int               `json:"revisionNumber,omitempty"`
 }
 
 type QuotationResponseDTO struct {
-	LeadID          *uuid.UUID             `json:"leadId,omitempty"`
-	Lines           []domain.QuotationLine `json:"lines"`
-	ID              uuid.UUID              `json:"id"`
-	QuotationNumber string                 `json:"quotationNumber"`
-	CustomerName    string                 `json:"customerName"`
-	TotalAmount     float64                `json:"totalAmount"`
-	Status          string                 `json:"status"`
-	ValidUntil      string                 `json:"validUntil"`
-	CreatedAt       time.Time              `json:"createdAt"`
+	LeadID                *uuid.UUID             `json:"leadId,omitempty"`
+	Lines                 []domain.QuotationLine `json:"lines"`
+	ID                    uuid.UUID              `json:"id"`
+	QuotationNumber       string                 `json:"quotationNumber"`
+	CustomerName          string                 `json:"customerName"`
+	TotalAmount           float64                `json:"totalAmount"`
+	Status                string                 `json:"status"`
+	ValidUntil            string                 `json:"validUntil"`
+	Notes                 string                 `json:"notes,omitempty"`
+	CancellationReason    string                 `json:"cancellationReason,omitempty"`
+	ParentQuotationID     *uuid.UUID             `json:"parentQuotationId,omitempty"`
+	ParentQuotationNumber string                 `json:"parentQuotationNumber,omitempty"`
+	RevisionNumber        int                    `json:"revisionNumber"`
+	IsSuperseded          bool                   `json:"isSuperseded"`
+	CreatedAt             time.Time              `json:"createdAt"`
+}
+
+type CustomerPOLineDTO struct {
+	ID          *uuid.UUID `json:"id,omitempty"`
+	ProductID   *uuid.UUID `json:"productId,omitempty"`
+	ProductName string     `json:"productName"`
+	Unit        string     `json:"unit"`
+	Quantity    float64    `json:"quantity"`
+	UnitPrice   float64    `json:"unitPrice"`
+	Subtotal    float64    `json:"subtotal"`
+	Notes       string     `json:"notes,omitempty"`
+}
+
+type CreateCustomerPODTO struct {
+	PoNumber     string              `json:"poNumber"`
+	CustomerID   *uuid.UUID          `json:"customerId,omitempty"`
+	CustomerName string              `json:"customerName"`
+	PoDate       string              `json:"poDate"`
+	Attachment   string              `json:"attachment,omitempty"`
+	Currency     string              `json:"currency,omitempty"`
+	Notes        string              `json:"notes,omitempty"`
+	Lines        []CustomerPOLineDTO `json:"lines"`
+}
+
+type UpdateCustomerPODTO struct {
+	PoNumber     string              `json:"poNumber"`
+	CustomerID   *uuid.UUID          `json:"customerId,omitempty"`
+	CustomerName string              `json:"customerName"`
+	PoDate       string              `json:"poDate"`
+	Attachment   string              `json:"attachment,omitempty"`
+	Currency     string              `json:"currency,omitempty"`
+	Notes        string              `json:"notes,omitempty"`
+	Status       string              `json:"status,omitempty"`
+	Lines        []CustomerPOLineDTO `json:"lines"`
+}
+
+type CustomerPOResponseDTO struct {
+	ID             uuid.UUID               `json:"id"`
+	PoNumber       string                  `json:"poNumber"`
+	CustomerID     *uuid.UUID              `json:"customerId,omitempty"`
+	CustomerName   string                  `json:"customerName"`
+	PoDate         string                  `json:"poDate"`
+	Attachment     string                  `json:"attachment,omitempty"`
+	Currency       string                  `json:"currency"`
+	TotalAmount    float64                 `json:"totalAmount"`
+	Status         string                  `json:"status"`
+	Notes          string                  `json:"notes,omitempty"`
+	QuotationID    *uuid.UUID              `json:"quotationId,omitempty"`
+	TradeInvoiceID *uuid.UUID              `json:"tradeInvoiceId,omitempty"`
+	Lines          []domain.CustomerPOLine `json:"lines"`
+	CreatedAt      time.Time               `json:"createdAt"`
+	UpdatedAt      time.Time               `json:"updatedAt"`
+}
+
+func ToCustomerPOResponse(p *domain.CustomerPO) *CustomerPOResponseDTO {
+	if p == nil {
+		return nil
+	}
+	return &CustomerPOResponseDTO{
+		ID:             p.ID,
+		PoNumber:       p.PoNumber,
+		CustomerID:     p.CustomerID,
+		CustomerName:   p.CustomerName,
+		PoDate:         p.PoDate,
+		Attachment:     p.Attachment,
+		Currency:       p.Currency,
+		TotalAmount:    p.TotalAmount,
+		Status:         p.Status,
+		Notes:          p.Notes,
+		QuotationID:    p.QuotationID,
+		TradeInvoiceID: p.TradeInvoiceID,
+		Lines:          p.Lines,
+		CreatedAt:      p.CreatedAt,
+		UpdatedAt:      p.UpdatedAt,
+	}
+}
+
+func ToCustomerPOResponseList(pos []domain.CustomerPO) []CustomerPOResponseDTO {
+	res := make([]CustomerPOResponseDTO, len(pos))
+	for i := range pos {
+		res[i] = *ToCustomerPOResponse(&pos[i])
+	}
+	return res
 }
 
 func ToSalesOrderResponse(o *domain.SalesOrder) *SalesOrderResponseDTO {
@@ -234,15 +333,21 @@ func ToQuotationResponse(q *domain.Quotation) *QuotationResponseDTO {
 		return nil
 	}
 	return &QuotationResponseDTO{
-		ID:              q.ID,
-		QuotationNumber: q.QuotationNumber,
-		LeadID:          q.LeadID,
-		Lines:           q.Lines,
-		CustomerName:    q.CustomerName,
-		TotalAmount:     q.TotalAmount,
-		Status:          q.Status,
-		ValidUntil:      q.ValidUntil,
-		CreatedAt:       q.CreatedAt,
+		ID:                    q.ID,
+		QuotationNumber:       q.QuotationNumber,
+		LeadID:                q.LeadID,
+		Lines:                 q.Lines,
+		CustomerName:          q.CustomerName,
+		TotalAmount:           q.TotalAmount,
+		Status:                q.Status,
+		ValidUntil:            q.ValidUntil,
+		Notes:                 q.Notes,
+		CancellationReason:    q.CancellationReason,
+		ParentQuotationID:     q.ParentQuotationID,
+		ParentQuotationNumber: q.ParentQuotationNumber,
+		RevisionNumber:        q.RevisionNumber,
+		IsSuperseded:          q.IsSuperseded,
+		CreatedAt:             q.CreatedAt,
 	}
 }
 

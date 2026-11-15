@@ -10,6 +10,12 @@ import (
 // (Ko Steven), admin (Mba Nadin) and the accountants.
 var TradeDocRoles = []string{"admin", "superadmin", "owner", "finance", "akuntan", "accountant", "accounting"}
 
+// PriceSettingRoles are roles allowed to enter or edit prices in sales orders.
+var PriceSettingRoles = []string{
+	"admin", "superadmin", "owner", "finance", "akuntan", "accountant", "accounting",
+	"sales", "salesman", "sales_staff", "sales_admin", "salesperson",
+}
+
 // HasAnyRole reports whether the caller carries one of the given role names.
 func HasAnyRole(ctx context.Context, names ...string) bool {
 	for _, have := range RolesFrom(ctx) {
@@ -30,7 +36,7 @@ func MaySeePrices(ctx context.Context) bool {
 	if len(RolesFrom(ctx)) == 0 {
 		return true
 	}
-	return HasAnyRole(ctx, append([]string{"manager"}, TradeDocRoles...)...)
+	return HasAnyRole(ctx, append([]string{"manager", "sales", "salesman", "sales_staff", "sales_admin", "salesperson"}, TradeDocRoles...)...)
 }
 
 // MaySetPrices reports whether the caller may enter or change selling prices.
@@ -38,5 +44,5 @@ func MaySetPrices(ctx context.Context) bool {
 	if len(RolesFrom(ctx)) == 0 {
 		return true
 	}
-	return HasAnyRole(ctx, TradeDocRoles...)
+	return HasAnyRole(ctx, PriceSettingRoles...)
 }

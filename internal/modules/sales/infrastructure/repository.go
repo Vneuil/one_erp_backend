@@ -413,3 +413,60 @@ func (r *salesRepository) GetLastSalePrice(ctx context.Context, customerName str
 		Order("o.created_at DESC").Limit(1).Scan(&price).Error
 	return price, err
 }
+
+func (r *salesRepository) CreateCustomerPO(ctx context.Context, po *domain.CustomerPO) error {
+	if po.TenantID == nil {
+		po.TenantID = tenantctx.FromContext(ctx)
+	}
+	return r.db.WithContext(ctx).Create(po).Error
+}
+
+func (r *salesRepository) GetCustomerPOByID(ctx context.Context, id uuid.UUID) (*domain.CustomerPO, error) {
+	var po domain.CustomerPO
+	err := r.db.WithContext(ctx).Preload("Lines").Where("id = ?", id).First(&po).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &po, nil
+}
+
+func (r *salesRepository) UpdateCustomerPO(ctx context.Context, po *domain.CustomerPO) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if len(po.Lines) > 0 {
+			if err := tx.Where("customer_po_id = ?", po.ID).Delete(&domain.CustomerPOLine{}).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Session(&gorm.Session{FullSaveAssociations: true}).Save(po).Error
+	})
+}
+
+func (r *salesRepository) ListCustomerPOs(ctx context.Context, query types.PaginationQuery) ([]domain.CustomerPO, int64, error) {
+	var pos []domain.CustomerPO
+	var total int64
+
+	db := tenantctx.Scope(ctx, r.db.WithContext(ctx).Model(&domain.CustomerPO{}))
+	if query.Search != "" {
+		like := "%" + strings.ToLower(query.Search) + "%"
+		db = db.Where("LOWER(po_number) LIKE ? OR LOWER(customer_name) LIKE ?", like, like)
+	}
+	if err := db.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (query.Page - 1) * query.PerPage
+	err := db.Preload("Lines").Order("created_at desc").Offset(offset).Limit(query.PerPage).Find(&pos).Error
+	return pos, total, err
+}
+
+func (r *salesRepository) DeleteCustomerPO(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("customer_po_id = ?", id).Delete(&domain.CustomerPOLine{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("id = ?", id).Delete(&domain.CustomerPO{}).Error
+	})
+}

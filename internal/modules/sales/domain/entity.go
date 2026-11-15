@@ -115,18 +115,58 @@ type Quotation struct {
 	LeadID *uuid.UUID      `gorm:"type:uuid;index" json:"leadId,omitempty"`
 	Lines  []QuotationLine `gorm:"foreignKey:QuotationID" json:"lines"`
 	types.BaseEntity
-	CompanyID       *uuid.UUID `gorm:"type:uuid;index" json:"companyId,omitempty"`
-	TenantID        *uuid.UUID `gorm:"type:uuid;index" json:"tenantId,omitempty"`
-	QuotationNumber string     `gorm:"type:varchar(50);not null;index" json:"quotationNumber"`
-	CustomerName    string     `gorm:"type:varchar(255);not null" json:"customerName"`
-	TotalAmount     float64    `gorm:"type:decimal(15,2);not null" json:"totalAmount"`
-	Status          string     `gorm:"type:varchar(50);default:'Sent'" json:"status"`
-	ValidUntil      string     `gorm:"type:varchar(50)" json:"validUntil"`
+	CompanyID             *uuid.UUID `gorm:"type:uuid;index" json:"companyId,omitempty"`
+	TenantID              *uuid.UUID `gorm:"type:uuid;index" json:"tenantId,omitempty"`
+	QuotationNumber       string     `gorm:"type:varchar(50);not null;index" json:"quotationNumber"`
+	CustomerName          string     `gorm:"type:varchar(255);not null" json:"customerName"`
+	TotalAmount           float64    `gorm:"type:decimal(15,2);not null" json:"totalAmount"`
+	Status                string     `gorm:"type:varchar(50);default:'Sent'" json:"status"`
+	ValidUntil            string     `gorm:"type:varchar(50)" json:"validUntil"`
+	Notes                 string     `gorm:"type:text" json:"notes,omitempty"`
+	CancellationReason    string     `gorm:"type:text" json:"cancellationReason,omitempty"`
+	ParentQuotationID     *uuid.UUID `gorm:"type:uuid;index" json:"parentQuotationId,omitempty"`
+	ParentQuotationNumber string     `gorm:"type:varchar(50)" json:"parentQuotationNumber,omitempty"`
+	RevisionNumber        int        `gorm:"default:0" json:"revisionNumber"`
+	IsSuperseded          bool       `gorm:"default:false;index" json:"isSuperseded"`
 }
 
 func (Quotation) TableName() string {
 	return "quotations"
 }
+
+type CustomerPOLine struct {
+	types.BaseEntity
+	CustomerPOID uuid.UUID  `gorm:"type:uuid;not null;index" json:"customerPoId"`
+	ProductID    *uuid.UUID `gorm:"type:uuid;index" json:"productId,omitempty"`
+	ProductName  string     `gorm:"type:varchar(255);not null" json:"productName"`
+	Unit         string     `gorm:"type:varchar(50);not null;default:'pcs'" json:"unit"`
+	Quantity     float64    `gorm:"type:decimal(15,2);not null" json:"quantity"`
+	UnitPrice    float64    `gorm:"type:decimal(15,2);not null;default:0" json:"unitPrice"`
+	Subtotal     float64    `gorm:"type:decimal(15,2);not null;default:0" json:"subtotal"`
+	Notes        string     `gorm:"type:text" json:"notes,omitempty"`
+}
+
+func (CustomerPOLine) TableName() string { return "customer_po_lines" }
+
+type CustomerPO struct {
+	types.BaseEntity
+	CompanyID      *uuid.UUID       `gorm:"type:uuid;index" json:"companyId,omitempty"`
+	TenantID       *uuid.UUID       `gorm:"type:uuid;index" json:"tenantId,omitempty"`
+	PoNumber       string           `gorm:"type:varchar(100);not null;index" json:"poNumber"`
+	CustomerID     *uuid.UUID       `gorm:"type:uuid;index" json:"customerId,omitempty"`
+	CustomerName   string           `gorm:"type:varchar(255);not null" json:"customerName"`
+	PoDate         string           `gorm:"type:varchar(20)" json:"poDate"`
+	Attachment     string           `gorm:"type:text" json:"attachment,omitempty"`
+	Currency       string           `gorm:"type:varchar(10);default:'IDR'" json:"currency"`
+	TotalAmount    float64          `gorm:"type:decimal(15,2);not null;default:0" json:"totalAmount"`
+	Status         string           `gorm:"type:varchar(50);default:'Pending'" json:"status"` // Pending | Agreed | Negotiating | Cancelled
+	Notes          string           `gorm:"type:text" json:"notes,omitempty"`
+	QuotationID    *uuid.UUID       `gorm:"type:uuid;index" json:"quotationId,omitempty"`
+	TradeInvoiceID *uuid.UUID       `gorm:"type:uuid;index" json:"tradeInvoiceId,omitempty"`
+	Lines          []CustomerPOLine `gorm:"foreignKey:CustomerPOID;constraint:OnDelete:CASCADE" json:"lines"`
+}
+
+func (CustomerPO) TableName() string { return "customer_pos" }
 
 type Invoice struct {
 	types.BaseEntity
@@ -349,4 +389,11 @@ type SalesRepository interface {
 	ListSalesReturnsByDelivery(ctx context.Context, deliveryID uuid.UUID) ([]SalesReturn, error)
 	// ListInvoicesByOrder returns the invoices billed against one order, oldest first.
 	ListInvoicesByOrder(ctx context.Context, orderID uuid.UUID) ([]Invoice, error)
+
+	// Customer POs (PO Masuk)
+	CreateCustomerPO(ctx context.Context, po *CustomerPO) error
+	GetCustomerPOByID(ctx context.Context, id uuid.UUID) (*CustomerPO, error)
+	UpdateCustomerPO(ctx context.Context, po *CustomerPO) error
+	ListCustomerPOs(ctx context.Context, query types.PaginationQuery) ([]CustomerPO, int64, error)
+	DeleteCustomerPO(ctx context.Context, id uuid.UUID) error
 }

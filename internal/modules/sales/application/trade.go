@@ -188,6 +188,8 @@ func (uc *tradeInvoiceUseCase) Create(ctx context.Context, dto CreateTradeInvoic
 		for _, l := range q.Lines {
 			lines = append(lines, domain.TradeInvoiceLine{ProductID: l.ProductID, Description: l.Description, Unit: l.Unit, Quantity: l.Quantity, UnitPrice: l.UnitPrice})
 		}
+		q.Status = "Converted"
+		_ = uc.sales.UpdateQuotation(ctx, q)
 	case dto.ParentID != nil:
 		if kind != domain.TradeKindCI {
 			return nil, apperrors.NewBadRequest("Only a Commercial Invoice can be created from a Proforma Invoice")

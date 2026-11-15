@@ -61,6 +61,7 @@ type SalesUseCase interface {
 	CreateQuotation(ctx context.Context, dto CreateQuotationDTO) (*QuotationResponseDTO, error)
 	GetQuotationByID(ctx context.Context, id uuid.UUID) (*QuotationResponseDTO, error)
 	UpdateQuotation(ctx context.Context, id uuid.UUID, dto UpdateQuotationDTO) (*QuotationResponseDTO, error)
+	CancelQuotation(ctx context.Context, id uuid.UUID, reason string) (*QuotationResponseDTO, error)
 	ListQuotations(ctx context.Context, query types.PaginationQuery) ([]QuotationResponseDTO, types.PaginationMeta, error)
 	ConvertQuotationToOrder(ctx context.Context, id uuid.UUID) (*SalesOrderResponseDTO, error)
 
@@ -84,6 +85,14 @@ type SalesUseCase interface {
 	CreateSalesReturn(ctx context.Context, dto CreateSalesReturnDTO) (*SalesReturnResponseDTO, error)
 	GetSalesReturnByID(ctx context.Context, id uuid.UUID) (*SalesReturnResponseDTO, error)
 	ListSalesReturns(ctx context.Context, query types.PaginationQuery) ([]SalesReturnResponseDTO, types.PaginationMeta, error)
+
+	// Customer POs (PO Masuk)
+	CreateCustomerPO(ctx context.Context, dto CreateCustomerPODTO) (*CustomerPOResponseDTO, error)
+	GetCustomerPOByID(ctx context.Context, id uuid.UUID) (*CustomerPOResponseDTO, error)
+	UpdateCustomerPO(ctx context.Context, id uuid.UUID, dto UpdateCustomerPODTO) (*CustomerPOResponseDTO, error)
+	ListCustomerPOs(ctx context.Context, query types.PaginationQuery) ([]CustomerPOResponseDTO, types.PaginationMeta, error)
+	DeleteCustomerPO(ctx context.Context, id uuid.UUID) error
+	MarkCustomerPOStatus(ctx context.Context, id uuid.UUID, status string) (*CustomerPOResponseDTO, error)
 
 	SeedInitialData(ctx context.Context) error
 }
@@ -306,8 +315,11 @@ func (uc *salesUseCase) SubmitOrder(ctx context.Context, id uuid.UUID) (*SalesOr
 	if order == nil {
 		return nil, apperrors.NewNotFound("Sales order not found")
 	}
-	if !strings.EqualFold(order.Status, "draft") {
+	if !strings.EqualFold(order.Status, "draft") && !strings.EqualFold(order.Status, "rejected") {
 		return nil, apperrors.NewConflict(fmt.Sprintf("Sales order in status %s cannot be submitted", order.Status))
+	}
+	if strings.EqualFold(order.Status, "rejected") {
+		order.RejectionReason = ""
 	}
 	requiresApproval := false
 	if uc.approvalUC != nil {
@@ -642,6 +654,10 @@ func (uc *salesUseCase) UpdateOrder(ctx context.Context, id uuid.UUID, dto Updat
 	}
 
 	order.CustomerName = strings.TrimSpace(dto.CustomerName)
+	if strings.EqualFold(order.Status, "rejected") {
+		order.Status = "draft"
+		order.RejectionReason = ""
+	}
 	order.TotalAmount = total
 	order.BaseAmount = baseAmount
 	order.Lines = lines
@@ -715,8 +731,8 @@ func (uc *salesUseCase) AttachInvoiceDocument(ctx context.Context, id uuid.UUID,
 		return nil, apperrors.NewBadRequest("Invoice document attachment is required")
 	}
 	docType := strings.ToUpper(strings.TrimSpace(dto.InvoiceDocType))
-	if docType != "CI" && docType != "PI" && !strings.Contains(strings.ToLower(dto.InvoiceDocType), "invoice") {
-		return nil, apperrors.NewBadRequest("Invoice document type must be CI (Commercial Invoice) or PI (Proforma Invoice)")
+	if docType != "CI" && docType != "PI" && docType != "PO" && docType != "PO_MASUK" && docType != "PI_KELUAR" && !strings.Contains(strings.ToLower(dto.InvoiceDocType), "invoice") && !strings.Contains(strings.ToLower(dto.InvoiceDocType), "po") {
+		return nil, apperrors.NewBadRequest("Invoice document type must be CI (Commercial Invoice) or PI (Proforma Invoice) or PO")
 	}
 
 	order, err := uc.repo.GetOrderByID(ctx, id)
@@ -786,6 +802,37 @@ func (uc *salesUseCase) CreateQuotation(ctx context.Context, dto CreateQuotation
 	}
 
 	quoNum := dto.QuotationNumber
+	parentQuoID := dto.ParentQuotationID
+	parentQuoNum := dto.ParentQuotationNumber
+	revNum := dto.RevisionNumber
+
+	// If this is a revision of an existing quotation
+	if parentQuoID != nil {
+		parentQuo, err := uc.repo.GetQuotationByID(ctx, *parentQuoID)
+		if err == nil && parentQuo != nil {
+			if parentQuoNum == "" {
+				parentQuoNum = parentQuo.QuotationNumber
+			}
+			if revNum <= 0 {
+				revNum = parentQuo.RevisionNumber + 1
+			}
+			if quoNum == "" {
+				baseNum := parentQuo.QuotationNumber
+				if idx := strings.LastIndex(baseNum, "-R"); idx != -1 {
+					baseNum = baseNum[:idx]
+				}
+				quoNum = fmt.Sprintf("%s-R%d", baseNum, revNum)
+			}
+			// Mark parent quotation as Revised and superseded so it is hidden and traced as historical reference
+			parentQuo.Status = "Revised"
+			parentQuo.IsSuperseded = true
+			if parentQuo.Notes == "" || strings.HasPrefix(parentQuo.Notes, "Telah direvisi") {
+				parentQuo.Notes = fmt.Sprintf("Telah direvisi menjadi %s", quoNum)
+			}
+			_ = uc.repo.UpdateQuotation(ctx, parentQuo)
+		}
+	}
+
 	if quoNum == "" {
 		quoNum = fmt.Sprintf("QUO-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000)
 	}
@@ -796,13 +843,18 @@ func (uc *salesUseCase) CreateQuotation(ctx context.Context, dto CreateQuotation
 	}
 
 	quo := &domain.Quotation{
-		LeadID:          dto.LeadID,
-		QuotationNumber: quoNum,
-		CustomerName:    strings.TrimSpace(dto.CustomerName),
-		TotalAmount:     total,
-		Lines:           lines,
-		Status:          "Sent",
-		ValidUntil:      validUntil,
+		LeadID:                dto.LeadID,
+		QuotationNumber:       quoNum,
+		CustomerName:          strings.TrimSpace(dto.CustomerName),
+		TotalAmount:           total,
+		Lines:                 lines,
+		Status:                "Sent",
+		ValidUntil:            validUntil,
+		Notes:                 strings.TrimSpace(dto.Notes),
+		ParentQuotationID:     parentQuoID,
+		ParentQuotationNumber: parentQuoNum,
+		RevisionNumber:        revNum,
+		IsSuperseded:          false,
 	}
 
 	if err := uc.repo.CreateQuotation(ctx, quo); err != nil {
@@ -860,6 +912,24 @@ func (uc *salesUseCase) UpdateQuotation(ctx context.Context, id uuid.UUID, dto U
 	quo.ValidUntil = validUntil
 	quo.TotalAmount = total
 	quo.Lines = lines
+	if dto.Status != "" {
+		quo.Status = strings.TrimSpace(dto.Status)
+	}
+	if dto.Notes != "" {
+		quo.Notes = strings.TrimSpace(dto.Notes)
+	}
+	if dto.IsSuperseded != nil {
+		quo.IsSuperseded = *dto.IsSuperseded
+	}
+	if dto.ParentQuotationID != nil {
+		quo.ParentQuotationID = dto.ParentQuotationID
+	}
+	if dto.ParentQuotationNumber != "" {
+		quo.ParentQuotationNumber = dto.ParentQuotationNumber
+	}
+	if dto.RevisionNumber != nil {
+		quo.RevisionNumber = *dto.RevisionNumber
+	}
 
 	if err := uc.repo.UpdateQuotation(ctx, quo); err != nil {
 		var appErr *apperrors.AppError
@@ -867,6 +937,31 @@ func (uc *salesUseCase) UpdateQuotation(ctx context.Context, id uuid.UUID, dto U
 			return nil, appErr
 		}
 		return nil, apperrors.NewInternal(err, "Failed to update quotation")
+	}
+
+	return ToQuotationResponse(quo), nil
+}
+
+// CancelQuotation marks a quotation as Cancelled.
+func (uc *salesUseCase) CancelQuotation(ctx context.Context, id uuid.UUID, reason string) (*QuotationResponseDTO, error) {
+	quo, err := uc.repo.GetQuotationByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get quotation")
+	}
+	if quo == nil {
+		return nil, apperrors.NewNotFound("Quotation not found")
+	}
+	if quo.Status == "Converted" {
+		return nil, apperrors.NewBadRequest("Quotation has already been converted to a sales order and cannot be cancelled")
+	}
+	quo.Status = "Cancelled"
+	quo.CancellationReason = strings.TrimSpace(reason)
+	if err := uc.repo.UpdateQuotation(ctx, quo); err != nil {
+		var appErr *apperrors.AppError
+		if errors.As(err, &appErr) {
+			return nil, appErr
+		}
+		return nil, apperrors.NewInternal(err, "Failed to cancel quotation")
 	}
 
 	return ToQuotationResponse(quo), nil
@@ -1488,4 +1583,195 @@ func (uc *salesUseCase) LastSalePrice(ctx context.Context, customerName string, 
 		return 0, apperrors.NewInternal(err, "Failed to look up last sale price")
 	}
 	return p, nil
+}
+
+func (uc *salesUseCase) CreateCustomerPO(ctx context.Context, dto CreateCustomerPODTO) (*CustomerPOResponseDTO, error) {
+	poNumber := strings.TrimSpace(dto.PoNumber)
+	if poNumber == "" {
+		return nil, apperrors.NewBadRequest("Nomor PO Masuk wajib diisi")
+	}
+	customerName := strings.TrimSpace(dto.CustomerName)
+	if customerName == "" {
+		return nil, apperrors.NewBadRequest("Nama pelanggan wajib diisi")
+	}
+
+	cur := strings.TrimSpace(dto.Currency)
+	if cur == "" {
+		cur = "IDR"
+	}
+
+	var total float64
+	lines := make([]domain.CustomerPOLine, 0, len(dto.Lines))
+	for _, l := range dto.Lines {
+		qty := l.Quantity
+		if qty < 0 {
+			qty = 0
+		}
+		price := l.UnitPrice
+		if price < 0 {
+			price = 0
+		}
+		subtotal := math.Round(qty*price*100) / 100
+		total += subtotal
+
+		unit := strings.TrimSpace(l.Unit)
+		if unit == "" {
+			unit = "pcs"
+		}
+		lines = append(lines, domain.CustomerPOLine{
+			ProductID:   l.ProductID,
+			ProductName: strings.TrimSpace(l.ProductName),
+			Unit:        unit,
+			Quantity:    qty,
+			UnitPrice:   price,
+			Subtotal:    subtotal,
+			Notes:       strings.TrimSpace(l.Notes),
+		})
+	}
+
+	poDate := strings.TrimSpace(dto.PoDate)
+	if poDate == "" {
+		poDate = time.Now().Format("2006-01-02")
+	}
+
+	po := &domain.CustomerPO{
+		PoNumber:     poNumber,
+		CustomerID:   dto.CustomerID,
+		CustomerName: customerName,
+		PoDate:       poDate,
+		Attachment:   strings.TrimSpace(dto.Attachment),
+		Currency:     cur,
+		TotalAmount:  math.Round(total*100) / 100,
+		Status:       "Pending",
+		Notes:        strings.TrimSpace(dto.Notes),
+		Lines:        lines,
+	}
+
+	if err := uc.repo.CreateCustomerPO(ctx, po); err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal mencatat PO Masuk")
+	}
+
+	return ToCustomerPOResponse(po), nil
+}
+
+func (uc *salesUseCase) GetCustomerPOByID(ctx context.Context, id uuid.UUID) (*CustomerPOResponseDTO, error) {
+	po, err := uc.repo.GetCustomerPOByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal mengambil data PO Masuk")
+	}
+	if po == nil {
+		return nil, apperrors.NewNotFound("PO Masuk tidak ditemukan")
+	}
+	return ToCustomerPOResponse(po), nil
+}
+
+func (uc *salesUseCase) UpdateCustomerPO(ctx context.Context, id uuid.UUID, dto UpdateCustomerPODTO) (*CustomerPOResponseDTO, error) {
+	po, err := uc.repo.GetCustomerPOByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal mengambil data PO Masuk")
+	}
+	if po == nil {
+		return nil, apperrors.NewNotFound("PO Masuk tidak ditemukan")
+	}
+
+	if dto.PoNumber != "" {
+		po.PoNumber = strings.TrimSpace(dto.PoNumber)
+	}
+	if dto.CustomerName != "" {
+		po.CustomerName = strings.TrimSpace(dto.CustomerName)
+	}
+	if dto.CustomerID != nil {
+		po.CustomerID = dto.CustomerID
+	}
+	if dto.PoDate != "" {
+		po.PoDate = strings.TrimSpace(dto.PoDate)
+	}
+	if dto.Attachment != "" {
+		po.Attachment = strings.TrimSpace(dto.Attachment)
+	}
+	if dto.Currency != "" {
+		po.Currency = strings.TrimSpace(dto.Currency)
+	}
+	if dto.Notes != "" {
+		po.Notes = strings.TrimSpace(dto.Notes)
+	}
+	if dto.Status != "" {
+		po.Status = strings.TrimSpace(dto.Status)
+	}
+
+	if len(dto.Lines) > 0 {
+		var total float64
+		lines := make([]domain.CustomerPOLine, 0, len(dto.Lines))
+		for _, l := range dto.Lines {
+			qty := l.Quantity
+			if qty < 0 {
+				qty = 0
+			}
+			price := l.UnitPrice
+			if price < 0 {
+				price = 0
+			}
+			subtotal := math.Round(qty*price*100) / 100
+			total += subtotal
+
+			unit := strings.TrimSpace(l.Unit)
+			if unit == "" {
+				unit = "pcs"
+			}
+			lines = append(lines, domain.CustomerPOLine{
+				CustomerPOID: po.ID,
+				ProductID:    l.ProductID,
+				ProductName:  strings.TrimSpace(l.ProductName),
+				Unit:         unit,
+				Quantity:     qty,
+				UnitPrice:    price,
+				Subtotal:     subtotal,
+				Notes:        strings.TrimSpace(l.Notes),
+			})
+		}
+		po.Lines = lines
+		po.TotalAmount = math.Round(total*100) / 100
+	}
+
+	if err := uc.repo.UpdateCustomerPO(ctx, po); err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal memperbarui PO Masuk")
+	}
+
+	return ToCustomerPOResponse(po), nil
+}
+
+func (uc *salesUseCase) ListCustomerPOs(ctx context.Context, query types.PaginationQuery) ([]CustomerPOResponseDTO, types.PaginationMeta, error) {
+	query.SetDefaults()
+	pos, total, err := uc.repo.ListCustomerPOs(ctx, query)
+	if err != nil {
+		return nil, types.PaginationMeta{}, apperrors.NewInternal(err, "Gagal mengambil daftar PO Masuk")
+	}
+	meta := types.NewPaginationMeta(total, query.Page, query.PerPage)
+	return ToCustomerPOResponseList(pos), meta, nil
+}
+
+func (uc *salesUseCase) DeleteCustomerPO(ctx context.Context, id uuid.UUID) error {
+	po, err := uc.repo.GetCustomerPOByID(ctx, id)
+	if err != nil {
+		return apperrors.NewInternal(err, "Gagal mengambil data PO Masuk")
+	}
+	if po == nil {
+		return apperrors.NewNotFound("PO Masuk tidak ditemukan")
+	}
+	return uc.repo.DeleteCustomerPO(ctx, id)
+}
+
+func (uc *salesUseCase) MarkCustomerPOStatus(ctx context.Context, id uuid.UUID, status string) (*CustomerPOResponseDTO, error) {
+	po, err := uc.repo.GetCustomerPOByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal mengambil data PO Masuk")
+	}
+	if po == nil {
+		return nil, apperrors.NewNotFound("PO Masuk tidak ditemukan")
+	}
+	po.Status = status
+	if err := uc.repo.UpdateCustomerPO(ctx, po); err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal memperbarui status PO Masuk")
+	}
+	return ToCustomerPOResponse(po), nil
 }

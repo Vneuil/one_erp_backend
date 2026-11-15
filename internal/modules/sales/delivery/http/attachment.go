@@ -10,6 +10,7 @@ import (
 	"github.com/divinecoid/one-backend/internal/foundation/middleware"
 	"github.com/divinecoid/one-backend/internal/foundation/response"
 	"github.com/divinecoid/one-backend/internal/modules/sales/application"
+	"github.com/divinecoid/one-backend/internal/shared/actor"
 	"github.com/divinecoid/one-backend/internal/shared/attachment"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/gofiber/fiber/v2"
@@ -66,6 +67,10 @@ func (h *Handler) UploadAttachment(c *fiber.Ctx) error {
 
 // DownloadAttachment streams the document attached to a specific Sales Order.
 func (h *Handler) DownloadAttachment(c *fiber.Ctx) error {
+	if !actor.MaySeePrices(h.ctx(c)) {
+		return apperrors.NewForbidden("You are not authorized to download customer purchase documents")
+	}
+
 	uc, err := h.resolve(c)
 	if err != nil {
 		return err
@@ -119,6 +124,10 @@ func (h *Handler) DownloadAttachment(c *fiber.Ctx) error {
 
 // DownloadAttachmentByKey streams any file by storage key (used for preview or direct key access).
 func (h *Handler) DownloadAttachmentByKey(c *fiber.Ctx) error {
+	if !actor.MaySeePrices(h.ctx(c)) {
+		return apperrors.NewForbidden("You are not authorized to download customer purchase documents")
+	}
+
 	key := c.Query("key")
 	if key == "" {
 		return apperrors.NewBadRequest("Key parameter is required")

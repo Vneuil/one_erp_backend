@@ -308,6 +308,31 @@ func (h *Handler) UpdateQuotation(c *fiber.Ctx) error {
 	return response.OK(c, "Quotation updated successfully", quo)
 }
 
+func (h *Handler) CancelQuotation(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+
+	idParam := c.Params("id")
+	id, err := uuid.Parse(idParam)
+	if err != nil {
+		return apperrors.NewBadRequest("Invalid quotation ID format")
+	}
+
+	var req struct {
+		Reason string `json:"reason"`
+	}
+	_ = c.BodyParser(&req)
+
+	quo, err := uc.CancelQuotation(h.ctx(c), id, req.Reason)
+	if err != nil {
+		return err
+	}
+
+	return response.OK(c, "Quotation cancelled successfully", quo)
+}
+
 func (h *Handler) ConvertQuotationToOrder(c *fiber.Ctx) error {
 	uc, err := h.resolve(c)
 	if err != nil {
@@ -776,4 +801,135 @@ func (h *Handler) GetLastSalePrice(c *fiber.Ctx) error {
 		return err
 	}
 	return response.OK(c, "Last sale price retrieved successfully", fiber.Map{"unitPrice": price})
+}
+
+func (h *Handler) CreateCustomerPO(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var dto application.CreateCustomerPODTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Format request tidak valid")
+	}
+	po, err := uc.CreateCustomerPO(h.ctx(c), dto)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "PO Masuk berhasil dicatat", po)
+}
+
+func (h *Handler) GetCustomerPOByID(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("ID PO Masuk tidak valid")
+	}
+	po, err := uc.GetCustomerPOByID(h.ctx(c), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "PO Masuk berhasil diambil", po)
+}
+
+func (h *Handler) UpdateCustomerPO(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("ID PO Masuk tidak valid")
+	}
+	var dto application.UpdateCustomerPODTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Format request tidak valid")
+	}
+	po, err := uc.UpdateCustomerPO(h.ctx(c), id, dto)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "PO Masuk berhasil diperbarui", po)
+}
+
+func (h *Handler) ListCustomerPOs(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var query types.PaginationQuery
+	if err := c.QueryParser(&query); err != nil {
+		return apperrors.NewBadRequest("Query pagination tidak valid")
+	}
+	pos, meta, err := uc.ListCustomerPOs(h.ctx(c), query)
+	if err != nil {
+		return err
+	}
+	return response.SuccessWithMeta(c, fiber.StatusOK, "Daftar PO Masuk berhasil diambil", pos, meta)
+}
+
+func (h *Handler) DeleteCustomerPO(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("ID PO Masuk tidak valid")
+	}
+	if err := uc.DeleteCustomerPO(h.ctx(c), id); err != nil {
+		return err
+	}
+	return response.OK(c, "PO Masuk berhasil dihapus", nil)
+}
+
+func (h *Handler) AgreeCustomerPO(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("ID PO Masuk tidak valid")
+	}
+	po, err := uc.MarkCustomerPOStatus(h.ctx(c), id, "Agreed")
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "PO Masuk disetujui (Agreed)", po)
+}
+
+func (h *Handler) NegotiateCustomerPO(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("ID PO Masuk tidak valid")
+	}
+	po, err := uc.MarkCustomerPOStatus(h.ctx(c), id, "Negotiating")
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "PO Masuk dalam tahap negosiasi (Quotation)", po)
+}
+
+func (h *Handler) CancelCustomerPO(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return apperrors.NewBadRequest("ID PO Masuk tidak valid")
+	}
+	po, err := uc.MarkCustomerPOStatus(h.ctx(c), id, "Cancelled")
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "PO Masuk dibatalkan", po)
 }

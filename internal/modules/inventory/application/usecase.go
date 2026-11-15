@@ -145,6 +145,9 @@ func (uc *inventoryUseCase) UpdateWarehouse(ctx context.Context, id uuid.UUID, d
 	if w == nil {
 		return nil, apperrors.NewNotFound("Warehouse not found")
 	}
+	if dto.Code != "" {
+		w.Code = dto.Code
+	}
 	if dto.Name != "" {
 		w.Name = dto.Name
 	}
