@@ -178,7 +178,9 @@ func (r *procurementRepository) CreateGoodsReceipt(ctx context.Context, gr *doma
 
 func (r *procurementRepository) GetGoodsReceiptByID(ctx context.Context, id uuid.UUID) (*domain.GoodsReceipt, error) {
 	var gr domain.GoodsReceipt
-	err := r.db.WithContext(ctx).Preload("Lines").Where("id = ?", id).First(&gr).Error
+	err := r.db.WithContext(ctx).Preload("Lines").Preload("Lines.BagEntries", func(db *gorm.DB) *gorm.DB {
+		return db.Order("row_number asc")
+	}).Where("id = ?", id).First(&gr).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -203,7 +205,9 @@ func (r *procurementRepository) ListGoodsReceipts(ctx context.Context, query typ
 	}
 
 	offset := (query.Page - 1) * query.PerPage
-	err := db.Preload("Lines").Order("created_at desc").Offset(offset).Limit(query.PerPage).Find(&items).Error
+	err := db.Preload("Lines").Preload("Lines.BagEntries", func(db *gorm.DB) *gorm.DB {
+		return db.Order("row_number asc")
+	}).Order("created_at desc").Offset(offset).Limit(query.PerPage).Find(&items).Error
 	return items, total, err
 }
 
@@ -211,6 +215,70 @@ func (r *procurementRepository) CountGoodsReceipts(ctx context.Context) (int64, 
 	var total int64
 	err := r.db.WithContext(ctx).Model(&domain.GoodsReceipt{}).Count(&total).Error
 	return total, err
+}
+
+func (r *procurementRepository) UpdateGoodsReceipt(ctx context.Context, gr *domain.GoodsReceipt) error {
+	tenantctx.SetTenantID(ctx, &gr.TenantID)
+	return r.db.WithContext(ctx).Save(gr).Error
+}
+
+func (r *procurementRepository) GetGoodsReceiptLineByID(ctx context.Context, lineID uuid.UUID) (*domain.GoodsReceiptLine, error) {
+	var line domain.GoodsReceiptLine
+	err := r.db.WithContext(ctx).Preload("BagEntries", func(db *gorm.DB) *gorm.DB {
+		return db.Order("row_number asc")
+	}).Where("id = ?", lineID).First(&line).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &line, nil
+}
+
+func (r *procurementRepository) UpdateGoodsReceiptLine(ctx context.Context, line *domain.GoodsReceiptLine) error {
+	return r.db.WithContext(ctx).Save(line).Error
+}
+
+func (r *procurementRepository) DeleteBagEntriesForLine(ctx context.Context, lineID uuid.UUID) error {
+	return r.db.WithContext(ctx).Where("goods_receipt_line_id = ?", lineID).Delete(&domain.GoodsReceiptBagEntry{}).Error
+}
+
+func (r *procurementRepository) CreateBagEntries(ctx context.Context, entries []domain.GoodsReceiptBagEntry) error {
+	if len(entries) == 0 {
+		return nil
+	}
+	return r.db.WithContext(ctx).Create(&entries).Error
+}
+
+func (r *procurementRepository) SaveBagEntries(ctx context.Context, lineID uuid.UUID, entries []domain.GoodsReceiptBagEntry) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for _, e := range entries {
+			var existing domain.GoodsReceiptBagEntry
+			err := tx.Where("goods_receipt_line_id = ? AND row_number = ?", lineID, e.RowNumber).First(&existing).Error
+			if err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					e.GoodsReceiptLineID = lineID
+					if err := tx.Create(&e).Error; err != nil {
+						return err
+					}
+					continue
+				}
+				return err
+			}
+			existing.WeightActual = e.WeightActual
+			if err := tx.Save(&existing).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func (r *procurementRepository) ListBagEntriesForLine(ctx context.Context, lineID uuid.UUID) ([]domain.GoodsReceiptBagEntry, error) {
+	var entries []domain.GoodsReceiptBagEntry
+	err := r.db.WithContext(ctx).Where("goods_receipt_line_id = ?", lineID).Order("row_number asc").Find(&entries).Error
+	return entries, err
 }
 
 // Purchase invoices

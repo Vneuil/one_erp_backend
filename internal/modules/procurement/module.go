@@ -36,6 +36,7 @@ func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager
 				&domain.PurchaseOrderLine{},
 				&domain.GoodsReceipt{},
 				&domain.GoodsReceiptLine{},
+				&domain.GoodsReceiptBagEntry{},
 				&domain.PurchaseInvoice{},
 				&domain.PurchaseDownPayment{},
 				&domain.PurchaseReturn{},

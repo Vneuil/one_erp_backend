@@ -37,6 +37,9 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	receipts.Post("/", h.CreateGoodsReceipt)
 	receipts.Get("/", h.ListGoodsReceipts)
 	receipts.Get("/:id", h.GetGoodsReceiptByID)
+	receipts.Post("/:id/bag-entries", h.GenerateBagEntries)
+	receipts.Put("/:id/bag-entries", h.SaveBagEntries)
+	receipts.Post("/:id/confirm", h.ConfirmGoodsReceipt)
 
 	invoices := procurement.Group("/invoices")
 	invoices.Post("/", h.CreatePurchaseInvoice)

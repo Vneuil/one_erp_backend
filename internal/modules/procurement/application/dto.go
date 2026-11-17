@@ -229,6 +229,29 @@ type GoodsReceiptLineDTO struct {
 	// Manual adjustment on top of the per-sak total (kg, signed) + mandatory reason.
 	WeightAdjustment float64 `json:"weightAdjustment,omitempty"`
 	AdjustmentReason string  `json:"adjustmentReason,omitempty"`
+	PackageSize      float64 `json:"packageSize,omitempty"`
+}
+
+type GenerateBagEntriesDTO struct {
+	LineID      uuid.UUID `json:"lineId"`
+	PackageSize float64   `json:"packageSize"`
+	TotalCount  int       `json:"totalCount"`
+}
+
+type UpdateBagEntryDTO struct {
+	RowNumber    int      `json:"rowNumber"`
+	WeightActual *float64 `json:"weightActual"`
+}
+
+type SaveBagEntriesDTO struct {
+	LineID  uuid.UUID           `json:"lineId"`
+	Entries []UpdateBagEntryDTO `json:"entries"`
+}
+
+type BagEntryResponseDTO struct {
+	ID           uuid.UUID `json:"id"`
+	RowNumber    int       `json:"rowNumber"`
+	WeightActual *float64  `json:"weightActual,omitempty"`
 }
 
 type CreateGoodsReceiptDTO struct {
@@ -248,18 +271,20 @@ type CreateGoodsReceiptDTO struct {
 }
 
 type GoodsReceiptLineResponseDTO struct {
-	ID                       uuid.UUID `json:"id"`
-	ProductID                uuid.UUID `json:"productId"`
-	QuantityReceived         float64   `json:"quantityReceived"`
-	QuantityOrderedReference float64   `json:"quantityOrderedReference"`
-	WeightGross              *float64  `json:"weightGross,omitempty"`
-	WeightTare               *float64  `json:"weightTare,omitempty"`
-	WeightNet                *float64  `json:"weightNet,omitempty"`
-	WeightDiffPO             *float64  `json:"weightDiffPo,omitempty"`
-	BagWeights               string    `json:"bagWeights,omitempty"`
-	LotNumber                string    `json:"lotNumber,omitempty"`
-	WeightAdjustment         float64   `json:"weightAdjustment,omitempty"`
-	AdjustmentReason         string    `json:"adjustmentReason,omitempty"`
+	ID                       uuid.UUID             `json:"id"`
+	ProductID                uuid.UUID             `json:"productId"`
+	QuantityReceived         float64               `json:"quantityReceived"`
+	QuantityOrderedReference float64               `json:"quantityOrderedReference"`
+	WeightGross              *float64              `json:"weightGross,omitempty"`
+	WeightTare               *float64              `json:"weightTare,omitempty"`
+	WeightNet                *float64              `json:"weightNet,omitempty"`
+	WeightDiffPO             *float64              `json:"weightDiffPo,omitempty"`
+	BagWeights               string                `json:"bagWeights,omitempty"`
+	LotNumber                string                `json:"lotNumber,omitempty"`
+	WeightAdjustment         float64               `json:"weightAdjustment,omitempty"`
+	AdjustmentReason         string                `json:"adjustmentReason,omitempty"`
+	PackageSize              float64               `json:"packageSize,omitempty"`
+	BagEntries               []BagEntryResponseDTO `json:"bagEntries,omitempty"`
 }
 
 type GoodsReceiptResponseDTO struct {
@@ -286,8 +311,18 @@ func ToGoodsReceiptResponse(gr *domain.GoodsReceipt) *GoodsReceiptResponseDTO {
 	}
 	lines := make([]GoodsReceiptLineResponseDTO, len(gr.Lines))
 	for i, l := range gr.Lines {
+		bagEntries := make([]BagEntryResponseDTO, len(l.BagEntries))
+		for j, be := range l.BagEntries {
+			bagEntries[j] = BagEntryResponseDTO{
+				ID:           be.ID,
+				RowNumber:    be.RowNumber,
+				WeightActual: be.WeightActual,
+			}
+		}
 		lines[i] = GoodsReceiptLineResponseDTO{
-			ID: l.ID, ProductID: l.ProductID, QuantityReceived: l.QuantityReceived,
+			ID:                       l.ID,
+			ProductID:                l.ProductID,
+			QuantityReceived:         l.QuantityReceived,
 			QuantityOrderedReference: l.QuantityOrderedRef,
 			WeightGross:              l.WeightGross,
 			WeightTare:               l.WeightTare,
@@ -297,6 +332,8 @@ func ToGoodsReceiptResponse(gr *domain.GoodsReceipt) *GoodsReceiptResponseDTO {
 			LotNumber:                l.LotNumber,
 			WeightAdjustment:         l.WeightAdjustment,
 			AdjustmentReason:         l.AdjustmentReason,
+			PackageSize:              l.PackageSize,
+			BagEntries:               bagEntries,
 		}
 	}
 	return &GoodsReceiptResponseDTO{

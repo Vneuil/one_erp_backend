@@ -464,6 +464,62 @@ func (h *Handler) GetGoodsReceiptByID(c *fiber.Ctx) error {
 	return response.OK(c, "Goods receipt retrieved successfully", gr)
 }
 
+func (h *Handler) GenerateBagEntries(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var dto application.GenerateBagEntriesDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	res, err := uc.GenerateBagEntries(h.ctx(c), id, dto)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Bag entries generated successfully", res)
+}
+
+func (h *Handler) SaveBagEntries(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var dto application.SaveBagEntriesDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Invalid request body")
+	}
+	res, err := uc.SaveBagEntries(h.ctx(c), id, dto)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Bag entries saved successfully", res)
+}
+
+func (h *Handler) ConfirmGoodsReceipt(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	gr, err := uc.ConfirmGoodsReceipt(h.ctx(c), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Goods receipt confirmed successfully", gr)
+}
+
 func (h *Handler) ListGoodsReceipts(c *fiber.Ctx) error {
 	uc, err := h.resolve(c)
 	if err != nil {

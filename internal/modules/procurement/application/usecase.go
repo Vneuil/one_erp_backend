@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/divinecoid/one-backend/internal/shared/actor"
 	"log/slog"
+	"math"
 	"strings"
 	"time"
 
@@ -69,6 +70,9 @@ type ProcurementUseCase interface {
 	CreateGoodsReceipt(ctx context.Context, dto CreateGoodsReceiptDTO) (*GoodsReceiptResponseDTO, error)
 	GetGoodsReceiptByID(ctx context.Context, id uuid.UUID) (*GoodsReceiptResponseDTO, error)
 	ListGoodsReceipts(ctx context.Context, query types.PaginationQuery) ([]GoodsReceiptResponseDTO, types.PaginationMeta, error)
+	GenerateBagEntries(ctx context.Context, goodsReceiptID uuid.UUID, dto GenerateBagEntriesDTO) ([]BagEntryResponseDTO, error)
+	SaveBagEntries(ctx context.Context, goodsReceiptID uuid.UUID, dto SaveBagEntriesDTO) ([]BagEntryResponseDTO, error)
+	ConfirmGoodsReceipt(ctx context.Context, id uuid.UUID) (*GoodsReceiptResponseDTO, error)
 
 	// Purchase invoices
 	CreatePurchaseInvoice(ctx context.Context, dto CreatePurchaseInvoiceDTO) (*PurchaseInvoiceResponseDTO, error)
@@ -1120,8 +1124,8 @@ func (uc *procurementUseCase) CreateGoodsReceipt(ctx context.Context, dto Create
 			LotNumber:          strings.ToUpper(strings.TrimSpace(l.LotNumber)),
 			WeightAdjustment:   l.WeightAdjustment,
 			AdjustmentReason:   strings.TrimSpace(l.AdjustmentReason),
+			PackageSize:        l.PackageSize,
 		}
-		poLine.QuantityReceived += net
 	}
 
 	receivedDate := dto.ReceivedDate
@@ -1142,7 +1146,7 @@ func (uc *procurementUseCase) CreateGoodsReceipt(ctx context.Context, dto Create
 		ReceivedDate:     receivedDate,
 		WarehouseID:      dto.WarehouseID,
 		ReceivedBy:       dto.ReceivedBy,
-		Status:           "completed",
+		Status:           "draft",
 		DeliveryNoteNo:   dto.DeliveryNoteNo,
 		SugarCondition:   dto.SugarCondition,
 		PackageCondition: dto.PackageCondition,
@@ -1154,10 +1158,191 @@ func (uc *procurementUseCase) CreateGoodsReceipt(ctx context.Context, dto Create
 		return nil, apperrors.NewInternal(err, "Failed to create goods receipt")
 	}
 
-	// Increase on-hand stock for each received line now that the receipt
-	// document exists, mirroring how Sales Order deducts stock via the same
-	// inventory use case (see modules/sales/application/usecase.go).
-	// WarehouseID is validated as required above, so this always runs.
+	return ToGoodsReceiptResponse(gr), nil
+}
+
+func (uc *procurementUseCase) GenerateBagEntries(ctx context.Context, goodsReceiptID uuid.UUID, dto GenerateBagEntriesDTO) ([]BagEntryResponseDTO, error) {
+	if dto.LineID == uuid.Nil {
+		return nil, apperrors.NewBadRequest("lineId is required")
+	}
+	if dto.PackageSize <= 0 {
+		return nil, apperrors.NewBadRequest("packageSize must be positive")
+	}
+	if dto.TotalCount <= 0 {
+		return nil, apperrors.NewBadRequest("totalCount must be positive")
+	}
+	if dto.TotalCount > 5000 {
+		return nil, apperrors.NewBadRequest("totalCount cannot exceed 5000")
+	}
+
+	gr, err := uc.repo.GetGoodsReceiptByID(ctx, goodsReceiptID)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get goods receipt")
+	}
+	if gr == nil {
+		return nil, apperrors.NewNotFound("Goods receipt not found")
+	}
+	if gr.Status == "completed" {
+		return nil, apperrors.NewConflict("Cannot modify bag entries on completed goods receipt")
+	}
+
+	line, err := uc.repo.GetGoodsReceiptLineByID(ctx, dto.LineID)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get line item")
+	}
+	if line == nil || line.GoodsReceiptID != goodsReceiptID {
+		return nil, apperrors.NewNotFound("Line item not found for this goods receipt")
+	}
+
+	line.PackageSize = dto.PackageSize
+	if err := uc.repo.UpdateGoodsReceiptLine(ctx, line); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to update package size on line")
+	}
+
+	if err := uc.repo.DeleteBagEntriesForLine(ctx, dto.LineID); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to reset old bag entries")
+	}
+
+	entries := make([]domain.GoodsReceiptBagEntry, dto.TotalCount)
+	for i := 0; i < dto.TotalCount; i++ {
+		entries[i] = domain.GoodsReceiptBagEntry{
+			GoodsReceiptLineID: dto.LineID,
+			RowNumber:          i + 1,
+			WeightActual:       nil,
+		}
+	}
+
+	if err := uc.repo.CreateBagEntries(ctx, entries); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to create bag entries")
+	}
+
+	saved, err := uc.repo.ListBagEntriesForLine(ctx, dto.LineID)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to list created bag entries")
+	}
+
+	resp := make([]BagEntryResponseDTO, len(saved))
+	for i, e := range saved {
+		resp[i] = BagEntryResponseDTO{
+			ID:           e.ID,
+			RowNumber:    e.RowNumber,
+			WeightActual: e.WeightActual,
+		}
+	}
+	return resp, nil
+}
+
+func (uc *procurementUseCase) SaveBagEntries(ctx context.Context, goodsReceiptID uuid.UUID, dto SaveBagEntriesDTO) ([]BagEntryResponseDTO, error) {
+	if dto.LineID == uuid.Nil {
+		return nil, apperrors.NewBadRequest("lineId is required")
+	}
+	gr, err := uc.repo.GetGoodsReceiptByID(ctx, goodsReceiptID)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get goods receipt")
+	}
+	if gr == nil {
+		return nil, apperrors.NewNotFound("Goods receipt not found")
+	}
+	if gr.Status == "completed" {
+		return nil, apperrors.NewConflict("Cannot modify bag entries on completed goods receipt")
+	}
+
+	line, err := uc.repo.GetGoodsReceiptLineByID(ctx, dto.LineID)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get line item")
+	}
+	if line == nil || line.GoodsReceiptID != goodsReceiptID {
+		return nil, apperrors.NewNotFound("Line item not found for this goods receipt")
+	}
+
+	existing, err := uc.repo.ListBagEntriesForLine(ctx, dto.LineID)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to list existing bag entries")
+	}
+	entryByRow := make(map[int]*domain.GoodsReceiptBagEntry, len(existing))
+	for i := range existing {
+		entryByRow[existing[i].RowNumber] = &existing[i]
+	}
+
+	toUpdate := make([]domain.GoodsReceiptBagEntry, 0, len(dto.Entries))
+	for _, req := range dto.Entries {
+		if cur, ok := entryByRow[req.RowNumber]; ok {
+			cur.WeightActual = req.WeightActual
+			toUpdate = append(toUpdate, *cur)
+		} else {
+			toUpdate = append(toUpdate, domain.GoodsReceiptBagEntry{
+				GoodsReceiptLineID: dto.LineID,
+				RowNumber:          req.RowNumber,
+				WeightActual:       req.WeightActual,
+			})
+		}
+	}
+
+	if err := uc.repo.SaveBagEntries(ctx, dto.LineID, toUpdate); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to save bag entries")
+	}
+
+	saved, err := uc.repo.ListBagEntriesForLine(ctx, dto.LineID)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to list updated bag entries")
+	}
+
+	resp := make([]BagEntryResponseDTO, len(saved))
+	for i, e := range saved {
+		resp[i] = BagEntryResponseDTO{
+			ID:           e.ID,
+			RowNumber:    e.RowNumber,
+			WeightActual: e.WeightActual,
+		}
+	}
+	return resp, nil
+}
+
+func (uc *procurementUseCase) ConfirmGoodsReceipt(ctx context.Context, id uuid.UUID) (*GoodsReceiptResponseDTO, error) {
+	gr, err := uc.repo.GetGoodsReceiptByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get goods receipt")
+	}
+	if gr == nil {
+		return nil, apperrors.NewNotFound("Goods receipt not found")
+	}
+	if gr.Status == "completed" {
+		return ToGoodsReceiptResponse(gr), nil
+	}
+
+	po, err := uc.repo.GetPurchaseOrderByID(ctx, gr.PurchaseOrderID)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to get purchase order")
+	}
+	if po == nil {
+		return nil, apperrors.NewNotFound("Purchase order not found")
+	}
+
+	// Recalculate WeightNet & QuantityReceived from bag entries if present
+	for i := range gr.Lines {
+		l := &gr.Lines[i]
+		if len(l.BagEntries) > 0 {
+			var sumNet float64
+			hasAny := false
+			for _, be := range l.BagEntries {
+				if be.WeightActual != nil {
+					sumNet += *be.WeightActual
+					hasAny = true
+				}
+			}
+			if hasAny {
+				if gr.PlasticTare > 0 {
+					sumNet = math.Max(0, sumNet-(gr.PlasticTare*float64(len(l.BagEntries))))
+				}
+				sumNet += l.WeightAdjustment
+				l.WeightNet = &sumNet
+				l.QuantityReceived = sumNet
+				_ = uc.repo.UpdateGoodsReceiptLine(ctx, l)
+			}
+		}
+	}
+
+	// Increase on-hand stock for each received line
 	if uc.inventoryUC != nil && gr.WarehouseID != nil {
 		for _, l := range gr.Lines {
 			if _, err := uc.inventoryUC.AdjustStock(ctx, inventoryApp.AdjustStockDTO{
@@ -1165,8 +1350,19 @@ func (uc *procurementUseCase) CreateGoodsReceipt(ctx context.Context, dto Create
 				BatchNo: l.LotNumber,
 				Reason:  "Goods Receipt", Reference: gr.ReceiptNo, CreatedBy: gr.ReceivedBy,
 			}); err != nil {
-				return nil, apperrors.NewInternal(err, "Goods receipt created but failed to increase stock for product "+l.ProductID.String())
+				return nil, apperrors.NewInternal(err, "Failed to increase stock for product "+l.ProductID.String())
 			}
+		}
+	}
+
+	// Update PO lines & status
+	poLineByProduct := make(map[uuid.UUID]*domain.PurchaseOrderLine, len(po.Lines))
+	for i := range po.Lines {
+		poLineByProduct[po.Lines[i].ProductID] = &po.Lines[i]
+	}
+	for _, l := range gr.Lines {
+		if poLine, ok := poLineByProduct[l.ProductID]; ok {
+			poLine.QuantityReceived += l.QuantityReceived
 		}
 	}
 
@@ -1187,6 +1383,11 @@ func (uc *procurementUseCase) CreateGoodsReceipt(ctx context.Context, dto Create
 	}
 	if err := uc.repo.UpdatePurchaseOrder(ctx, po); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to update purchase order status")
+	}
+
+	gr.Status = "completed"
+	if err := uc.repo.UpdateGoodsReceipt(ctx, gr); err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to update goods receipt status")
 	}
 
 	return ToGoodsReceiptResponse(gr), nil

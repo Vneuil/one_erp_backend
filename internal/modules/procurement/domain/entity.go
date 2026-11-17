@@ -147,13 +147,29 @@ type GoodsReceiptLine struct {
 	// it is non-zero.
 	// LotNumber follows this material from receipt through production to the COI;
 	// it is also the stock batch number the received quantity is booked under.
-	LotNumber        string  `gorm:"type:varchar(60);index" json:"lotNumber,omitempty"`
-	WeightAdjustment float64 `gorm:"type:decimal(15,3);default:0" json:"weightAdjustment,omitempty"`
-	AdjustmentReason string  `gorm:"type:varchar(255)" json:"adjustmentReason,omitempty"`
+	LotNumber        string                 `gorm:"type:varchar(60);index" json:"lotNumber,omitempty"`
+	WeightAdjustment float64                `gorm:"type:decimal(15,3);default:0" json:"weightAdjustment,omitempty"`
+	AdjustmentReason string                 `gorm:"type:varchar(255)" json:"adjustmentReason,omitempty"`
+	PackageSize      float64                `gorm:"type:decimal(10,3);default:0" json:"packageSize,omitempty"`
+	BagEntries       []GoodsReceiptBagEntry `gorm:"foreignKey:GoodsReceiptLineID;constraint:OnDelete:CASCADE" json:"bagEntries,omitempty"`
 }
 
 func (GoodsReceiptLine) TableName() string {
 	return "procurement_goods_receipt_lines"
+}
+
+// GoodsReceiptBagEntry stores one physical package/sack weight
+// for a GoodsReceiptLine. Generated when warehouse staff inputs
+// per-package weights on the LBM detail page.
+type GoodsReceiptBagEntry struct {
+	types.BaseEntity
+	GoodsReceiptLineID uuid.UUID `gorm:"type:uuid;not null;index" json:"goodsReceiptLineId"`
+	RowNumber          int       `gorm:"not null" json:"rowNumber"`
+	WeightActual       *float64  `gorm:"type:decimal(10,3)" json:"weightActual,omitempty"`
+}
+
+func (GoodsReceiptBagEntry) TableName() string {
+	return "procurement_goods_receipt_bag_entries"
 }
 
 // PurchaseInvoice is a vendor/purchase invoice for a supplier, optionally tied to a PO
@@ -318,6 +334,13 @@ type ProcurementRepository interface {
 	GetGoodsReceiptByID(ctx context.Context, id uuid.UUID) (*GoodsReceipt, error)
 	ListGoodsReceipts(ctx context.Context, query types.PaginationQuery) ([]GoodsReceipt, int64, error)
 	CountGoodsReceipts(ctx context.Context) (int64, error)
+	UpdateGoodsReceipt(ctx context.Context, gr *GoodsReceipt) error
+	GetGoodsReceiptLineByID(ctx context.Context, lineID uuid.UUID) (*GoodsReceiptLine, error)
+	UpdateGoodsReceiptLine(ctx context.Context, line *GoodsReceiptLine) error
+	DeleteBagEntriesForLine(ctx context.Context, lineID uuid.UUID) error
+	CreateBagEntries(ctx context.Context, entries []GoodsReceiptBagEntry) error
+	SaveBagEntries(ctx context.Context, lineID uuid.UUID, entries []GoodsReceiptBagEntry) error
+	ListBagEntriesForLine(ctx context.Context, lineID uuid.UUID) ([]GoodsReceiptBagEntry, error)
 
 	// Purchase invoices
 	CreatePurchaseInvoice(ctx context.Context, inv *PurchaseInvoice) error
