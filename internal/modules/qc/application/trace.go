@@ -36,16 +36,29 @@ type TraceUsage struct {
 	RecordedAt   string  `json:"recordedAt"`
 }
 
+// SupplierCertInfo represents a supplier certificate summary displayed in lot tracing.
+type SupplierCertInfo struct {
+	ID              uuid.UUID  `json:"id"`
+	Scheme          string     `json:"scheme"`
+	Number          string     `json:"number"`
+	Issuer          string     `json:"issuer,omitempty"`
+	SupplierID      *uuid.UUID `json:"supplierId,omitempty"`
+	ValidFrom       string     `json:"validFrom"`
+	ValidUntil      string     `json:"validUntil"`
+	Status          string     `json:"status"`
+	EffectiveStatus string     `json:"effectiveStatus"`
+}
+
 type LotTrace struct {
-	Lot             string                `json:"lot"`
-	Found           bool                  `json:"found"`
-	Receipts        []TraceReceipt        `json:"receipts"`
-	ReceiptQC       []TraceInspection     `json:"receiptQc"`
-	UsedIn          []TraceUsage          `json:"usedIn"`
-	FinishedBatches []string              `json:"finishedBatches"`
-	FinishedQC      []TraceInspection     `json:"finishedQc"` // basis of the COI per finished batch
-	SupplierCerts   []CertificateResponse `json:"supplierCertificates"`
-	Gaps            []string              `json:"gaps,omitempty"`
+	Lot             string             `json:"lot"`
+	Found           bool               `json:"found"`
+	Receipts        []TraceReceipt     `json:"receipts"`
+	ReceiptQC       []TraceInspection  `json:"receiptQc"`
+	UsedIn          []TraceUsage       `json:"usedIn"`
+	FinishedBatches []string           `json:"finishedBatches"`
+	FinishedQC      []TraceInspection  `json:"finishedQc"` // basis of the COI per finished batch
+	SupplierCerts   []SupplierCertInfo `json:"supplierCertificates"`
+	Gaps            []string           `json:"gaps,omitempty"`
 }
 
 // TraceReader is the read side of the lot trace; it spans procurement, QC and
@@ -54,7 +67,7 @@ type TraceReader interface {
 	Receipts(ctx context.Context, lot string) ([]TraceReceipt, error)
 	Inspections(ctx context.Context, batchNos []string) ([]TraceInspection, error)
 	Usage(ctx context.Context, lot string) ([]TraceUsage, error)
-	SupplierCerts(ctx context.Context, supplierIDs []uuid.UUID) ([]CertificateResponse, error)
+	SupplierCerts(ctx context.Context, supplierIDs []uuid.UUID) ([]SupplierCertInfo, error)
 }
 
 // TraceLot walks a lot forward from the goods receipt to the QC records of the batches it
@@ -64,7 +77,15 @@ func TraceLot(ctx context.Context, r TraceReader, lot string) (*LotTrace, error)
 	if lot == "" {
 		return nil, apperrors.NewBadRequest("Lot number is required")
 	}
-	t := &LotTrace{Lot: lot, Receipts: []TraceReceipt{}, ReceiptQC: []TraceInspection{}, UsedIn: []TraceUsage{}, FinishedBatches: []string{}, FinishedQC: []TraceInspection{}, SupplierCerts: []CertificateResponse{}}
+	t := &LotTrace{
+		Lot:             lot,
+		Receipts:        []TraceReceipt{},
+		ReceiptQC:       []TraceInspection{},
+		UsedIn:          []TraceUsage{},
+		FinishedBatches: []string{},
+		FinishedQC:      []TraceInspection{},
+		SupplierCerts:   []SupplierCertInfo{},
+	}
 
 	var err error
 	if t.Receipts, err = r.Receipts(ctx, lot); err != nil {

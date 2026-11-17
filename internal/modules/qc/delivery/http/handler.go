@@ -684,3 +684,18 @@ func (h *Handler) DeleteIncomingCheck(c *fiber.Ctx) error {
 	}
 	return response.OK(c, "Pemeriksaan bahan datang berhasil dihapus", fiber.Map{"id": id})
 }
+
+// TraceLot follows one lot number: receipt -> QC -> production genealogy -> finished
+// batches -> their QC inspections (the basis of the COI), plus the supplier's certificates.
+func (h *Handler) TraceLot(c *fiber.Ctx) error {
+	tenantDB := middleware.TenantDB(c)
+	if tenantDB == nil {
+		return apperrors.NewBadRequest("No active company. Please select or provision a company first.")
+	}
+	res, err := application.TraceLot(c.UserContext(), infrastructure.NewTraceReader(tenantDB), c.Params("lot"))
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Lot trace retrieved successfully", res)
+}
+

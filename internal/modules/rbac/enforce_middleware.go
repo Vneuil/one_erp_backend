@@ -213,8 +213,7 @@ var moduleAliases = map[string]string{
 	"payment-terms":  "pricing",
 	"customer-types": "pricing",
 	"tax-rates":      "pricing",
-	// Certification and lot tracing belong to the quality function.
-	"certifications": "qc",
+	// Lot tracing belongs to the quality function.
 	"traceability":   "qc",
 }
 

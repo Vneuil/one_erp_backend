@@ -28,7 +28,7 @@ func (f fakeTrace) Usage(context.Context, string) ([]TraceUsage, error) {
 	}
 	return nil, nil
 }
-func (f fakeTrace) SupplierCerts(context.Context, []uuid.UUID) ([]CertificateResponse, error) {
+func (f fakeTrace) SupplierCerts(context.Context, []uuid.UUID) ([]SupplierCertInfo, error) {
 	return nil, nil
 }
 

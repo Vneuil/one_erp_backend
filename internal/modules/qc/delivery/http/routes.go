@@ -57,4 +57,7 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	incoming.Get("/:id", h.GetIncomingCheck)
 	incoming.Put("/:id", h.UpdateIncomingCheck)
 	incoming.Delete("/:id", h.DeleteIncomingCheck)
+
+	// Lot traceability (moved from legacy certification module)
+	router.Get("/traceability/lot/:lot", protected, tenantCtx, h.TraceLot)
 }

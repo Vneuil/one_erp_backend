@@ -21,7 +21,6 @@ import (
 	"github.com/divinecoid/one-backend/internal/modules/assets"
 	"github.com/divinecoid/one-backend/internal/modules/auth"
 	"github.com/divinecoid/one-backend/internal/modules/banking"
-	"github.com/divinecoid/one-backend/internal/modules/certification"
 	"github.com/divinecoid/one-backend/internal/modules/checkout"
 	"github.com/divinecoid/one-backend/internal/modules/collaboration"
 	"github.com/divinecoid/one-backend/internal/modules/commission"
@@ -205,7 +204,6 @@ func main() {
 	banking.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	manufacturing.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	qc.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
-	certification.NewModule(server.V1, cfg.JWT.Secret, tenantManager, objectStore)
 	warehouse.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	assets.NewModule(server.V1, cfg.JWT.Secret, tenantManager)
 	contracts.NewModule(server.V1, cfg.JWT.Secret, tenantManager)

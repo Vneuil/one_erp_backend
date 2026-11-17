@@ -5,8 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/divinecoid/one-backend/internal/modules/certification/application"
-	"github.com/divinecoid/one-backend/internal/modules/certification/domain"
+	"github.com/divinecoid/one-backend/internal/modules/qc/application"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -48,7 +47,14 @@ func (r *traceReader) Inspections(ctx context.Context, batchNos []string) ([]app
 	}
 	out := make([]application.TraceInspection, len(rows))
 	for i, x := range rows {
-		out[i] = application.TraceInspection{InspectionNo: x.InspectionNo, BatchNo: x.BatchNo, TargetType: x.TargetType, OverallStatus: x.OverallStatus, InspectedAt: x.InspectedAt.Format("2006-01-02 15:04"), IsVoided: x.IsVoided}
+		out[i] = application.TraceInspection{
+			InspectionNo:  x.InspectionNo,
+			BatchNo:       x.BatchNo,
+			TargetType:    x.TargetType,
+			OverallStatus: x.OverallStatus,
+			InspectedAt:   x.InspectedAt.Format("2006-01-02 15:04"),
+			IsVoided:      x.IsVoided,
+		}
 	}
 	return out, nil
 }
@@ -68,20 +74,60 @@ func (r *traceReader) Usage(ctx context.Context, lot string) ([]application.Trac
 	}
 	out := make([]application.TraceUsage, len(rows))
 	for i, x := range rows {
-		out[i] = application.TraceUsage{OrderNumber: x.OrderNumber, ChildBatchNo: x.ChildBatchNo, ChildProduct: x.ChildProductName, QuantityUsed: x.QuantityUsed, RecordedAt: x.RecordedAt.Format("2006-01-02")}
+		out[i] = application.TraceUsage{
+			OrderNumber:  x.OrderNumber,
+			ChildBatchNo: x.ChildBatchNo,
+			ChildProduct: x.ChildProductName,
+			QuantityUsed: x.QuantityUsed,
+			RecordedAt:   x.RecordedAt.Format("2006-01-02"),
+		}
 	}
 	return out, nil
 }
 
-func (r *traceReader) SupplierCerts(ctx context.Context, ids []uuid.UUID) ([]application.CertificateResponse, error) {
-	var certs []domain.Certificate
-	if err := r.db.WithContext(ctx).Where("supplier_id IN ?", ids).Order("valid_until asc").Find(&certs).Error; err != nil {
+type certRow struct {
+	ID         uuid.UUID  `gorm:"column:id"`
+	Scheme     string     `gorm:"column:scheme"`
+	Number     string     `gorm:"column:number"`
+	Issuer     string     `gorm:"column:issuer"`
+	SupplierID *uuid.UUID `gorm:"column:supplier_id"`
+	ValidFrom  string     `gorm:"column:valid_from"`
+	ValidUntil string     `gorm:"column:valid_until"`
+	Status     string     `gorm:"column:status"`
+}
+
+func (r *traceReader) SupplierCerts(ctx context.Context, ids []uuid.UUID) ([]application.SupplierCertInfo, error) {
+	var rows []certRow
+	if err := r.db.WithContext(ctx).Table("certifications").
+		Where("supplier_id IN ?", ids).
+		Order("valid_until asc").
+		Find(&rows).Error; err != nil {
 		return nil, tolerateMissing(err)
 	}
 	today := time.Now().Format("2006-01-02")
-	out := make([]application.CertificateResponse, len(certs))
-	for i, c := range certs {
-		out[i] = application.CertificateResponse{Certificate: c, EffectiveStatus: c.EffectiveStatus(today)}
+	out := make([]application.SupplierCertInfo, len(rows))
+	for i, c := range rows {
+		effectiveStatus := c.Status
+		if c.Status != "revoked" && c.Status != "suspended" {
+			if c.ValidFrom != "" && today < c.ValidFrom {
+				effectiveStatus = "not_yet_valid"
+			} else if c.ValidUntil != "" && today > c.ValidUntil {
+				effectiveStatus = "expired"
+			} else {
+				effectiveStatus = "active"
+			}
+		}
+		out[i] = application.SupplierCertInfo{
+			ID:              c.ID,
+			Scheme:          c.Scheme,
+			Number:          c.Number,
+			Issuer:          c.Issuer,
+			SupplierID:      c.SupplierID,
+			ValidFrom:       c.ValidFrom,
+			ValidUntil:      c.ValidUntil,
+			Status:          c.Status,
+			EffectiveStatus: effectiveStatus,
+		}
 	}
 	return out, nil
 }
