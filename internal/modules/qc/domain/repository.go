@@ -50,4 +50,25 @@ type QCRepository interface {
 	CreatePreOpCheck(ctx context.Context, check *PreOpSanitationCheck) error
 	ListPreOpChecks(ctx context.Context, date string, room string) ([]PreOpSanitationCheck, error)
 	DeletePreOpCheck(ctx context.Context, id uuid.UUID) error
+
+	// Packaging Quality Check (PBK — QC-003)
+	CreatePackagingCheck(ctx context.Context, check *PackagingQualityCheck) error
+	GetPackagingCheckByID(ctx context.Context, id uuid.UUID) (*PackagingQualityCheck, error)
+	ListPackagingChecks(ctx context.Context, month string, lbmNo string) ([]PackagingQualityCheck, error)
+	UpdatePackagingCheck(ctx context.Context, check *PackagingQualityCheck) error
+	DeletePackagingCheck(ctx context.Context, id uuid.UUID) error
+
+	// Supplier Armada Check (CAS — QC-007)
+	CreateArmadaCheck(ctx context.Context, check *SupplierArmadaCheck) error
+	GetArmadaCheckByID(ctx context.Context, id uuid.UUID) (*SupplierArmadaCheck, error)
+	ListArmadaChecks(ctx context.Context, date string, lbmNo string) ([]SupplierArmadaCheck, error)
+	UpdateArmadaCheck(ctx context.Context, check *SupplierArmadaCheck) error
+	DeleteArmadaCheck(ctx context.Context, id uuid.UUID) error
+
+	// Raw Material Incoming Check (PBD — QC-001)
+	CreateIncomingCheck(ctx context.Context, check *RawMaterialIncomingCheck) error
+	GetIncomingCheckByID(ctx context.Context, id uuid.UUID) (*RawMaterialIncomingCheck, error)
+	ListIncomingChecks(ctx context.Context, date string, lbmNo string) ([]RawMaterialIncomingCheck, error)
+	UpdateIncomingCheck(ctx context.Context, check *RawMaterialIncomingCheck) error
+	DeleteIncomingCheck(ctx context.Context, id uuid.UUID) error
 }

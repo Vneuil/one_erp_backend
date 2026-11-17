@@ -37,6 +37,27 @@ type QCUseCase interface {
 	CreatePreOpCheck(ctx context.Context, dto CreatePreOpCheckDTO) (*domain.PreOpSanitationCheck, error)
 	ListPreOpChecks(ctx context.Context, date string, room string) ([]domain.PreOpSanitationCheck, error)
 	DeletePreOpCheck(ctx context.Context, id uuid.UUID) error
+
+	// Packaging Quality Check (PBK — QC-003)
+	CreatePackagingCheck(ctx context.Context, dto CreatePackagingCheckDTO) (*PackagingCheckResponseDTO, error)
+	GetPackagingCheckByID(ctx context.Context, id uuid.UUID) (*PackagingCheckResponseDTO, error)
+	ListPackagingChecks(ctx context.Context, month string, lbmNo string) ([]PackagingCheckResponseDTO, error)
+	UpdatePackagingCheck(ctx context.Context, id uuid.UUID, dto UpdatePackagingCheckDTO) (*PackagingCheckResponseDTO, error)
+	DeletePackagingCheck(ctx context.Context, id uuid.UUID) error
+
+	// Supplier Armada Check (CAS — QC-007)
+	CreateArmadaCheck(ctx context.Context, dto CreateArmadaCheckDTO) (*ArmadaCheckResponseDTO, error)
+	GetArmadaCheckByID(ctx context.Context, id uuid.UUID) (*ArmadaCheckResponseDTO, error)
+	ListArmadaChecks(ctx context.Context, date string, lbmNo string) ([]ArmadaCheckResponseDTO, error)
+	UpdateArmadaCheck(ctx context.Context, id uuid.UUID, dto UpdateArmadaCheckDTO) (*ArmadaCheckResponseDTO, error)
+	DeleteArmadaCheck(ctx context.Context, id uuid.UUID) error
+
+	// Raw Material Incoming Check (PBD — QC-001)
+	CreateIncomingCheck(ctx context.Context, dto CreateIncomingCheckDTO) (*IncomingCheckResponseDTO, error)
+	GetIncomingCheckByID(ctx context.Context, id uuid.UUID) (*IncomingCheckResponseDTO, error)
+	ListIncomingChecks(ctx context.Context, date string, lbmNo string) ([]IncomingCheckResponseDTO, error)
+	UpdateIncomingCheck(ctx context.Context, id uuid.UUID, dto UpdateIncomingCheckDTO) (*IncomingCheckResponseDTO, error)
+	DeleteIncomingCheck(ctx context.Context, id uuid.UUID) error
 }
 
 type qcUseCase struct {
@@ -511,6 +532,704 @@ func (uc *qcUseCase) ListPreOpChecks(ctx context.Context, date string, room stri
 
 func (uc *qcUseCase) DeletePreOpCheck(ctx context.Context, id uuid.UUID) error {
 	if err := uc.repo.DeletePreOpCheck(ctx, id); err != nil {
+		return apperrors.NewInternal(err)
+	}
+	return nil
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Packaging Quality Check (PBK — QC-003)
+// ─────────────────────────────────────────────────────────────────────────────
+
+func computePBKStatus(passedQty, failedQty int) string {
+	if failedQty == 0 {
+		return "passed"
+	}
+	if passedQty == 0 {
+		return "failed"
+	}
+	return "partial"
+}
+
+func mapPackagingCheckToDTO(c *domain.PackagingQualityCheck) PackagingCheckResponseDTO {
+	return PackagingCheckResponseDTO{
+		ID:              c.ID,
+		CheckMonth:      c.CheckMonth,
+		GoodsReceiptID:  c.GoodsReceiptID,
+		LBMNo:           c.LBMNo,
+		CheckDate:       c.CheckDate,
+		SupplierID:      c.SupplierID,
+		SupplierName:    c.SupplierName,
+		ItemName:        c.ItemName,
+		ItemCode:        c.ItemCode,
+		MaterialType:    c.MaterialType,
+		BaseColor:       c.BaseColor,
+		Dimension:       c.Dimension,
+		TotalQty:        c.TotalQty,
+		SampleQty:       c.SampleQty,
+		PassedQty:       c.PassedQty,
+		PassedCondition: c.PassedCondition,
+		FailedQty:       c.FailedQty,
+		FailedCondition: c.FailedCondition,
+		OverallStatus:   c.OverallStatus,
+		QCName:          c.QCName,
+		QCDate:          c.QCDate,
+		QAName:          c.QAName,
+		QADate:          c.QADate,
+		Notes:           c.Notes,
+		CreatedAt:       c.CreatedAt,
+		UpdatedAt:       c.UpdatedAt,
+	}
+}
+
+func (uc *qcUseCase) CreatePackagingCheck(ctx context.Context, dto CreatePackagingCheckDTO) (*PackagingCheckResponseDTO, error) {
+	if strings.TrimSpace(dto.CheckMonth) == "" || strings.TrimSpace(dto.SupplierName) == "" || strings.TrimSpace(dto.ItemName) == "" {
+		return nil, apperrors.NewBadRequest("Bulan, supplier, dan nama barang wajib diisi")
+	}
+
+	overallStatus := computePBKStatus(dto.PassedQty, dto.FailedQty)
+	now := time.Now()
+	var qcDate *time.Time
+	if dto.QCName != "" {
+		qcDate = &now
+	}
+	var qaDate *time.Time
+	if dto.QAName != "" {
+		qaDate = &now
+	}
+
+	check := &domain.PackagingQualityCheck{
+		CheckMonth:      dto.CheckMonth,
+		GoodsReceiptID:  dto.GoodsReceiptID,
+		LBMNo:           dto.LBMNo,
+		CheckDate:       dto.CheckDate,
+		SupplierID:      dto.SupplierID,
+		SupplierName:    dto.SupplierName,
+		ItemName:        dto.ItemName,
+		ItemCode:        dto.ItemCode,
+		MaterialType:    dto.MaterialType,
+		BaseColor:       dto.BaseColor,
+		Dimension:       dto.Dimension,
+		TotalQty:        dto.TotalQty,
+		SampleQty:       dto.SampleQty,
+		PassedQty:       dto.PassedQty,
+		PassedCondition: dto.PassedCondition,
+		FailedQty:       dto.FailedQty,
+		FailedCondition: dto.FailedCondition,
+		OverallStatus:   overallStatus,
+		QCName:          dto.QCName,
+		QCDate:          qcDate,
+		QAName:          dto.QAName,
+		QADate:          qaDate,
+		Notes:           dto.Notes,
+	}
+
+	if err := uc.repo.CreatePackagingCheck(ctx, check); err != nil {
+		return nil, apperrors.NewInternal(err)
+	}
+
+	res := mapPackagingCheckToDTO(check)
+	return &res, nil
+}
+
+func (uc *qcUseCase) GetPackagingCheckByID(ctx context.Context, id uuid.UUID) (*PackagingCheckResponseDTO, error) {
+	check, err := uc.repo.GetPackagingCheckByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewNotFound("Pemeriksaan kemasan tidak ditemukan")
+	}
+	res := mapPackagingCheckToDTO(check)
+	return &res, nil
+}
+
+func (uc *qcUseCase) ListPackagingChecks(ctx context.Context, month string, lbmNo string) ([]PackagingCheckResponseDTO, error) {
+	checks, err := uc.repo.ListPackagingChecks(ctx, month, lbmNo)
+	if err != nil {
+		return nil, apperrors.NewInternal(err)
+	}
+	res := make([]PackagingCheckResponseDTO, 0, len(checks))
+	for _, c := range checks {
+		res = append(res, mapPackagingCheckToDTO(&c))
+	}
+	return res, nil
+}
+
+func (uc *qcUseCase) UpdatePackagingCheck(ctx context.Context, id uuid.UUID, dto UpdatePackagingCheckDTO) (*PackagingCheckResponseDTO, error) {
+	check, err := uc.repo.GetPackagingCheckByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewNotFound("Pemeriksaan kemasan tidak ditemukan")
+	}
+
+	if dto.CheckMonth != "" {
+		check.CheckMonth = dto.CheckMonth
+	}
+	if dto.CheckDate != "" {
+		check.CheckDate = dto.CheckDate
+	}
+	if dto.GoodsReceiptID != nil {
+		check.GoodsReceiptID = dto.GoodsReceiptID
+	}
+	if dto.LBMNo != "" {
+		check.LBMNo = dto.LBMNo
+	}
+	if dto.SupplierName != "" {
+		check.SupplierName = dto.SupplierName
+	}
+	if dto.SupplierID != nil {
+		check.SupplierID = dto.SupplierID
+	}
+	if dto.ItemName != "" {
+		check.ItemName = dto.ItemName
+	}
+	if dto.ItemCode != "" {
+		check.ItemCode = dto.ItemCode
+	}
+	if dto.MaterialType != "" {
+		check.MaterialType = dto.MaterialType
+	}
+	if dto.BaseColor != "" {
+		check.BaseColor = dto.BaseColor
+	}
+	if dto.Dimension != "" {
+		check.Dimension = dto.Dimension
+	}
+	if dto.TotalQty > 0 {
+		check.TotalQty = dto.TotalQty
+	}
+	if dto.SampleQty > 0 {
+		check.SampleQty = dto.SampleQty
+	}
+	check.PassedQty = dto.PassedQty
+	check.PassedCondition = dto.PassedCondition
+	check.FailedQty = dto.FailedQty
+	check.FailedCondition = dto.FailedCondition
+	check.OverallStatus = computePBKStatus(check.PassedQty, check.FailedQty)
+
+	now := time.Now()
+	if dto.QCName != "" {
+		check.QCName = dto.QCName
+		if check.QCDate == nil {
+			check.QCDate = &now
+		}
+	}
+	if dto.QAName != "" {
+		check.QAName = dto.QAName
+		if check.QADate == nil {
+			check.QADate = &now
+		}
+	}
+	if dto.Notes != "" {
+		check.Notes = dto.Notes
+	}
+
+	if err := uc.repo.UpdatePackagingCheck(ctx, check); err != nil {
+		return nil, apperrors.NewInternal(err)
+	}
+
+	res := mapPackagingCheckToDTO(check)
+	return &res, nil
+}
+
+func (uc *qcUseCase) DeletePackagingCheck(ctx context.Context, id uuid.UUID) error {
+	if err := uc.repo.DeletePackagingCheck(ctx, id); err != nil {
+		return apperrors.NewInternal(err)
+	}
+	return nil
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Supplier Armada Check (CAS — QC-007)
+// ─────────────────────────────────────────────────────────────────────────────
+
+func computeCASStatus(cabinSafe, undercarriageSafe, cargoAreaSafe, floorClean, wallRightClean, wallLeftClean, ceilingClean, doorClean bool) string {
+	if !cabinSafe || !undercarriageSafe || !cargoAreaSafe {
+		return "rejected"
+	}
+	if !floorClean || !wallRightClean || !wallLeftClean || !ceilingClean || !doorClean {
+		return "flagged"
+	}
+	return "cleared"
+}
+
+func mapArmadaCheckToDTO(c *domain.SupplierArmadaCheck) ArmadaCheckResponseDTO {
+	return ArmadaCheckResponseDTO{
+		ID:                c.ID,
+		GoodsReceiptID:    c.GoodsReceiptID,
+		LBMNo:             c.LBMNo,
+		CheckDate:         c.CheckDate,
+		IDNumber:          c.IDNumber,
+		DriverName:        c.DriverName,
+		BirthPlace:        c.BirthPlace,
+		BirthDate:         c.BirthDate,
+		Gender:            c.Gender,
+		Address:           c.Address,
+		Religion:          c.Religion,
+		MaritalStatus:     c.MaritalStatus,
+		IDExpiry:          c.IDExpiry,
+		CompanyOrigin:     c.CompanyOrigin,
+		CargoDesc:         c.CargoDesc,
+		LicensePlate:      c.LicensePlate,
+		VehicleType:       c.VehicleType,
+		CabinSafe:         c.CabinSafe,
+		UndercarriageSafe: c.UndercarriageSafe,
+		CargoAreaSafe:     c.CargoAreaSafe,
+		FloorClean:        c.FloorClean,
+		WallRightClean:    c.WallRightClean,
+		WallLeftClean:     c.WallLeftClean,
+		CeilingClean:      c.CeilingClean,
+		DoorClean:         c.DoorClean,
+		OverallStatus:     c.OverallStatus,
+		QCName:            c.QCName,
+		QCDate:            c.QCDate,
+		QAName:            c.QAName,
+		QADate:            c.QADate,
+		Notes:             c.Notes,
+		CreatedAt:         c.CreatedAt,
+		UpdatedAt:         c.UpdatedAt,
+	}
+}
+
+func (uc *qcUseCase) CreateArmadaCheck(ctx context.Context, dto CreateArmadaCheckDTO) (*ArmadaCheckResponseDTO, error) {
+	if strings.TrimSpace(dto.DriverName) == "" || strings.TrimSpace(dto.CheckDate) == "" {
+		return nil, apperrors.NewBadRequest("Nama pengemudi dan tanggal checklist wajib diisi")
+	}
+
+	overallStatus := computeCASStatus(
+		dto.CabinSafe, dto.UndercarriageSafe, dto.CargoAreaSafe,
+		dto.FloorClean, dto.WallRightClean, dto.WallLeftClean, dto.CeilingClean, dto.DoorClean,
+	)
+
+	now := time.Now()
+	var qcDate *time.Time
+	if dto.QCName != "" {
+		qcDate = &now
+	}
+	var qaDate *time.Time
+	if dto.QAName != "" {
+		qaDate = &now
+	}
+
+	check := &domain.SupplierArmadaCheck{
+		GoodsReceiptID:    dto.GoodsReceiptID,
+		LBMNo:             dto.LBMNo,
+		CheckDate:         dto.CheckDate,
+		IDNumber:          dto.IDNumber,
+		DriverName:        dto.DriverName,
+		BirthPlace:        dto.BirthPlace,
+		BirthDate:         dto.BirthDate,
+		Gender:            dto.Gender,
+		Address:           dto.Address,
+		Religion:          dto.Religion,
+		MaritalStatus:     dto.MaritalStatus,
+		IDExpiry:          dto.IDExpiry,
+		CompanyOrigin:     dto.CompanyOrigin,
+		CargoDesc:         dto.CargoDesc,
+		LicensePlate:      dto.LicensePlate,
+		VehicleType:       dto.VehicleType,
+		CabinSafe:         dto.CabinSafe,
+		UndercarriageSafe: dto.UndercarriageSafe,
+		CargoAreaSafe:     dto.CargoAreaSafe,
+		FloorClean:        dto.FloorClean,
+		WallRightClean:    dto.WallRightClean,
+		WallLeftClean:     dto.WallLeftClean,
+		CeilingClean:      dto.CeilingClean,
+		DoorClean:         dto.DoorClean,
+		OverallStatus:     overallStatus,
+		QCName:            dto.QCName,
+		QCDate:            qcDate,
+		QAName:            dto.QAName,
+		QADate:            qaDate,
+		Notes:             dto.Notes,
+	}
+
+	if err := uc.repo.CreateArmadaCheck(ctx, check); err != nil {
+		return nil, apperrors.NewInternal(err)
+	}
+
+	res := mapArmadaCheckToDTO(check)
+	return &res, nil
+}
+
+func (uc *qcUseCase) GetArmadaCheckByID(ctx context.Context, id uuid.UUID) (*ArmadaCheckResponseDTO, error) {
+	check, err := uc.repo.GetArmadaCheckByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewNotFound("Checklist armada tidak ditemukan")
+	}
+	res := mapArmadaCheckToDTO(check)
+	return &res, nil
+}
+
+func (uc *qcUseCase) ListArmadaChecks(ctx context.Context, date string, lbmNo string) ([]ArmadaCheckResponseDTO, error) {
+	checks, err := uc.repo.ListArmadaChecks(ctx, date, lbmNo)
+	if err != nil {
+		return nil, apperrors.NewInternal(err)
+	}
+	res := make([]ArmadaCheckResponseDTO, 0, len(checks))
+	for _, c := range checks {
+		res = append(res, mapArmadaCheckToDTO(&c))
+	}
+	return res, nil
+}
+
+func (uc *qcUseCase) UpdateArmadaCheck(ctx context.Context, id uuid.UUID, dto UpdateArmadaCheckDTO) (*ArmadaCheckResponseDTO, error) {
+	check, err := uc.repo.GetArmadaCheckByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewNotFound("Checklist armada tidak ditemukan")
+	}
+
+	if dto.GoodsReceiptID != nil {
+		check.GoodsReceiptID = dto.GoodsReceiptID
+	}
+	if dto.LBMNo != "" {
+		check.LBMNo = dto.LBMNo
+	}
+	if dto.CheckDate != "" {
+		check.CheckDate = dto.CheckDate
+	}
+	if dto.IDNumber != "" {
+		check.IDNumber = dto.IDNumber
+	}
+	if dto.DriverName != "" {
+		check.DriverName = dto.DriverName
+	}
+	if dto.BirthPlace != "" {
+		check.BirthPlace = dto.BirthPlace
+	}
+	if dto.BirthDate != "" {
+		check.BirthDate = dto.BirthDate
+	}
+	if dto.Gender != "" {
+		check.Gender = dto.Gender
+	}
+	if dto.Address != "" {
+		check.Address = dto.Address
+	}
+	if dto.Religion != "" {
+		check.Religion = dto.Religion
+	}
+	if dto.MaritalStatus != "" {
+		check.MaritalStatus = dto.MaritalStatus
+	}
+	if dto.IDExpiry != "" {
+		check.IDExpiry = dto.IDExpiry
+	}
+	if dto.CompanyOrigin != "" {
+		check.CompanyOrigin = dto.CompanyOrigin
+	}
+	if dto.CargoDesc != "" {
+		check.CargoDesc = dto.CargoDesc
+	}
+	if dto.LicensePlate != "" {
+		check.LicensePlate = dto.LicensePlate
+	}
+	if dto.VehicleType != "" {
+		check.VehicleType = dto.VehicleType
+	}
+
+	check.CabinSafe = dto.CabinSafe
+	check.UndercarriageSafe = dto.UndercarriageSafe
+	check.CargoAreaSafe = dto.CargoAreaSafe
+	check.FloorClean = dto.FloorClean
+	check.WallRightClean = dto.WallRightClean
+	check.WallLeftClean = dto.WallLeftClean
+	check.CeilingClean = dto.CeilingClean
+	check.DoorClean = dto.DoorClean
+
+	check.OverallStatus = computeCASStatus(
+		check.CabinSafe, check.UndercarriageSafe, check.CargoAreaSafe,
+		check.FloorClean, check.WallRightClean, check.WallLeftClean, check.CeilingClean, check.DoorClean,
+	)
+
+	now := time.Now()
+	if dto.QCName != "" {
+		check.QCName = dto.QCName
+		if check.QCDate == nil {
+			check.QCDate = &now
+		}
+	}
+	if dto.QAName != "" {
+		check.QAName = dto.QAName
+		if check.QADate == nil {
+			check.QADate = &now
+		}
+	}
+	if dto.Notes != "" {
+		check.Notes = dto.Notes
+	}
+
+	if err := uc.repo.UpdateArmadaCheck(ctx, check); err != nil {
+		return nil, apperrors.NewInternal(err)
+	}
+
+	res := mapArmadaCheckToDTO(check)
+	return &res, nil
+}
+
+func (uc *qcUseCase) DeleteArmadaCheck(ctx context.Context, id uuid.UUID) error {
+	if err := uc.repo.DeleteArmadaCheck(ctx, id); err != nil {
+		return apperrors.NewInternal(err)
+	}
+	return nil
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Raw Material Incoming Check (PBD — QC-001)
+// ─────────────────────────────────────────────────────────────────────────────
+
+func computePBDStatus(acceptedWeight, rejectedWeight float64, moisture *float64, foreignClean bool) (status string, recommendedAction string) {
+	if !foreignClean || (rejectedWeight > 0 && acceptedWeight == 0) {
+		return "rejected", "Ditolak / Retur ke Supplier (Tercemar atau Rusak Total)"
+	}
+	if moisture != nil && *moisture > 2.0 {
+		if rejectedWeight > 0 {
+			return "conditional", fmt.Sprintf("Diterima Bersyarat (Wajib Masuk Oven, Kadar Air %.2f%%; %.0f kg Ditolak)", *moisture, rejectedWeight)
+		}
+		return "conditional", fmt.Sprintf("Diterima Bersyarat - Wajib Line Oven (Kadar Air %.2f%% > 2.0%%)", *moisture)
+	}
+	if rejectedWeight > 0 {
+		return "conditional", fmt.Sprintf("Diterima Sebagian (%.0f kg Ditolak)", rejectedWeight)
+	}
+	return "passed", "Lolos Standar - Dapat Langsung ke Ayak Matang / Produksi (Kadar Air <= 2.0%)"
+}
+
+func mapIncomingCheckToDTO(c *domain.RawMaterialIncomingCheck) IncomingCheckResponseDTO {
+	return IncomingCheckResponseDTO{
+		ID:                 c.ID,
+		GoodsReceiptID:     c.GoodsReceiptID,
+		LBMNo:              c.LBMNo,
+		CheckDate:          c.CheckDate,
+		CheckMonth:         c.CheckMonth,
+		SupplierID:         c.SupplierID,
+		SupplierName:       c.SupplierName,
+		DeliveryNoteNo:     c.DeliveryNoteNo,
+		PONo:               c.PONo,
+		ProductName:        c.ProductName,
+		BatchNo:            c.BatchNo,
+		TotalBags:          c.TotalBags,
+		SampleBags:         c.SampleBags,
+		GrossWeight:        c.GrossWeight,
+		NetWeight:          c.NetWeight,
+		AcceptedWeight:     c.AcceptedWeight,
+		RejectedWeight:     c.RejectedWeight,
+		SugarCondition:     c.SugarCondition,
+		ColorAppearance:    c.ColorAppearance,
+		AromaFlavor:        c.AromaFlavor,
+		ForeignMatterClean: c.ForeignMatterClean,
+		PackagingCondition: c.PackagingCondition,
+		MoistureContent:    c.MoistureContent,
+		BrixValue:          c.BrixValue,
+		MeshSize:           c.MeshSize,
+		RecommendedAction:  c.RecommendedAction,
+		OverallStatus:      c.OverallStatus,
+		QCName:             c.QCName,
+		QCDate:             c.QCDate,
+		QAName:             c.QAName,
+		QADate:             c.QADate,
+		Notes:              c.Notes,
+		CreatedAt:          c.CreatedAt,
+		UpdatedAt:          c.UpdatedAt,
+	}
+}
+
+func (uc *qcUseCase) CreateIncomingCheck(ctx context.Context, dto CreateIncomingCheckDTO) (*IncomingCheckResponseDTO, error) {
+	if strings.TrimSpace(dto.SupplierName) == "" || strings.TrimSpace(dto.ProductName) == "" || strings.TrimSpace(dto.CheckDate) == "" {
+		return nil, apperrors.NewBadRequest("Tanggal, supplier, dan nama produk bahan datang wajib diisi")
+	}
+
+	month := dto.CheckMonth
+	if month == "" && len(dto.CheckDate) >= 7 {
+		month = dto.CheckDate[:7]
+	}
+
+	status, autoAction := computePBDStatus(dto.AcceptedWeight, dto.RejectedWeight, dto.MoistureContent, dto.ForeignMatterClean)
+	recAction := dto.RecommendedAction
+	if recAction == "" {
+		recAction = autoAction
+	}
+
+	now := time.Now()
+	var qcDate *time.Time
+	if dto.QCName != "" {
+		qcDate = &now
+	}
+	var qaDate *time.Time
+	if dto.QAName != "" {
+		qaDate = &now
+	}
+
+	check := &domain.RawMaterialIncomingCheck{
+		GoodsReceiptID:     dto.GoodsReceiptID,
+		LBMNo:              dto.LBMNo,
+		CheckDate:          dto.CheckDate,
+		CheckMonth:         month,
+		SupplierID:         dto.SupplierID,
+		SupplierName:       dto.SupplierName,
+		DeliveryNoteNo:     dto.DeliveryNoteNo,
+		PONo:               dto.PONo,
+		ProductName:        dto.ProductName,
+		BatchNo:            dto.BatchNo,
+		TotalBags:          dto.TotalBags,
+		SampleBags:         dto.SampleBags,
+		GrossWeight:        dto.GrossWeight,
+		NetWeight:          dto.NetWeight,
+		AcceptedWeight:     dto.AcceptedWeight,
+		RejectedWeight:     dto.RejectedWeight,
+		SugarCondition:     dto.SugarCondition,
+		ColorAppearance:    dto.ColorAppearance,
+		AromaFlavor:        dto.AromaFlavor,
+		ForeignMatterClean: dto.ForeignMatterClean,
+		PackagingCondition: dto.PackagingCondition,
+		MoistureContent:    dto.MoistureContent,
+		BrixValue:          dto.BrixValue,
+		MeshSize:           dto.MeshSize,
+		RecommendedAction:  recAction,
+		OverallStatus:      status,
+		QCName:             dto.QCName,
+		QCDate:             qcDate,
+		QAName:             dto.QAName,
+		QADate:             qaDate,
+		Notes:              dto.Notes,
+	}
+
+	if err := uc.repo.CreateIncomingCheck(ctx, check); err != nil {
+		return nil, apperrors.NewInternal(err)
+	}
+
+	res := mapIncomingCheckToDTO(check)
+	return &res, nil
+}
+
+func (uc *qcUseCase) GetIncomingCheckByID(ctx context.Context, id uuid.UUID) (*IncomingCheckResponseDTO, error) {
+	check, err := uc.repo.GetIncomingCheckByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewNotFound("Catatan pemeriksaan bahan datang tidak ditemukan")
+	}
+	res := mapIncomingCheckToDTO(check)
+	return &res, nil
+}
+
+func (uc *qcUseCase) ListIncomingChecks(ctx context.Context, date string, lbmNo string) ([]IncomingCheckResponseDTO, error) {
+	checks, err := uc.repo.ListIncomingChecks(ctx, date, lbmNo)
+	if err != nil {
+		return nil, apperrors.NewInternal(err)
+	}
+	res := make([]IncomingCheckResponseDTO, 0, len(checks))
+	for _, c := range checks {
+		res = append(res, mapIncomingCheckToDTO(&c))
+	}
+	return res, nil
+}
+
+func (uc *qcUseCase) UpdateIncomingCheck(ctx context.Context, id uuid.UUID, dto UpdateIncomingCheckDTO) (*IncomingCheckResponseDTO, error) {
+	check, err := uc.repo.GetIncomingCheckByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewNotFound("Catatan pemeriksaan bahan datang tidak ditemukan")
+	}
+
+	if dto.GoodsReceiptID != nil {
+		check.GoodsReceiptID = dto.GoodsReceiptID
+	}
+	if dto.LBMNo != "" {
+		check.LBMNo = dto.LBMNo
+	}
+	if dto.CheckDate != "" {
+		check.CheckDate = dto.CheckDate
+		if len(dto.CheckDate) >= 7 {
+			check.CheckMonth = dto.CheckDate[:7]
+		}
+	}
+	if dto.CheckMonth != "" {
+		check.CheckMonth = dto.CheckMonth
+	}
+	if dto.SupplierID != nil {
+		check.SupplierID = dto.SupplierID
+	}
+	if dto.SupplierName != "" {
+		check.SupplierName = dto.SupplierName
+	}
+	if dto.DeliveryNoteNo != "" {
+		check.DeliveryNoteNo = dto.DeliveryNoteNo
+	}
+	if dto.PONo != "" {
+		check.PONo = dto.PONo
+	}
+	if dto.ProductName != "" {
+		check.ProductName = dto.ProductName
+	}
+	if dto.BatchNo != "" {
+		check.BatchNo = dto.BatchNo
+	}
+	if dto.TotalBags > 0 {
+		check.TotalBags = dto.TotalBags
+	}
+	if dto.SampleBags > 0 {
+		check.SampleBags = dto.SampleBags
+	}
+	if dto.GrossWeight > 0 {
+		check.GrossWeight = dto.GrossWeight
+	}
+	if dto.NetWeight > 0 {
+		check.NetWeight = dto.NetWeight
+	}
+	check.AcceptedWeight = dto.AcceptedWeight
+	check.RejectedWeight = dto.RejectedWeight
+	if dto.SugarCondition != "" {
+		check.SugarCondition = dto.SugarCondition
+	}
+	if dto.ColorAppearance != "" {
+		check.ColorAppearance = dto.ColorAppearance
+	}
+	if dto.AromaFlavor != "" {
+		check.AromaFlavor = dto.AromaFlavor
+	}
+	check.ForeignMatterClean = dto.ForeignMatterClean
+	if dto.PackagingCondition != "" {
+		check.PackagingCondition = dto.PackagingCondition
+	}
+	if dto.MoistureContent != nil {
+		check.MoistureContent = dto.MoistureContent
+	}
+	if dto.BrixValue != nil {
+		check.BrixValue = dto.BrixValue
+	}
+	if dto.MeshSize != "" {
+		check.MeshSize = dto.MeshSize
+	}
+
+	status, autoAction := computePBDStatus(check.AcceptedWeight, check.RejectedWeight, check.MoistureContent, check.ForeignMatterClean)
+	check.OverallStatus = status
+	if dto.RecommendedAction != "" {
+		check.RecommendedAction = dto.RecommendedAction
+	} else if check.RecommendedAction == "" {
+		check.RecommendedAction = autoAction
+	}
+
+	now := time.Now()
+	if dto.QCName != "" {
+		check.QCName = dto.QCName
+		if check.QCDate == nil {
+			check.QCDate = &now
+		}
+	}
+	if dto.QAName != "" {
+		check.QAName = dto.QAName
+		if check.QADate == nil {
+			check.QADate = &now
+		}
+	}
+	if dto.Notes != "" {
+		check.Notes = dto.Notes
+	}
+
+	if err := uc.repo.UpdateIncomingCheck(ctx, check); err != nil {
+		return nil, apperrors.NewInternal(err)
+	}
+
+	res := mapIncomingCheckToDTO(check)
+	return &res, nil
+}
+
+func (uc *qcUseCase) DeleteIncomingCheck(ctx context.Context, id uuid.UUID) error {
+	if err := uc.repo.DeleteIncomingCheck(ctx, id); err != nil {
 		return apperrors.NewInternal(err)
 	}
 	return nil

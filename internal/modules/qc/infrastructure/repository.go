@@ -224,3 +224,108 @@ func (r *qcRepository) ListPreOpChecks(ctx context.Context, date string, room st
 func (r *qcRepository) DeletePreOpCheck(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Delete(&domain.PreOpSanitationCheck{}, "id = ?", id).Error
 }
+
+// ─── Packaging Quality Check (PBK — QC-003) ──────────────────────────────────
+
+func (r *qcRepository) CreatePackagingCheck(ctx context.Context, check *domain.PackagingQualityCheck) error {
+	return r.db.WithContext(ctx).Create(check).Error
+}
+
+func (r *qcRepository) GetPackagingCheckByID(ctx context.Context, id uuid.UUID) (*domain.PackagingQualityCheck, error) {
+	var check domain.PackagingQualityCheck
+	if err := r.db.WithContext(ctx).First(&check, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &check, nil
+}
+
+func (r *qcRepository) ListPackagingChecks(ctx context.Context, month string, lbmNo string) ([]domain.PackagingQualityCheck, error) {
+	var checks []domain.PackagingQualityCheck
+	q := r.db.WithContext(ctx).Model(&domain.PackagingQualityCheck{})
+	if month != "" {
+		q = q.Where("check_month = ?", month)
+	}
+	if lbmNo != "" {
+		q = q.Where("lbm_no = ?", lbmNo)
+	}
+	err := q.Order("check_date DESC, created_at DESC").Find(&checks).Error
+	return checks, err
+}
+
+func (r *qcRepository) UpdatePackagingCheck(ctx context.Context, check *domain.PackagingQualityCheck) error {
+	return r.db.WithContext(ctx).Save(check).Error
+}
+
+func (r *qcRepository) DeletePackagingCheck(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.PackagingQualityCheck{}, "id = ?", id).Error
+}
+
+// ─── Supplier Armada Check (CAS — QC-007) ────────────────────────────────────
+
+func (r *qcRepository) CreateArmadaCheck(ctx context.Context, check *domain.SupplierArmadaCheck) error {
+	return r.db.WithContext(ctx).Create(check).Error
+}
+
+func (r *qcRepository) GetArmadaCheckByID(ctx context.Context, id uuid.UUID) (*domain.SupplierArmadaCheck, error) {
+	var check domain.SupplierArmadaCheck
+	if err := r.db.WithContext(ctx).First(&check, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &check, nil
+}
+
+func (r *qcRepository) ListArmadaChecks(ctx context.Context, date string, lbmNo string) ([]domain.SupplierArmadaCheck, error) {
+	var checks []domain.SupplierArmadaCheck
+	q := r.db.WithContext(ctx).Model(&domain.SupplierArmadaCheck{})
+	if date != "" {
+		q = q.Where("check_date = ?", date)
+	}
+	if lbmNo != "" {
+		q = q.Where("lbm_no = ?", lbmNo)
+	}
+	err := q.Order("check_date DESC, created_at DESC").Find(&checks).Error
+	return checks, err
+}
+
+func (r *qcRepository) UpdateArmadaCheck(ctx context.Context, check *domain.SupplierArmadaCheck) error {
+	return r.db.WithContext(ctx).Save(check).Error
+}
+
+func (r *qcRepository) DeleteArmadaCheck(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.SupplierArmadaCheck{}, "id = ?", id).Error
+}
+
+// ─── Raw Material Incoming Check (PBD — QC-001) ──────────────────────────────
+
+func (r *qcRepository) CreateIncomingCheck(ctx context.Context, check *domain.RawMaterialIncomingCheck) error {
+	return r.db.WithContext(ctx).Create(check).Error
+}
+
+func (r *qcRepository) GetIncomingCheckByID(ctx context.Context, id uuid.UUID) (*domain.RawMaterialIncomingCheck, error) {
+	var check domain.RawMaterialIncomingCheck
+	if err := r.db.WithContext(ctx).First(&check, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &check, nil
+}
+
+func (r *qcRepository) ListIncomingChecks(ctx context.Context, date string, lbmNo string) ([]domain.RawMaterialIncomingCheck, error) {
+	var checks []domain.RawMaterialIncomingCheck
+	q := r.db.WithContext(ctx).Model(&domain.RawMaterialIncomingCheck{})
+	if date != "" {
+		q = q.Where("check_date = ?", date)
+	}
+	if lbmNo != "" {
+		q = q.Where("lbm_no = ?", lbmNo)
+	}
+	err := q.Order("check_date DESC, created_at DESC").Find(&checks).Error
+	return checks, err
+}
+
+func (r *qcRepository) UpdateIncomingCheck(ctx context.Context, check *domain.RawMaterialIncomingCheck) error {
+	return r.db.WithContext(ctx).Save(check).Error
+}
+
+func (r *qcRepository) DeleteIncomingCheck(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.RawMaterialIncomingCheck{}, "id = ?", id).Error
+}

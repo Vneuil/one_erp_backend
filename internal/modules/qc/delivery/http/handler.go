@@ -405,3 +405,282 @@ func (h *Handler) DeletePreOpCheck(c *fiber.Ctx) error {
 	}
 	return response.OK(c, "Catatan sarana pra-operasional berhasil dihapus", fiber.Map{"id": id})
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Packaging Quality Check (PBK — QC-003) Handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+func (h *Handler) ListPackagingChecks(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	month := c.Query("month")
+	lbmNo := c.Query("lbmNo")
+	checks, err := uc.ListPackagingChecks(c.Context(), month, lbmNo)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Data pemeriksaan mutu bahan kemas berhasil dimuat", checks)
+}
+
+func (h *Handler) GetPackagingCheck(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	check, err := uc.GetPackagingCheckByID(c.Context(), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Detail pemeriksaan kemasan berhasil dimuat", check)
+}
+
+func (h *Handler) CreatePackagingCheck(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var dto application.CreatePackagingCheckDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload pemeriksaan kemasan tidak valid")
+	}
+	if dto.QCName == "" {
+		claims := middleware.CurrentUser(c)
+		if claims != nil {
+			dto.QCName = claims.Email
+		} else {
+			dto.QCName = "Staff QC"
+		}
+	}
+	check, err := uc.CreatePackagingCheck(c.Context(), dto)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Pemeriksaan mutu bahan kemas berhasil disimpan", check)
+}
+
+func (h *Handler) UpdatePackagingCheck(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var dto application.UpdatePackagingCheckDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload update kemasan tidak valid")
+	}
+	check, err := uc.UpdatePackagingCheck(c.Context(), id, dto)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Pemeriksaan mutu bahan kemas berhasil diperbarui", check)
+}
+
+func (h *Handler) DeletePackagingCheck(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	if err := uc.DeletePackagingCheck(c.Context(), id); err != nil {
+		return err
+	}
+	return response.OK(c, "Pemeriksaan kemasan berhasil dihapus", fiber.Map{"id": id})
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Supplier Armada Check (CAS — QC-007) Handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+func (h *Handler) ListArmadaChecks(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	date := c.Query("date")
+	lbmNo := c.Query("lbmNo")
+	checks, err := uc.ListArmadaChecks(c.Context(), date, lbmNo)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Data checklist armada supplier berhasil dimuat", checks)
+}
+
+func (h *Handler) GetArmadaCheck(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	check, err := uc.GetArmadaCheckByID(c.Context(), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Detail checklist armada berhasil dimuat", check)
+}
+
+func (h *Handler) CreateArmadaCheck(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var dto application.CreateArmadaCheckDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload checklist armada tidak valid")
+	}
+	if dto.QCName == "" {
+		claims := middleware.CurrentUser(c)
+		if claims != nil {
+			dto.QCName = claims.Email
+		} else {
+			dto.QCName = "Staff QC"
+		}
+	}
+	check, err := uc.CreateArmadaCheck(c.Context(), dto)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Checklist armada supplier berhasil disimpan", check)
+}
+
+func (h *Handler) UpdateArmadaCheck(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var dto application.UpdateArmadaCheckDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload update checklist armada tidak valid")
+	}
+	check, err := uc.UpdateArmadaCheck(c.Context(), id, dto)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Checklist armada supplier berhasil diperbarui", check)
+}
+
+func (h *Handler) DeleteArmadaCheck(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	if err := uc.DeleteArmadaCheck(c.Context(), id); err != nil {
+		return err
+	}
+	return response.OK(c, "Checklist armada berhasil dihapus", fiber.Map{"id": id})
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Raw Material Incoming Check (PBD — QC-001) Handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+func (h *Handler) ListIncomingChecks(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	date := c.Query("date")
+	lbmNo := c.Query("lbmNo")
+	checks, err := uc.ListIncomingChecks(c.Context(), date, lbmNo)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Data pemeriksaan bahan datang berhasil dimuat", checks)
+}
+
+func (h *Handler) GetIncomingCheck(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	check, err := uc.GetIncomingCheckByID(c.Context(), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Detail pemeriksaan bahan datang berhasil dimuat", check)
+}
+
+func (h *Handler) CreateIncomingCheck(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var dto application.CreateIncomingCheckDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload pemeriksaan bahan datang tidak valid")
+	}
+	if dto.QCName == "" {
+		claims := middleware.CurrentUser(c)
+		if claims != nil {
+			dto.QCName = claims.Email
+		} else {
+			dto.QCName = "Staff QC"
+		}
+	}
+	check, err := uc.CreateIncomingCheck(c.Context(), dto)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Pemeriksaan bahan datang berhasil disimpan", check)
+}
+
+func (h *Handler) UpdateIncomingCheck(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var dto application.UpdateIncomingCheckDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload update pemeriksaan bahan datang tidak valid")
+	}
+	check, err := uc.UpdateIncomingCheck(c.Context(), id, dto)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Pemeriksaan bahan datang berhasil diperbarui", check)
+}
+
+func (h *Handler) DeleteIncomingCheck(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	if err := uc.DeleteIncomingCheck(c.Context(), id); err != nil {
+		return err
+	}
+	return response.OK(c, "Pemeriksaan bahan datang berhasil dihapus", fiber.Map{"id": id})
+}

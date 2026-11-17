@@ -36,4 +36,25 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	preop.Get("/", h.ListPreOpChecks)
 	preop.Post("/", h.CreatePreOpCheck)
 	preop.Delete("/:id", h.DeletePreOpCheck)
+
+	packaging := qc.Group("/packaging")
+	packaging.Get("/", h.ListPackagingChecks)
+	packaging.Post("/", h.CreatePackagingCheck)
+	packaging.Get("/:id", h.GetPackagingCheck)
+	packaging.Put("/:id", h.UpdatePackagingCheck)
+	packaging.Delete("/:id", h.DeletePackagingCheck)
+
+	armada := qc.Group("/armada")
+	armada.Get("/", h.ListArmadaChecks)
+	armada.Post("/", h.CreateArmadaCheck)
+	armada.Get("/:id", h.GetArmadaCheck)
+	armada.Put("/:id", h.UpdateArmadaCheck)
+	armada.Delete("/:id", h.DeleteArmadaCheck)
+
+	incoming := qc.Group("/incoming")
+	incoming.Get("/", h.ListIncomingChecks)
+	incoming.Post("/", h.CreateIncomingCheck)
+	incoming.Get("/:id", h.GetIncomingCheck)
+	incoming.Put("/:id", h.UpdateIncomingCheck)
+	incoming.Delete("/:id", h.DeleteIncomingCheck)
 }

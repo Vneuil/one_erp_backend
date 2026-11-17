@@ -161,3 +161,279 @@ type CreatePreOpCheckDTO struct {
 	InspectorName      string   `json:"inspectorName" validate:"required"`
 	SupervisorName     string   `json:"supervisorName,omitempty"`
 }
+
+// ─── PBK (Packaging Quality Check) DTOs ──────────────────────────────────────
+
+type CreatePackagingCheckDTO struct {
+	CheckMonth      string     `json:"checkMonth" validate:"required"` // YYYY-MM
+	GoodsReceiptID  *uuid.UUID `json:"goodsReceiptId,omitempty"`
+	LBMNo           string     `json:"lbmNo,omitempty"`
+	CheckDate       string     `json:"checkDate" validate:"required"`
+	SupplierID      *uuid.UUID `json:"supplierId,omitempty"`
+	SupplierName    string     `json:"supplierName" validate:"required"`
+	ItemName        string     `json:"itemName" validate:"required"`
+	ItemCode        string     `json:"itemCode,omitempty"`
+	MaterialType    string     `json:"materialType" validate:"required"` // plastik, kardus, jerigen, pallet_plastik, pallet_kayu
+	BaseColor       string     `json:"baseColor,omitempty"`
+	Dimension       string     `json:"dimension,omitempty"`
+	TotalQty        int        `json:"totalQty" validate:"required,min=1"`
+	SampleQty       int        `json:"sampleQty" validate:"required,min=1"`
+	PassedQty       int        `json:"passedQty"`
+	PassedCondition string     `json:"passedCondition,omitempty"`
+	FailedQty       int        `json:"failedQty"`
+	FailedCondition string     `json:"failedCondition,omitempty"`
+	QCName          string     `json:"qcName,omitempty"`
+	QAName          string     `json:"qaName,omitempty"`
+	Notes           string     `json:"notes,omitempty"`
+}
+
+type UpdatePackagingCheckDTO struct {
+	CheckMonth      string     `json:"checkMonth,omitempty"`
+	GoodsReceiptID  *uuid.UUID `json:"goodsReceiptId,omitempty"`
+	LBMNo           string     `json:"lbmNo,omitempty"`
+	CheckDate       string     `json:"checkDate,omitempty"`
+	SupplierID      *uuid.UUID `json:"supplierId,omitempty"`
+	SupplierName    string     `json:"supplierName,omitempty"`
+	ItemName        string     `json:"itemName,omitempty"`
+	ItemCode        string     `json:"itemCode,omitempty"`
+	MaterialType    string     `json:"materialType,omitempty"`
+	BaseColor       string     `json:"baseColor,omitempty"`
+	Dimension       string     `json:"dimension,omitempty"`
+	TotalQty        int        `json:"totalQty,omitempty"`
+	SampleQty       int        `json:"sampleQty,omitempty"`
+	PassedQty       int        `json:"passedQty"`
+	PassedCondition string     `json:"passedCondition,omitempty"`
+	FailedQty       int        `json:"failedQty"`
+	FailedCondition string     `json:"failedCondition,omitempty"`
+	QCName          string     `json:"qcName,omitempty"`
+	QAName          string     `json:"qaName,omitempty"`
+	Notes           string     `json:"notes,omitempty"`
+}
+
+type PackagingCheckResponseDTO struct {
+	ID              uuid.UUID  `json:"id"`
+	CheckMonth      string     `json:"checkMonth"`
+	GoodsReceiptID  *uuid.UUID `json:"goodsReceiptId,omitempty"`
+	LBMNo           string     `json:"lbmNo,omitempty"`
+	CheckDate       string     `json:"checkDate"`
+	SupplierID      *uuid.UUID `json:"supplierId,omitempty"`
+	SupplierName    string     `json:"supplierName"`
+	ItemName        string     `json:"itemName"`
+	ItemCode        string     `json:"itemCode,omitempty"`
+	MaterialType    string     `json:"materialType"`
+	BaseColor       string     `json:"baseColor,omitempty"`
+	Dimension       string     `json:"dimension,omitempty"`
+	TotalQty        int        `json:"totalQty"`
+	SampleQty       int        `json:"sampleQty"`
+	PassedQty       int        `json:"passedQty"`
+	PassedCondition string     `json:"passedCondition,omitempty"`
+	FailedQty       int        `json:"failedQty"`
+	FailedCondition string     `json:"failedCondition,omitempty"`
+	OverallStatus   string     `json:"overallStatus"`
+	QCName          string     `json:"qcName,omitempty"`
+	QCDate          *time.Time `json:"qcDate,omitempty"`
+	QAName          string     `json:"qaName,omitempty"`
+	QADate          *time.Time `json:"qaDate,omitempty"`
+	Notes           string     `json:"notes,omitempty"`
+	CreatedAt       time.Time  `json:"createdAt"`
+	UpdatedAt       time.Time  `json:"updatedAt"`
+}
+
+// ─── CAS (Supplier Armada Check) DTOs ────────────────────────────────────────
+
+type CreateArmadaCheckDTO struct {
+	GoodsReceiptID    *uuid.UUID `json:"goodsReceiptId,omitempty"`
+	LBMNo             string     `json:"lbmNo,omitempty"`
+	CheckDate         string     `json:"checkDate" validate:"required"`
+	IDNumber          string     `json:"idNumber,omitempty"`
+	DriverName        string     `json:"driverName" validate:"required"`
+	BirthPlace        string     `json:"birthPlace,omitempty"`
+	BirthDate         string     `json:"birthDate,omitempty"`
+	Gender            string     `json:"gender,omitempty"`
+	Address           string     `json:"address,omitempty"`
+	Religion          string     `json:"religion,omitempty"`
+	MaritalStatus     string     `json:"maritalStatus,omitempty"`
+	IDExpiry          string     `json:"idExpiry,omitempty"`
+	CompanyOrigin     string     `json:"companyOrigin,omitempty"`
+	CargoDesc         string     `json:"cargoDesc,omitempty"`
+	LicensePlate      string     `json:"licensePlate,omitempty"`
+	VehicleType       string     `json:"vehicleType,omitempty"`
+	CabinSafe         bool       `json:"cabinSafe"`
+	UndercarriageSafe bool       `json:"undercarriageSafe"`
+	CargoAreaSafe     bool       `json:"cargoAreaSafe"`
+	FloorClean        bool       `json:"floorClean"`
+	WallRightClean    bool       `json:"wallRightClean"`
+	WallLeftClean     bool       `json:"wallLeftClean"`
+	CeilingClean      bool       `json:"ceilingClean"`
+	DoorClean         bool       `json:"doorClean"`
+	QCName            string     `json:"qcName,omitempty"`
+	QAName            string     `json:"qaName,omitempty"`
+	Notes             string     `json:"notes,omitempty"`
+}
+
+type UpdateArmadaCheckDTO struct {
+	GoodsReceiptID    *uuid.UUID `json:"goodsReceiptId,omitempty"`
+	LBMNo             string     `json:"lbmNo,omitempty"`
+	CheckDate         string     `json:"checkDate,omitempty"`
+	IDNumber          string     `json:"idNumber,omitempty"`
+	DriverName        string     `json:"driverName,omitempty"`
+	BirthPlace        string     `json:"birthPlace,omitempty"`
+	BirthDate         string     `json:"birthDate,omitempty"`
+	Gender            string     `json:"gender,omitempty"`
+	Address           string     `json:"address,omitempty"`
+	Religion          string     `json:"religion,omitempty"`
+	MaritalStatus     string     `json:"maritalStatus,omitempty"`
+	IDExpiry          string     `json:"idExpiry,omitempty"`
+	CompanyOrigin     string     `json:"companyOrigin,omitempty"`
+	CargoDesc         string     `json:"cargoDesc,omitempty"`
+	LicensePlate      string     `json:"licensePlate,omitempty"`
+	VehicleType       string     `json:"vehicleType,omitempty"`
+	CabinSafe         bool       `json:"cabinSafe"`
+	UndercarriageSafe bool       `json:"undercarriageSafe"`
+	CargoAreaSafe     bool       `json:"cargoAreaSafe"`
+	FloorClean        bool       `json:"floorClean"`
+	WallRightClean    bool       `json:"wallRightClean"`
+	WallLeftClean     bool       `json:"wallLeftClean"`
+	CeilingClean      bool       `json:"ceilingClean"`
+	DoorClean         bool       `json:"doorClean"`
+	QCName            string     `json:"qcName,omitempty"`
+	QAName            string     `json:"qaName,omitempty"`
+	Notes             string     `json:"notes,omitempty"`
+}
+
+type ArmadaCheckResponseDTO struct {
+	ID                uuid.UUID  `json:"id"`
+	GoodsReceiptID    *uuid.UUID `json:"goodsReceiptId,omitempty"`
+	LBMNo             string     `json:"lbmNo,omitempty"`
+	CheckDate         string     `json:"checkDate"`
+	IDNumber          string     `json:"idNumber,omitempty"`
+	DriverName        string     `json:"driverName"`
+	BirthPlace        string     `json:"birthPlace,omitempty"`
+	BirthDate         string     `json:"birthDate,omitempty"`
+	Gender            string     `json:"gender,omitempty"`
+	Address           string     `json:"address,omitempty"`
+	Religion          string     `json:"religion,omitempty"`
+	MaritalStatus     string     `json:"maritalStatus,omitempty"`
+	IDExpiry          string     `json:"idExpiry,omitempty"`
+	CompanyOrigin     string     `json:"companyOrigin,omitempty"`
+	CargoDesc         string     `json:"cargoDesc,omitempty"`
+	LicensePlate      string     `json:"licensePlate,omitempty"`
+	VehicleType       string     `json:"vehicleType,omitempty"`
+	CabinSafe         bool       `json:"cabinSafe"`
+	UndercarriageSafe bool       `json:"undercarriageSafe"`
+	CargoAreaSafe     bool       `json:"cargoAreaSafe"`
+	FloorClean        bool       `json:"floorClean"`
+	WallRightClean    bool       `json:"wallRightClean"`
+	WallLeftClean     bool       `json:"wallLeftClean"`
+	CeilingClean      bool       `json:"ceilingClean"`
+	DoorClean         bool       `json:"doorClean"`
+	OverallStatus     string     `json:"overallStatus"`
+	QCName            string     `json:"qcName,omitempty"`
+	QCDate            *time.Time `json:"qcDate,omitempty"`
+	QAName            string     `json:"qaName,omitempty"`
+	QADate            *time.Time `json:"qaDate,omitempty"`
+	Notes             string     `json:"notes,omitempty"`
+	CreatedAt         time.Time  `json:"createdAt"`
+	UpdatedAt         time.Time  `json:"updatedAt"`
+}
+
+// ─── PBD (Raw Material Incoming Check) DTOs ─────────────────────────────────
+
+type CreateIncomingCheckDTO struct {
+	GoodsReceiptID     *uuid.UUID `json:"goodsReceiptId,omitempty"`
+	LBMNo              string     `json:"lbmNo,omitempty"`
+	CheckDate          string     `json:"checkDate" validate:"required"` // YYYY-MM-DD
+	CheckMonth         string     `json:"checkMonth,omitempty"`          // YYYY-MM
+	SupplierID         *uuid.UUID `json:"supplierId,omitempty"`
+	SupplierName       string     `json:"supplierName" validate:"required"`
+	DeliveryNoteNo     string     `json:"deliveryNoteNo,omitempty"`
+	PONo               string     `json:"poNo,omitempty"`
+	ProductName        string     `json:"productName" validate:"required"`
+	BatchNo            string     `json:"batchNo,omitempty"`
+	TotalBags          int        `json:"totalBags"`
+	SampleBags         int        `json:"sampleBags"`
+	GrossWeight        float64    `json:"grossWeight"`
+	NetWeight          float64    `json:"netWeight"`
+	AcceptedWeight     float64    `json:"acceptedWeight"`
+	RejectedWeight     float64    `json:"rejectedWeight"`
+	SugarCondition     string     `json:"sugarCondition" validate:"required"`
+	ColorAppearance    string     `json:"colorAppearance,omitempty"`
+	AromaFlavor        string     `json:"aromaFlavor,omitempty"`
+	ForeignMatterClean bool       `json:"foreignMatterClean"`
+	PackagingCondition string     `json:"packagingCondition,omitempty"`
+	MoistureContent    *float64   `json:"moistureContent,omitempty"`
+	BrixValue          *float64   `json:"brixValue,omitempty"`
+	MeshSize           string     `json:"meshSize,omitempty"`
+	RecommendedAction  string     `json:"recommendedAction,omitempty"`
+	QCName             string     `json:"qcName,omitempty"`
+	QAName             string     `json:"qaName,omitempty"`
+	Notes              string     `json:"notes,omitempty"`
+}
+
+type UpdateIncomingCheckDTO struct {
+	GoodsReceiptID     *uuid.UUID `json:"goodsReceiptId,omitempty"`
+	LBMNo              string     `json:"lbmNo,omitempty"`
+	CheckDate          string     `json:"checkDate,omitempty"`
+	CheckMonth         string     `json:"checkMonth,omitempty"`
+	SupplierID         *uuid.UUID `json:"supplierId,omitempty"`
+	SupplierName       string     `json:"supplierName,omitempty"`
+	DeliveryNoteNo     string     `json:"deliveryNoteNo,omitempty"`
+	PONo               string     `json:"poNo,omitempty"`
+	ProductName        string     `json:"productName,omitempty"`
+	BatchNo            string     `json:"batchNo,omitempty"`
+	TotalBags          int        `json:"totalBags,omitempty"`
+	SampleBags         int        `json:"sampleBags,omitempty"`
+	GrossWeight        float64    `json:"grossWeight,omitempty"`
+	NetWeight          float64    `json:"netWeight,omitempty"`
+	AcceptedWeight     float64    `json:"acceptedWeight,omitempty"`
+	RejectedWeight     float64    `json:"rejectedWeight,omitempty"`
+	SugarCondition     string     `json:"sugarCondition,omitempty"`
+	ColorAppearance    string     `json:"colorAppearance,omitempty"`
+	AromaFlavor        string     `json:"aromaFlavor,omitempty"`
+	ForeignMatterClean bool       `json:"foreignMatterClean"`
+	PackagingCondition string     `json:"packagingCondition,omitempty"`
+	MoistureContent    *float64   `json:"moistureContent,omitempty"`
+	BrixValue          *float64   `json:"brixValue,omitempty"`
+	MeshSize           string     `json:"meshSize,omitempty"`
+	RecommendedAction  string     `json:"recommendedAction,omitempty"`
+	QCName             string     `json:"qcName,omitempty"`
+	QAName             string     `json:"qaName,omitempty"`
+	Notes              string     `json:"notes,omitempty"`
+}
+
+type IncomingCheckResponseDTO struct {
+	ID                 uuid.UUID  `json:"id"`
+	GoodsReceiptID     *uuid.UUID `json:"goodsReceiptId,omitempty"`
+	LBMNo              string     `json:"lbmNo,omitempty"`
+	CheckDate          string     `json:"checkDate"`
+	CheckMonth         string     `json:"checkMonth"`
+	SupplierID         *uuid.UUID `json:"supplierId,omitempty"`
+	SupplierName       string     `json:"supplierName"`
+	DeliveryNoteNo     string     `json:"deliveryNoteNo,omitempty"`
+	PONo               string     `json:"poNo,omitempty"`
+	ProductName        string     `json:"productName"`
+	BatchNo            string     `json:"batchNo,omitempty"`
+	TotalBags          int        `json:"totalBags"`
+	SampleBags         int        `json:"sampleBags"`
+	GrossWeight        float64    `json:"grossWeight"`
+	NetWeight          float64    `json:"netWeight"`
+	AcceptedWeight     float64    `json:"acceptedWeight"`
+	RejectedWeight     float64    `json:"rejectedWeight"`
+	SugarCondition     string     `json:"sugarCondition"`
+	ColorAppearance    string     `json:"colorAppearance,omitempty"`
+	AromaFlavor        string     `json:"aromaFlavor,omitempty"`
+	ForeignMatterClean bool       `json:"foreignMatterClean"`
+	PackagingCondition string     `json:"packagingCondition,omitempty"`
+	MoistureContent    *float64   `json:"moistureContent,omitempty"`
+	BrixValue          *float64   `json:"brixValue,omitempty"`
+	MeshSize           string     `json:"meshSize,omitempty"`
+	RecommendedAction  string     `json:"recommendedAction,omitempty"`
+	OverallStatus      string     `json:"overallStatus"`
+	QCName             string     `json:"qcName,omitempty"`
+	QCDate             *time.Time `json:"qcDate,omitempty"`
+	QAName             string     `json:"qaName,omitempty"`
+	QADate             *time.Time `json:"qaDate,omitempty"`
+	Notes              string     `json:"notes,omitempty"`
+	CreatedAt          time.Time  `json:"createdAt"`
+	UpdatedAt          time.Time  `json:"updatedAt"`
+}
