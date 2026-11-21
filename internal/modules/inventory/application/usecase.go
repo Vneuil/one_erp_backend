@@ -56,13 +56,27 @@ type InventoryUseCase interface {
 	ListStockDocuments(ctx context.Context, docType, from, to string) ([]StockDocumentResponseDTO, error)
 	VoidStockDocument(ctx context.Context, id uuid.UUID, reason string) (*StockDocumentResponseDTO, error)
 
+	// Raw material warehouse stock entries (Form Stok Gudang Bahan Baku — GDG-002-SBB)
+	GetLBMInboundContext(ctx context.Context, goodsReceiptID uuid.UUID) (*LBMInboundContextDTO, error)
+	CreateRawMaterialStockEntry(ctx context.Context, dto CreateRawMaterialStockDTO) (*RawMaterialStockResponseDTO, error)
+	UpdateRawMaterialStockEntry(ctx context.Context, id uuid.UUID, dto UpdateRawMaterialStockDTO) (*RawMaterialStockResponseDTO, error)
+	PostRawMaterialStockEntry(ctx context.Context, id uuid.UUID, dto PostRawMaterialStockDTO) (*RawMaterialStockResponseDTO, error)
+	ReleaseQuarantine(ctx context.Context, id uuid.UUID, dto ReleaseQuarantineDTO) (*RawMaterialStockResponseDTO, error)
+	VoidRawMaterialStockEntry(ctx context.Context, id uuid.UUID, reason string) (*RawMaterialStockResponseDTO, error)
+	DeleteRawMaterialStockEntry(ctx context.Context, id uuid.UUID) error
+	GetRawMaterialStockEntry(ctx context.Context, id uuid.UUID) (*RawMaterialStockResponseDTO, error)
+	ListRawMaterialStockEntries(ctx context.Context, f domain.RawMaterialStockFilter) ([]RawMaterialStockResponseDTO, error)
+	ListAvailableRawMaterialLots(ctx context.Context, productID, warehouseID *uuid.UUID) ([]RawMaterialStockResponseDTO, error)
+	GetRawMaterialStockSummary(ctx context.Context, warehouseID *uuid.UUID) (*RawMaterialStockSummaryDTO, error)
+
 	SeedInitialData(ctx context.Context) error
 }
 
 type inventoryUseCase struct {
-	repo        domain.InventoryRepository
-	productRepo productDomain.ProductRepository
-	ledger      financeApp.LedgerPoster // optional: posts write-offs of expired stock
+	repo          domain.InventoryRepository
+	productRepo   productDomain.ProductRepository
+	ledger        financeApp.LedgerPoster // optional: posts write-offs of expired stock
+	inboundReader InboundReader           // optional: reads LBM & 3 QC forms for SBB put-away
 }
 
 // Option customises optional collaborators.
@@ -71,6 +85,11 @@ type Option func(*inventoryUseCase)
 // WithLedger posts write-offs to the general ledger.
 func WithLedger(l financeApp.LedgerPoster) Option {
 	return func(uc *inventoryUseCase) { uc.ledger = l }
+}
+
+// WithInboundReader supplies read-only access to LBM & QC checks for Form Stok Gudang Bahan Baku.
+func WithInboundReader(r InboundReader) Option {
+	return func(uc *inventoryUseCase) { uc.inboundReader = r }
 }
 
 func NewInventoryUseCase(repo domain.InventoryRepository, productRepo productDomain.ProductRepository, opts ...Option) InventoryUseCase {

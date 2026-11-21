@@ -48,7 +48,8 @@ func (h *Handler) resolve(c *fiber.Ctx) (application.InventoryUseCase, error) {
 	repo := infrastructure.NewInventoryRepository(tenantDB)
 	productRepo := productInfra.NewProductRepository(tenantDB)
 	ledger := financeApp.NewLedgerPoster(financeInfra.NewFinanceRepository(tenantDB))
-	return application.NewInventoryUseCase(repo, productRepo, application.WithLedger(ledger)), nil
+	inboundReader := infrastructure.NewInboundReader(tenantDB)
+	return application.NewInventoryUseCase(repo, productRepo, application.WithLedger(ledger), application.WithInboundReader(inboundReader)), nil
 }
 
 // ctx returns the request context with the active Tenant ID (see

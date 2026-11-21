@@ -272,12 +272,40 @@ type ManufacturingRepository interface {
 	CreateRequisition(ctx context.Context, req *MaterialRequisition) error
 	GetRequisitionByID(ctx context.Context, id uuid.UUID) (*MaterialRequisition, error)
 	ListRequisitions(ctx context.Context, reqType string, status string) ([]MaterialRequisition, error)
+	UpdateRequisition(ctx context.Context, req *MaterialRequisition) error
+	UpdateRequisitionLine(ctx context.Context, line *MaterialRequisitionLine) error
 	UpdateRequisitionStatus(ctx context.Context, id uuid.UUID, status string, issuedBy string) error
+	CountRequisitionsByPrefix(ctx context.Context, prefix string) (int64, error)
+
+	// LBB (Laporan Permintaan Bahan Baku — GDG-013-LBB)
+	CreateLBBReport(ctx context.Context, rep *RawMaterialRequestReport) error
+	GetLBBReportByID(ctx context.Context, id uuid.UUID) (*RawMaterialRequestReport, error)
+	ListLBBReports(ctx context.Context, requisitionID *uuid.UUID, variantType, status string) ([]RawMaterialRequestReport, error)
+	UpdateLBBReport(ctx context.Context, rep *RawMaterialRequestReport) error
+	ReplaceLBBBagEntries(ctx context.Context, reportID uuid.UUID, entries []RawMaterialRequestBagEntry) error
+	DeleteLBBReport(ctx context.Context, id uuid.UUID) error
+	CountLBBReportsByPrefix(ctx context.Context, prefix string) (int64, error)
 
 	// Oven Logs (LHO)
 	CreateOvenLog(ctx context.Context, log *OvenProductionLog) error
 	GetOvenLogByID(ctx context.Context, id uuid.UUID) (*OvenProductionLog, error)
 	ListOvenLogs(ctx context.Context, date string, ovenNumber string) ([]OvenProductionLog, error)
+
+	// LHP (Laporan Hasil Produksi — PRO-002-LHP)
+	CreateLHP(ctx context.Context, r *ProductionOutputReport) error
+	GetLHPByID(ctx context.Context, id uuid.UUID) (*ProductionOutputReport, error)
+	ListLHP(ctx context.Context, orderID *uuid.UUID, batchNo, status string) ([]ProductionOutputReport, error)
+	UpdateLHP(ctx context.Context, r *ProductionOutputReport) error
+	DeleteLHP(ctx context.Context, id uuid.UUID) error
+	CountLHPByPrefix(ctx context.Context, prefix string) (int64, error)
+
+	// LST (Laporan Serah Terima — GDG-009-LST)
+	CreateLST(ctx context.Context, r *HandoverReport) error
+	GetLSTByID(ctx context.Context, id uuid.UUID) (*HandoverReport, error)
+	ListLST(ctx context.Context, lhpID *uuid.UUID, batchNo, status string) ([]HandoverReport, error)
+	UpdateLST(ctx context.Context, r *HandoverReport) error
+	DeleteLST(ctx context.Context, id uuid.UUID) error
+	CountLSTByPrefix(ctx context.Context, prefix string) (int64, error)
 }
 
 // BatchGenealogy tracks relationship between raw material / input batches and FG output batch
@@ -308,18 +336,31 @@ const (
 // MaterialRequisition tracks requisition of raw materials, packaging, and liquid sugar (BPB, PBPK, LPC)
 type MaterialRequisition struct {
 	types.BaseEntity
-	RequestNo         string                      `gorm:"type:varchar(50);uniqueIndex;not null" json:"requestNo"`
-	RequisitionType   string                      `gorm:"type:varchar(30);not null;index" json:"requisitionType"`
-	ProductionOrderID *uuid.UUID                  `gorm:"type:uuid;index" json:"productionOrderId,omitempty"`
-	OrderNumber       string                      `gorm:"type:varchar(50)" json:"orderNumber,omitempty"`
-	RequestDate       string                      `gorm:"type:varchar(10);not null;index" json:"requestDate"`
-	Department        string                      `gorm:"type:varchar(100);not null" json:"department"`
-	RequestedBy       string                      `gorm:"type:varchar(150);not null" json:"requestedBy"`
-	IssuedBy          string                      `gorm:"type:varchar(150)" json:"issuedBy,omitempty"`
-	Status            string                      `gorm:"type:varchar(30);not null;default:'submitted'" json:"status"` // draft, submitted, issued, completed, cancelled
-	Notes             string                      `gorm:"type:text" json:"notes,omitempty"`
-	Lines             []MaterialRequisitionLine   `gorm:"foreignKey:RequisitionID" json:"lines,omitempty"`
-	DispensingItems   []LiquidSugarDispensingItem `gorm:"foreignKey:RequisitionID" json:"dispensingItems,omitempty"`
+	TenantID            *uuid.UUID                  `gorm:"type:uuid;index" json:"tenantId,omitempty"`
+	RequestNo           string                      `gorm:"type:varchar(50);uniqueIndex;not null" json:"requestNo"`
+	DocumentCode        string                      `gorm:"type:varchar(30);default:'GDG-011-BPB'" json:"documentCode"`
+	RequisitionType     string                      `gorm:"type:varchar(30);not null;index" json:"requisitionType"`
+	MaterialCategory    string                      `gorm:"type:varchar(30);default:'GSKN'" json:"materialCategory"`     // GSKN, GCKN, NVCO
+	FairtradeStatus     string                      `gorm:"type:varchar(30);default:'Fairtrade'" json:"fairtradeStatus"` // Fairtrade, Non-Fairtrade
+	WarehouseID         *uuid.UUID                  `gorm:"type:uuid;index" json:"warehouseId,omitempty"`
+	ProductionOrderID   *uuid.UUID                  `gorm:"type:uuid;index" json:"productionOrderId,omitempty"`
+	OrderNumber         string                      `gorm:"type:varchar(50)" json:"orderNumber,omitempty"`
+	RequestDate         string                      `gorm:"type:varchar(10);not null;index" json:"requestDate"`
+	Department          string                      `gorm:"type:varchar(100);not null" json:"department"`
+	RequestedBy         string                      `gorm:"type:varchar(150);not null" json:"requestedBy"`
+	IssuedBy            string                      `gorm:"type:varchar(150)" json:"issuedBy,omitempty"`
+	IssuedAt            *time.Time                  `json:"issuedAt,omitempty"`
+	WarehouseApprovedBy string                      `gorm:"type:varchar(150)" json:"warehouseApprovedBy,omitempty"`
+	WarehouseApprovedAt *time.Time                  `json:"warehouseApprovedAt,omitempty"`
+	EnteredProductionBy string                      `gorm:"type:varchar(150)" json:"enteredProductionBy,omitempty"`
+	EnteredProductionAt *time.Time                  `json:"enteredProductionAt,omitempty"`
+	RejectionReason     string                      `gorm:"type:varchar(255)" json:"rejectionReason,omitempty"`
+	Status              string                      `gorm:"type:varchar(30);not null;default:'submitted';index" json:"status"` // draft, submitted, lbb_recorded, warehouse_approved, in_production, completed, rejected
+	StockDeducted       bool                        `gorm:"not null;default:false" json:"stockDeducted"`
+	Notes               string                      `gorm:"type:text" json:"notes,omitempty"`
+	Lines               []MaterialRequisitionLine   `gorm:"foreignKey:RequisitionID" json:"lines,omitempty"`
+	DispensingItems     []LiquidSugarDispensingItem `gorm:"foreignKey:RequisitionID" json:"dispensingItems,omitempty"`
+	LBBReports          []RawMaterialRequestReport  `gorm:"foreignKey:RequisitionID" json:"lbbReports,omitempty"`
 }
 
 func (MaterialRequisition) TableName() string { return "manufacturing_material_requisitions" }
@@ -327,17 +368,28 @@ func (MaterialRequisition) TableName() string { return "manufacturing_material_r
 // MaterialRequisitionLine represents single item requested
 type MaterialRequisitionLine struct {
 	types.BaseEntity
-	RequisitionID     uuid.UUID `gorm:"type:uuid;not null;index" json:"requisitionId"`
-	ProductID         uuid.UUID `gorm:"type:uuid;not null;index" json:"productId"`
-	ProductName       string    `gorm:"type:varchar(255);not null" json:"productName"`
-	BatchNo           string    `gorm:"type:varchar(50)" json:"batchNo,omitempty"`
-	QuantityRequested float64   `gorm:"type:decimal(15,3);not null" json:"quantityRequested"`
-	QuantityIssued    float64   `gorm:"type:decimal(15,3);default:0" json:"quantityIssued"`
-	QuantityUsed      float64   `gorm:"type:decimal(15,3);default:0" json:"quantityUsed"`
-	QuantityReject    float64   `gorm:"type:decimal(15,3);default:0" json:"quantityReject"`
-	QuantityReturned  float64   `gorm:"type:decimal(15,3);default:0" json:"quantityReturned"`
-	UoM               string    `gorm:"type:varchar(20);not null" json:"uom"`
-	Notes             string    `gorm:"type:varchar(255)" json:"notes,omitempty"`
+	RequisitionID         uuid.UUID  `gorm:"type:uuid;not null;index" json:"requisitionId"`
+	RawMaterialStockID    *uuid.UUID `gorm:"type:uuid;index" json:"rawMaterialStockId,omitempty"` // FK ke inventory_raw_material_stock_entries (SBB)
+	SBBEntryNo            string     `gorm:"type:varchar(50)" json:"sbbEntryNo,omitempty"`
+	ProductID             uuid.UUID  `gorm:"type:uuid;not null;index" json:"productId"`
+	ProductSKU            string     `gorm:"type:varchar(50)" json:"productSku,omitempty"`
+	ProductName           string     `gorm:"type:varchar(255);not null" json:"productName"`
+	BatchNo               string     `gorm:"type:varchar(100);index" json:"batchNo,omitempty"`
+	SupplierName          string     `gorm:"type:varchar(255)" json:"supplierName,omitempty"`
+	ArrivalDateRef        string     `gorm:"type:varchar(20)" json:"arrivalDateRef,omitempty"` // mis. Tgl. kedatangan pada kolom Keterangan BPB
+	RackLocation          string     `gorm:"type:varchar(60)" json:"rackLocation,omitempty"`
+	PalletNo              string     `gorm:"type:varchar(60)" json:"palletNo,omitempty"`
+	MoistureContent       *float64   `gorm:"type:decimal(6,2)" json:"moistureContent,omitempty"`
+	QuantityRequested     float64    `gorm:"type:decimal(15,3);not null" json:"quantityRequested"`
+	QuantityIssued        float64    `gorm:"type:decimal(15,3);default:0" json:"quantityIssued"`
+	QuantityUsed          float64    `gorm:"type:decimal(15,3);default:0" json:"quantityUsed"`
+	QuantityReject        float64    `gorm:"type:decimal(15,3);default:0" json:"quantityReject"`
+	QuantityReturned      float64    `gorm:"type:decimal(15,3);default:0" json:"quantityReturned"`
+	PackageCountRequested int        `gorm:"default:0" json:"packageCountRequested"`
+	PackageCountIssued    int        `gorm:"default:0" json:"packageCountIssued"`
+	PackageUnit           string     `gorm:"type:varchar(30);default:'Sak'" json:"packageUnit,omitempty"`
+	UoM                   string     `gorm:"type:varchar(20);not null" json:"uom"`
+	Notes                 string     `gorm:"type:varchar(255)" json:"notes,omitempty"`
 }
 
 func (MaterialRequisitionLine) TableName() string { return "manufacturing_material_requisition_lines" }

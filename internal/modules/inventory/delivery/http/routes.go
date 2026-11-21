@@ -52,4 +52,17 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	documents.Get("/", h.ListStockDocuments)
 	documents.Get("/:id", h.GetStockDocument)
 	documents.Post("/:id/void", h.VoidStockDocument)
+
+	rawStock := inventory.Group("/raw-material-stock")
+	rawStock.Get("/", h.ListRawMaterialStockEntries)
+	rawStock.Get("/summary", h.GetRawMaterialStockSummary)
+	rawStock.Get("/available", h.ListAvailableRawMaterialLots)
+	rawStock.Get("/lbm-context/:goodsReceiptId", h.GetLBMInboundContext)
+	rawStock.Post("/", h.CreateRawMaterialStockEntry)
+	rawStock.Get("/:id", h.GetRawMaterialStockEntry)
+	rawStock.Put("/:id", h.UpdateRawMaterialStockEntry)
+	rawStock.Post("/:id/post", h.PostRawMaterialStockEntry)
+	rawStock.Post("/:id/release", h.ReleaseRawMaterialQuarantine)
+	rawStock.Post("/:id/void", h.VoidRawMaterialStockEntry)
+	rawStock.Delete("/:id", h.DeleteRawMaterialStockEntry)
 }

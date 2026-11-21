@@ -40,9 +40,15 @@ func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager
 				&domain.BatchGenealogy{},
 				&domain.MaterialRequisition{},
 				&domain.MaterialRequisitionLine{},
+				&domain.RawMaterialRequestReport{},
+				&domain.RawMaterialRequestBagEntry{},
 				&domain.LiquidSugarDispensingItem{},
 				&domain.OvenProductionLog{},
 				&domain.OvenCycleLine{},
+				&domain.ProductionOutputReport{},
+				&domain.ProductionOutputReportItem{},
+				&domain.HandoverReport{},
+				&domain.HandoverReportItem{},
 			)
 		},
 		Seed: func(tenantDB *gorm.DB) error {

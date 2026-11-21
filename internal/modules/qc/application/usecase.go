@@ -58,6 +58,83 @@ type QCUseCase interface {
 	ListIncomingChecks(ctx context.Context, date string, lbmNo string) ([]IncomingCheckResponseDTO, error)
 	UpdateIncomingCheck(ctx context.Context, id uuid.UUID, dto UpdateIncomingCheckDTO) (*IncomingCheckResponseDTO, error)
 	DeleteIncomingCheck(ctx context.Context, id uuid.UUID) error
+
+	// Sieving Monitoring (MNA — Form QC-009-MNA.01)
+	CreateSievingLog(ctx context.Context, dto CreateSievingLogDTO) (*domain.SievingMonitoringLog, error)
+	GetSievingLogByID(ctx context.Context, id uuid.UUID) (*domain.SievingMonitoringLog, error)
+	ListSievingLogs(ctx context.Context, month string, category string, machineNo string, batchNo string) ([]domain.SievingMonitoringLog, error)
+	UpdateSievingLog(ctx context.Context, id uuid.UUID, dto UpdateSievingLogDTO) (*domain.SievingMonitoringLog, error)
+	DeleteSievingLog(ctx context.Context, id uuid.UUID) error
+
+	// Magnet Trap (CMT — Form QC-038-CMT)
+	CreateMagnetTrapLog(ctx context.Context, dto CreateMagnetTrapLogDTO) (*domain.MagnetTrapLog, error)
+	GetMagnetTrapLogByID(ctx context.Context, id uuid.UUID) (*domain.MagnetTrapLog, error)
+	ListMagnetTrapLogs(ctx context.Context, month string, room string, machineNo string) ([]domain.MagnetTrapLog, error)
+	UpdateMagnetTrapLog(ctx context.Context, id uuid.UUID, dto UpdateMagnetTrapLogDTO) (*domain.MagnetTrapLog, error)
+	DeleteMagnetTrapLog(ctx context.Context, id uuid.UUID) error
+
+	// Mesh Bolt Monitoring (MNM — Form QC-010-MNM.01)
+	CreateMeshBoltLog(ctx context.Context, dto CreateMeshBoltLogDTO) (*domain.MeshBoltMonitoringLog, error)
+	GetMeshBoltLogByID(ctx context.Context, id uuid.UUID) (*domain.MeshBoltMonitoringLog, error)
+	ListMeshBoltLogs(ctx context.Context, month string, room string, machineNo string) ([]domain.MeshBoltMonitoringLog, error)
+	UpdateMeshBoltLog(ctx context.Context, id uuid.UUID, dto UpdateMeshBoltLogDTO) (*domain.MeshBoltMonitoringLog, error)
+	DeleteMeshBoltLog(ctx context.Context, id uuid.UUID) error
+
+	// Oven Monitoring (MNO — Form QC-012-MNO.05)
+	CreateOvenLog(ctx context.Context, dto CreateOvenLogDTO) (*domain.OvenMonitoringLog, error)
+	GetOvenLogByID(ctx context.Context, id uuid.UUID) (*domain.OvenMonitoringLog, error)
+	ListOvenLogs(ctx context.Context, month string, ovenNo string, batchNo string) ([]domain.OvenMonitoringLog, error)
+	UpdateOvenLog(ctx context.Context, id uuid.UUID, dto UpdateOvenLogDTO) (*domain.OvenMonitoringLog, error)
+	DeleteOvenLog(ctx context.Context, id uuid.UUID) error
+
+	// Needle Monitoring (MNJ — Form QC-011-MNJ.01)
+	CreateNeedleLog(ctx context.Context, dto CreateNeedleLogDTO) (*domain.NeedleMonitoringLog, error)
+	GetNeedleLogByID(ctx context.Context, id uuid.UUID) (*domain.NeedleMonitoringLog, error)
+	ListNeedleLogs(ctx context.Context, month string, machineNo string) ([]domain.NeedleMonitoringLog, error)
+	UpdateNeedleLog(ctx context.Context, id uuid.UUID, dto UpdateNeedleLogDTO) (*domain.NeedleMonitoringLog, error)
+	DeleteNeedleLog(ctx context.Context, id uuid.UUID) error
+
+	// Scissor Monitoring (MNG — Form QC-011-MNJ.01 Sheet MNG)
+	CreateScissorLog(ctx context.Context, dto CreateScissorLogDTO) (*domain.ScissorMonitoringLog, error)
+	GetScissorLogByID(ctx context.Context, id uuid.UUID) (*domain.ScissorMonitoringLog, error)
+	ListScissorLogs(ctx context.Context, month string, location string) ([]domain.ScissorMonitoringLog, error)
+	UpdateScissorLog(ctx context.Context, id uuid.UUID, dto UpdateScissorLogDTO) (*domain.ScissorMonitoringLog, error)
+	DeleteScissorLog(ctx context.Context, id uuid.UUID) error
+
+	// Metal Detector Cleaning (CPP — Form CPP)
+	CreateMetalCleaningLog(ctx context.Context, dto CreateMetalCleaningLogDTO) (*domain.MetalDetectorCleaningLog, error)
+	GetMetalCleaningLogByID(ctx context.Context, id uuid.UUID) (*domain.MetalDetectorCleaningLog, error)
+	ListMetalCleaningLogs(ctx context.Context, month string, machineNo string, location string) ([]domain.MetalDetectorCleaningLog, error)
+	UpdateMetalCleaningLog(ctx context.Context, id uuid.UUID, dto UpdateMetalCleaningLogDTO) (*domain.MetalDetectorCleaningLog, error)
+	DeleteMetalCleaningLog(ctx context.Context, id uuid.UUID) error
+
+	// Metal Detector Verification (VMD — Form QC-017-VMD)
+	CreateMetalVerificationLog(ctx context.Context, dto CreateMetalVerificationLogDTO) (*domain.MetalDetectorVerificationLog, error)
+	GetMetalVerificationLogByID(ctx context.Context, id uuid.UUID) (*domain.MetalDetectorVerificationLog, error)
+	ListMetalVerificationLogs(ctx context.Context, month string, productType string, location string) ([]domain.MetalDetectorVerificationLog, error)
+	UpdateMetalVerificationLog(ctx context.Context, id uuid.UUID, dto UpdateMetalVerificationLogDTO) (*domain.MetalDetectorVerificationLog, error)
+	DeleteMetalVerificationLog(ctx context.Context, id uuid.UUID) error
+
+	// Finished Goods Inspection (PJD — Form QC-004-PJD.05 Rev 05)
+	CreateFinishedGoodsLog(ctx context.Context, dto CreateFinishedGoodsDTO) (*domain.FinishedGoodsInspectionLog, error)
+	GetFinishedGoodsLogByID(ctx context.Context, id uuid.UUID) (*domain.FinishedGoodsInspectionLog, error)
+	ListFinishedGoodsLogs(ctx context.Context, month string, productName string, batchNo string, decision string) ([]domain.FinishedGoodsInspectionLog, error)
+	UpdateFinishedGoodsLog(ctx context.Context, id uuid.UUID, dto UpdateFinishedGoodsDTO) (*domain.FinishedGoodsInspectionLog, error)
+	DeleteFinishedGoodsLog(ctx context.Context, id uuid.UUID) error
+
+	// Packaging Label Check (PLK — Form QC-018-PLK)
+	CreatePackagingLabelCheck(ctx context.Context, dto CreatePackagingLabelCheckDTO) (*domain.PackagingLabelCheckLog, error)
+	GetPackagingLabelCheckByID(ctx context.Context, id uuid.UUID) (*domain.PackagingLabelCheckLog, error)
+	ListPackagingLabelChecks(ctx context.Context, month string, batchNo string, decision string) ([]domain.PackagingLabelCheckLog, error)
+	UpdatePackagingLabelCheck(ctx context.Context, id uuid.UUID, dto UpdatePackagingLabelCheckDTO) (*domain.PackagingLabelCheckLog, error)
+	DeletePackagingLabelCheck(ctx context.Context, id uuid.UUID) error
+
+	// Container Checklist (CCO — Form QC-008-CCO.02)
+	CreateContainerChecklist(ctx context.Context, dto CreateContainerChecklistDTO) (*domain.ContainerChecklistLog, error)
+	GetContainerChecklistByID(ctx context.Context, id uuid.UUID) (*domain.ContainerChecklistLog, error)
+	ListContainerChecklists(ctx context.Context, month string, containerNo string, destination string, decision string) ([]domain.ContainerChecklistLog, error)
+	UpdateContainerChecklist(ctx context.Context, id uuid.UUID, dto UpdateContainerChecklistDTO) (*domain.ContainerChecklistLog, error)
+	DeleteContainerChecklist(ctx context.Context, id uuid.UUID) error
 }
 
 type qcUseCase struct {

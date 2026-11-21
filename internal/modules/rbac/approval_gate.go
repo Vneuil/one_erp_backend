@@ -51,6 +51,7 @@ var approvalRules = []approvalRule{
 	rule(http.MethodPost, `/api/v1/inventory/batches/`+idSeg+`/write-off`, "inventory"),
 	rule(http.MethodPost, `/api/v1/inventory/opname/`+idSeg+`/finalize`, "inventory"),
 	rule(http.MethodPost, `/api/v1/inventory/documents/`+idSeg+`/void`, "inventory"),
+	rule(http.MethodPost, `/api/v1/inventory/raw-material-stock/`+idSeg+`/(release|void)`, "inventory"),
 	rule(http.MethodPost, `/api/v1/finance/journal-entries/`+idSeg+`/(post|reverse)`, "finance"),
 	rule(http.MethodPost, `/api/v1/finance/petty-cash/`+idSeg+`/transactions/`+idSeg+`/(approve|reject)`, "finance"),
 	rule(http.MethodPost, `/api/v1/finance/capital/drawings`, "finance"),
@@ -59,6 +60,7 @@ var approvalRules = []approvalRule{
 	rule(http.MethodPost, `/api/v1/pos/transactions/`+idSeg+`/(void|refund)`, "pos"),
 	rule(http.MethodPost, `/api/v1/manufacturing/production-orders/`+idSeg+`/release`, "manufacturing"),
 	rule(http.MethodPost, `/api/v1/manufacturing/production-orders/`+idSeg+`/(step-logs|batches)/`+idSeg+`/void`, "manufacturing"),
+	rule(http.MethodPost, `/api/v1/manufacturing/requisitions/`+idSeg+`/(acc-gudang|reject)`, "manufacturing"),
 	rule(http.MethodPost, `/api/v1/recruitment/candidates/`+idSeg+`/hire`, "recruitment"),
 }
 

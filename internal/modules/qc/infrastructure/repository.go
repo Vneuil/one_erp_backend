@@ -329,3 +329,443 @@ func (r *qcRepository) UpdateIncomingCheck(ctx context.Context, check *domain.Ra
 func (r *qcRepository) DeleteIncomingCheck(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Delete(&domain.RawMaterialIncomingCheck{}, "id = ?", id).Error
 }
+
+// ─── Sieving Monitoring (MNA — Form QC-009-MNA.01) ───────────────────────────
+
+func (r *qcRepository) CreateSievingLog(ctx context.Context, log *domain.SievingMonitoringLog) error {
+	return r.db.WithContext(ctx).Create(log).Error
+}
+
+func (r *qcRepository) GetSievingLogByID(ctx context.Context, id uuid.UUID) (*domain.SievingMonitoringLog, error) {
+	var item domain.SievingMonitoringLog
+	if err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *qcRepository) ListSievingLogs(ctx context.Context, month string, category string, machineNo string, batchNo string) ([]domain.SievingMonitoringLog, error) {
+	var logs []domain.SievingMonitoringLog
+	q := r.db.WithContext(ctx).Model(&domain.SievingMonitoringLog{})
+	if month != "" {
+		q = q.Where("check_month = ?", month)
+	}
+	if category != "" {
+		q = q.Where("category = ?", category)
+	}
+	if machineNo != "" {
+		q = q.Where("machine_no = ?", machineNo)
+	}
+	if batchNo != "" {
+		q = q.Where("batch_no = ?", batchNo)
+	}
+	err := q.Order("check_date DESC, created_at DESC").Find(&logs).Error
+	return logs, err
+}
+
+func (r *qcRepository) UpdateSievingLog(ctx context.Context, log *domain.SievingMonitoringLog) error {
+	return r.db.WithContext(ctx).Save(log).Error
+}
+
+func (r *qcRepository) DeleteSievingLog(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.SievingMonitoringLog{}, "id = ?", id).Error
+}
+
+// ─── Magnet Trap (CMT — Form QC-038-CMT) ────────────────────────────────────
+
+func (r *qcRepository) CreateMagnetTrapLog(ctx context.Context, log *domain.MagnetTrapLog) error {
+	return r.db.WithContext(ctx).Create(log).Error
+}
+
+func (r *qcRepository) GetMagnetTrapLogByID(ctx context.Context, id uuid.UUID) (*domain.MagnetTrapLog, error) {
+	var item domain.MagnetTrapLog
+	if err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *qcRepository) ListMagnetTrapLogs(ctx context.Context, month string, room string, machineNo string) ([]domain.MagnetTrapLog, error) {
+	var logs []domain.MagnetTrapLog
+	q := r.db.WithContext(ctx).Model(&domain.MagnetTrapLog{})
+	if month != "" {
+		q = q.Where("check_month = ?", month)
+	}
+	if room != "" {
+		q = q.Where("room = ?", room)
+	}
+	if machineNo != "" {
+		q = q.Where("machine_no = ?", machineNo)
+	}
+	err := q.Order("check_date DESC, created_at DESC").Find(&logs).Error
+	return logs, err
+}
+
+func (r *qcRepository) UpdateMagnetTrapLog(ctx context.Context, log *domain.MagnetTrapLog) error {
+	return r.db.WithContext(ctx).Save(log).Error
+}
+
+func (r *qcRepository) DeleteMagnetTrapLog(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.MagnetTrapLog{}, "id = ?", id).Error
+}
+
+// ─── Mesh Bolt Monitoring (MNM — Form QC-010-MNM.01) ─────────────────────────
+
+func (r *qcRepository) CreateMeshBoltLog(ctx context.Context, log *domain.MeshBoltMonitoringLog) error {
+	return r.db.WithContext(ctx).Create(log).Error
+}
+
+func (r *qcRepository) GetMeshBoltLogByID(ctx context.Context, id uuid.UUID) (*domain.MeshBoltMonitoringLog, error) {
+	var item domain.MeshBoltMonitoringLog
+	if err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *qcRepository) ListMeshBoltLogs(ctx context.Context, month string, room string, machineNo string) ([]domain.MeshBoltMonitoringLog, error) {
+	var logs []domain.MeshBoltMonitoringLog
+	q := r.db.WithContext(ctx).Model(&domain.MeshBoltMonitoringLog{})
+	if month != "" {
+		q = q.Where("check_month = ?", month)
+	}
+	if room != "" {
+		q = q.Where("room = ?", room)
+	}
+	if machineNo != "" {
+		q = q.Where("machine_no = ?", machineNo)
+	}
+	err := q.Order("check_date DESC, created_at DESC").Find(&logs).Error
+	return logs, err
+}
+
+func (r *qcRepository) UpdateMeshBoltLog(ctx context.Context, log *domain.MeshBoltMonitoringLog) error {
+	return r.db.WithContext(ctx).Save(log).Error
+}
+
+func (r *qcRepository) DeleteMeshBoltLog(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.MeshBoltMonitoringLog{}, "id = ?", id).Error
+}
+
+// ─── Oven Monitoring (MNO — Form QC-012-MNO.05) ──────────────────────────────
+
+func (r *qcRepository) CreateOvenLog(ctx context.Context, log *domain.OvenMonitoringLog) error {
+	return r.db.WithContext(ctx).Create(log).Error
+}
+
+func (r *qcRepository) GetOvenLogByID(ctx context.Context, id uuid.UUID) (*domain.OvenMonitoringLog, error) {
+	var item domain.OvenMonitoringLog
+	if err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *qcRepository) ListOvenLogs(ctx context.Context, month string, ovenNo string, batchNo string) ([]domain.OvenMonitoringLog, error) {
+	var logs []domain.OvenMonitoringLog
+	q := r.db.WithContext(ctx).Model(&domain.OvenMonitoringLog{})
+	if month != "" {
+		q = q.Where("check_month = ?", month)
+	}
+	if ovenNo != "" {
+		q = q.Where("oven_no = ?", ovenNo)
+	}
+	if batchNo != "" {
+		q = q.Where("batch_no = ?", batchNo)
+	}
+	err := q.Order("check_date DESC, created_at DESC").Find(&logs).Error
+	return logs, err
+}
+
+func (r *qcRepository) UpdateOvenLog(ctx context.Context, log *domain.OvenMonitoringLog) error {
+	return r.db.WithContext(ctx).Save(log).Error
+}
+
+func (r *qcRepository) DeleteOvenLog(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.OvenMonitoringLog{}, "id = ?", id).Error
+}
+
+// ─── Needle Monitoring (MNJ — Form QC-011-MNJ.01) ────────────────────────────
+
+func (r *qcRepository) CreateNeedleLog(ctx context.Context, log *domain.NeedleMonitoringLog) error {
+	return r.db.WithContext(ctx).Create(log).Error
+}
+
+func (r *qcRepository) GetNeedleLogByID(ctx context.Context, id uuid.UUID) (*domain.NeedleMonitoringLog, error) {
+	var item domain.NeedleMonitoringLog
+	if err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *qcRepository) ListNeedleLogs(ctx context.Context, month string, machineNo string) ([]domain.NeedleMonitoringLog, error) {
+	var logs []domain.NeedleMonitoringLog
+	q := r.db.WithContext(ctx).Model(&domain.NeedleMonitoringLog{})
+	if month != "" {
+		q = q.Where("check_month = ?", month)
+	}
+	if machineNo != "" {
+		q = q.Where("sewing_machine_no = ?", machineNo)
+	}
+	err := q.Order("check_date DESC, created_at DESC").Find(&logs).Error
+	return logs, err
+}
+
+func (r *qcRepository) UpdateNeedleLog(ctx context.Context, log *domain.NeedleMonitoringLog) error {
+	return r.db.WithContext(ctx).Save(log).Error
+}
+
+func (r *qcRepository) DeleteNeedleLog(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.NeedleMonitoringLog{}, "id = ?", id).Error
+}
+
+// ─── Scissor Monitoring (MNG — Form QC-011-MNJ.01 Sheet MNG) ─────────────────
+
+func (r *qcRepository) CreateScissorLog(ctx context.Context, log *domain.ScissorMonitoringLog) error {
+	return r.db.WithContext(ctx).Create(log).Error
+}
+
+func (r *qcRepository) GetScissorLogByID(ctx context.Context, id uuid.UUID) (*domain.ScissorMonitoringLog, error) {
+	var item domain.ScissorMonitoringLog
+	if err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *qcRepository) ListScissorLogs(ctx context.Context, month string, location string) ([]domain.ScissorMonitoringLog, error) {
+	var logs []domain.ScissorMonitoringLog
+	q := r.db.WithContext(ctx).Model(&domain.ScissorMonitoringLog{})
+	if month != "" {
+		q = q.Where("check_month = ?", month)
+	}
+	if location != "" {
+		q = q.Where("location = ?", location)
+	}
+	err := q.Order("check_date DESC, created_at DESC").Find(&logs).Error
+	return logs, err
+}
+
+func (r *qcRepository) UpdateScissorLog(ctx context.Context, log *domain.ScissorMonitoringLog) error {
+	return r.db.WithContext(ctx).Save(log).Error
+}
+
+func (r *qcRepository) DeleteScissorLog(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.ScissorMonitoringLog{}, "id = ?", id).Error
+}
+
+// ─── Metal Detector Cleaning (CPP — Form CPP) ────────────────────────────────
+
+func (r *qcRepository) CreateMetalCleaningLog(ctx context.Context, log *domain.MetalDetectorCleaningLog) error {
+	return r.db.WithContext(ctx).Create(log).Error
+}
+
+func (r *qcRepository) GetMetalCleaningLogByID(ctx context.Context, id uuid.UUID) (*domain.MetalDetectorCleaningLog, error) {
+	var item domain.MetalDetectorCleaningLog
+	if err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *qcRepository) ListMetalCleaningLogs(ctx context.Context, month string, machineNo string, location string) ([]domain.MetalDetectorCleaningLog, error) {
+	var logs []domain.MetalDetectorCleaningLog
+	q := r.db.WithContext(ctx).Model(&domain.MetalDetectorCleaningLog{})
+	if month != "" {
+		q = q.Where("check_month = ?", month)
+	}
+	if machineNo != "" {
+		q = q.Where("machine_no = ?", machineNo)
+	}
+	if location != "" {
+		q = q.Where("location = ?", location)
+	}
+	err := q.Order("check_date DESC, created_at DESC").Find(&logs).Error
+	return logs, err
+}
+
+func (r *qcRepository) UpdateMetalCleaningLog(ctx context.Context, log *domain.MetalDetectorCleaningLog) error {
+	return r.db.WithContext(ctx).Save(log).Error
+}
+
+func (r *qcRepository) DeleteMetalCleaningLog(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.MetalDetectorCleaningLog{}, "id = ?", id).Error
+}
+
+// ─── Metal Detector Verification (VMD — Form QC-017-VMD) ─────────────────────
+
+func (r *qcRepository) CreateMetalVerificationLog(ctx context.Context, log *domain.MetalDetectorVerificationLog) error {
+	return r.db.WithContext(ctx).Create(log).Error
+}
+
+func (r *qcRepository) GetMetalVerificationLogByID(ctx context.Context, id uuid.UUID) (*domain.MetalDetectorVerificationLog, error) {
+	var item domain.MetalDetectorVerificationLog
+	if err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *qcRepository) ListMetalVerificationLogs(ctx context.Context, month string, productType string, location string) ([]domain.MetalDetectorVerificationLog, error) {
+	var logs []domain.MetalDetectorVerificationLog
+	q := r.db.WithContext(ctx).Model(&domain.MetalDetectorVerificationLog{})
+	if month != "" {
+		q = q.Where("check_month = ?", month)
+	}
+	if productType != "" {
+		q = q.Where("product_type = ?", productType)
+	}
+	if location != "" {
+		q = q.Where("location = ?", location)
+	}
+	err := q.Order("check_date DESC, monitoring_round ASC, created_at DESC").Find(&logs).Error
+	return logs, err
+}
+
+func (r *qcRepository) UpdateMetalVerificationLog(ctx context.Context, log *domain.MetalDetectorVerificationLog) error {
+	return r.db.WithContext(ctx).Save(log).Error
+}
+
+func (r *qcRepository) DeleteMetalVerificationLog(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.MetalDetectorVerificationLog{}, "id = ?", id).Error
+}
+
+// ─── Finished Goods Inspection (PJD — Form QC-004-PJD.05 Rev 05) ─────────────
+
+func (r *qcRepository) CreateFinishedGoodsLog(ctx context.Context, log *domain.FinishedGoodsInspectionLog) error {
+	return r.db.WithContext(ctx).Create(log).Error
+}
+
+func (r *qcRepository) GetFinishedGoodsLogByID(ctx context.Context, id uuid.UUID) (*domain.FinishedGoodsInspectionLog, error) {
+	var item domain.FinishedGoodsInspectionLog
+	if err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *qcRepository) ListFinishedGoodsLogs(ctx context.Context, month string, productName string, batchNo string, decision string) ([]domain.FinishedGoodsInspectionLog, error) {
+	var logs []domain.FinishedGoodsInspectionLog
+	q := r.db.WithContext(ctx).Model(&domain.FinishedGoodsInspectionLog{})
+	if month != "" {
+		q = q.Where("check_month = ?", month)
+	}
+	if productName != "" {
+		q = q.Where("product_name LIKE ?", "%"+productName+"%")
+	}
+	if batchNo != "" {
+		q = q.Where("batch_no LIKE ?", "%"+batchNo+"%")
+	}
+	if decision != "" {
+		q = q.Where("inspection_decision = ?", decision)
+	}
+	err := q.Order("check_date DESC, created_at DESC").Find(&logs).Error
+	return logs, err
+}
+
+func (r *qcRepository) UpdateFinishedGoodsLog(ctx context.Context, log *domain.FinishedGoodsInspectionLog) error {
+	return r.db.WithContext(ctx).Save(log).Error
+}
+
+func (r *qcRepository) DeleteFinishedGoodsLog(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.FinishedGoodsInspectionLog{}, "id = ?", id).Error
+}
+
+// ─── Packaging Label Check (PLK — Form QC-018-PLK) ───────────────────────────
+
+func (r *qcRepository) CreatePackagingLabelCheck(ctx context.Context, log *domain.PackagingLabelCheckLog) error {
+	return r.db.WithContext(ctx).Create(log).Error
+}
+
+func (r *qcRepository) GetPackagingLabelCheckByID(ctx context.Context, id uuid.UUID) (*domain.PackagingLabelCheckLog, error) {
+	var item domain.PackagingLabelCheckLog
+	if err := r.db.WithContext(ctx).Preload("Items").First(&item, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *qcRepository) ListPackagingLabelChecks(ctx context.Context, month string, batchNo string, decision string) ([]domain.PackagingLabelCheckLog, error) {
+	var logs []domain.PackagingLabelCheckLog
+	q := r.db.WithContext(ctx).Model(&domain.PackagingLabelCheckLog{}).Preload("Items")
+	if month != "" {
+		q = q.Where("check_month = ?", month)
+	}
+	if batchNo != "" {
+		q = q.Where("batch_no LIKE ? OR id IN (SELECT log_id FROM qc_packaging_label_check_items WHERE batch_no LIKE ?)", "%"+batchNo+"%", "%"+batchNo+"%")
+	}
+	if decision != "" {
+		q = q.Where("overall_decision = ?", decision)
+	}
+	err := q.Order("check_date DESC, created_at DESC").Find(&logs).Error
+	return logs, err
+}
+
+func (r *qcRepository) UpdatePackagingLabelCheck(ctx context.Context, log *domain.PackagingLabelCheckLog) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("log_id = ?", log.ID).Delete(&domain.PackagingLabelCheckItem{}).Error; err != nil {
+			return err
+		}
+		return tx.Save(log).Error
+	})
+}
+
+func (r *qcRepository) DeletePackagingLabelCheck(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("log_id = ?", id).Delete(&domain.PackagingLabelCheckItem{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&domain.PackagingLabelCheckLog{}, "id = ?", id).Error
+	})
+}
+
+// ─── Container Checklist (CCO — Form QC-008-CCO.02) ──────────────────────────
+
+func (r *qcRepository) CreateContainerChecklist(ctx context.Context, log *domain.ContainerChecklistLog) error {
+	return r.db.WithContext(ctx).Create(log).Error
+}
+
+func (r *qcRepository) GetContainerChecklistByID(ctx context.Context, id uuid.UUID) (*domain.ContainerChecklistLog, error) {
+	var item domain.ContainerChecklistLog
+	if err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *qcRepository) ListContainerChecklists(ctx context.Context, month string, containerNo string, destination string, decision string) ([]domain.ContainerChecklistLog, error) {
+	var logs []domain.ContainerChecklistLog
+	q := r.db.WithContext(ctx).Model(&domain.ContainerChecklistLog{})
+	if month != "" {
+		q = q.Where("check_month = ?", month)
+	}
+	if containerNo != "" {
+		q = q.Where("container_number LIKE ?", "%"+containerNo+"%")
+	}
+	if destination != "" {
+		q = q.Where("shipment_destination LIKE ?", "%"+destination+"%")
+	}
+	if decision != "" {
+		q = q.Where("overall_decision = ?", decision)
+	}
+	err := q.Order("check_date DESC, created_at DESC").Find(&logs).Error
+	return logs, err
+}
+
+func (r *qcRepository) UpdateContainerChecklist(ctx context.Context, log *domain.ContainerChecklistLog) error {
+	return r.db.WithContext(ctx).Save(log).Error
+}
+
+func (r *qcRepository) DeleteContainerChecklist(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.ContainerChecklistLog{}, "id = ?", id).Error
+}
+
+// ─── Helper Prefix Counter ───────────────────────────────────────────────────
+
+func (r *qcRepository) CountLogsByPrefix(ctx context.Context, tableName string, prefix string) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Table(tableName).Where("document_no LIKE ?", prefix+"%").Count(&count).Error
+	return count, err
+}
+

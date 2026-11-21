@@ -23,9 +23,13 @@ func TestApprovalModuleFor(t *testing.T) {
 		{http.MethodPost, "/api/v1/procurement/orders/" + id + "/reject", "procurement"},
 		{http.MethodPost, "/api/v1/procurement/requests/" + id + "/approve", "procurement"},
 		{http.MethodPost, "/api/v1/inventory/opname/" + id + "/finalize", "inventory"},
+		{http.MethodPost, "/api/v1/inventory/raw-material-stock/" + id + "/release", "inventory"},
+		{http.MethodPost, "/api/v1/inventory/raw-material-stock/" + id + "/void", "inventory"},
 		{http.MethodPost, "/api/v1/finance/journal-entries/" + id + "/post", "finance"},
 		{http.MethodPost, "/api/v1/finance/petty-cash/" + id + "/transactions/" + id + "/approve", "finance"},
 		{http.MethodPost, "/api/v1/manufacturing/production-orders/" + id + "/release", "manufacturing"},
+		{http.MethodPost, "/api/v1/manufacturing/requisitions/" + id + "/acc-gudang", "manufacturing"},
+		{http.MethodPost, "/api/v1/manufacturing/requisitions/" + id + "/reject", "manufacturing"},
 		{http.MethodPost, "/api/v1/recruitment/candidates/" + id + "/hire", "recruitment"},
 		{http.MethodPost, "/api/v1/leaves/" + id + "/approve/", "hrm"}, // trailing slash
 	}
@@ -40,6 +44,7 @@ func TestApprovalModuleFor(t *testing.T) {
 		{http.MethodGet, "/api/v1/leaves/" + id + "/approve"},             // wrong method
 		{http.MethodPost, "/api/v1/approval/requests/" + id + "/approve"}, // Approval Center has its own role match
 		{http.MethodPost, "/api/v1/sales/invoices/" + id + "/payments"},
+		{http.MethodPost, "/api/v1/inventory/raw-material-stock/" + id + "/post"},
 		{http.MethodPost, "/api/v1/leaves/" + id + "/approve/extra"},
 	}
 	for _, c := range notApproval {

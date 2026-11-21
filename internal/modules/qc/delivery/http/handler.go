@@ -699,3 +699,349 @@ func (h *Handler) TraceLot(c *fiber.Ctx) error {
 	return response.OK(c, "Lot trace retrieved successfully", res)
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Sieving Monitoring (MNA — Form QC-009-MNA.01) Handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+func (h *Handler) ListSievingLogs(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	month := c.Query("month")
+	category := c.Query("category")
+	machineNo := c.Query("machineNo")
+	batchNo := c.Query("batchNo")
+	list, err := uc.ListSievingLogs(c.Context(), month, category, machineNo, batchNo)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Daftar monitoring proses ayak berhasil diambil", list)
+}
+
+func (h *Handler) GetSievingLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	item, err := uc.GetSievingLogByID(c.Context(), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Data monitoring proses ayak berhasil diambil", item)
+}
+
+func (h *Handler) CreateSievingLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var dto application.CreateSievingLogDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload monitoring proses ayak tidak valid")
+	}
+	item, err := uc.CreateSievingLog(c.Context(), dto)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Monitoring proses ayak berhasil disimpan", item)
+}
+
+func (h *Handler) UpdateSievingLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var dto application.UpdateSievingLogDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload update monitoring proses ayak tidak valid")
+	}
+	item, err := uc.UpdateSievingLog(c.Context(), id, dto)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Monitoring proses ayak berhasil diperbarui", item)
+}
+
+func (h *Handler) DeleteSievingLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	if err := uc.DeleteSievingLog(c.Context(), id); err != nil {
+		return err
+	}
+	return response.OK(c, "Monitoring proses ayak berhasil dihapus", fiber.Map{"id": id})
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Magnet Trap (CMT — Form QC-038-CMT) Handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+func (h *Handler) ListMagnetTrapLogs(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	month := c.Query("month")
+	room := c.Query("room")
+	machineNo := c.Query("machineNo")
+	list, err := uc.ListMagnetTrapLogs(c.Context(), month, room, machineNo)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Daftar pemakaian magnet trap berhasil diambil", list)
+}
+
+func (h *Handler) GetMagnetTrapLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	item, err := uc.GetMagnetTrapLogByID(c.Context(), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Data pemakaian magnet trap berhasil diambil", item)
+}
+
+func (h *Handler) CreateMagnetTrapLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var dto application.CreateMagnetTrapLogDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload catatan magnet trap tidak valid")
+	}
+	item, err := uc.CreateMagnetTrapLog(c.Context(), dto)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Catatan pemakaian magnet trap berhasil disimpan", item)
+}
+
+func (h *Handler) UpdateMagnetTrapLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var dto application.UpdateMagnetTrapLogDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload update catatan magnet trap tidak valid")
+	}
+	item, err := uc.UpdateMagnetTrapLog(c.Context(), id, dto)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Catatan pemakaian magnet trap berhasil diperbarui", item)
+}
+
+func (h *Handler) DeleteMagnetTrapLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	if err := uc.DeleteMagnetTrapLog(c.Context(), id); err != nil {
+		return err
+	}
+	return response.OK(c, "Catatan magnet trap berhasil dihapus", fiber.Map{"id": id})
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mesh Bolt Monitoring (MNM — Form QC-010-MNM.01) Handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+func (h *Handler) ListMeshBoltLogs(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	month := c.Query("month")
+	room := c.Query("room")
+	machineNo := c.Query("machineNo")
+	list, err := uc.ListMeshBoltLogs(c.Context(), month, room, machineNo)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Daftar monitoring mur & baut berhasil diambil", list)
+}
+
+func (h *Handler) GetMeshBoltLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	item, err := uc.GetMeshBoltLogByID(c.Context(), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Data monitoring mur & baut berhasil diambil", item)
+}
+
+func (h *Handler) CreateMeshBoltLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var dto application.CreateMeshBoltLogDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload monitoring mur & baut tidak valid")
+	}
+	item, err := uc.CreateMeshBoltLog(c.Context(), dto)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Monitoring mur & baut berhasil disimpan", item)
+}
+
+func (h *Handler) UpdateMeshBoltLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var dto application.UpdateMeshBoltLogDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload update monitoring mur & baut tidak valid")
+	}
+	item, err := uc.UpdateMeshBoltLog(c.Context(), id, dto)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Monitoring mur & baut berhasil diperbarui", item)
+}
+
+func (h *Handler) DeleteMeshBoltLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	if err := uc.DeleteMeshBoltLog(c.Context(), id); err != nil {
+		return err
+	}
+	return response.OK(c, "Monitoring mur & baut berhasil dihapus", fiber.Map{"id": id})
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Oven Monitoring (MNO — Form QC-012-MNO.05) Handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+func (h *Handler) ListOvenLogs(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	month := c.Query("month")
+	ovenNo := c.Query("ovenNo")
+	batchNo := c.Query("batchNo")
+	list, err := uc.ListOvenLogs(c.Context(), month, ovenNo, batchNo)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Daftar monitoring proses oven berhasil diambil", list)
+}
+
+func (h *Handler) GetOvenLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	item, err := uc.GetOvenLogByID(c.Context(), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Data monitoring oven berhasil diambil", item)
+}
+
+func (h *Handler) CreateOvenLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var dto application.CreateOvenLogDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload monitoring proses oven tidak valid")
+	}
+	item, err := uc.CreateOvenLog(c.Context(), dto)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Monitoring proses oven berhasil disimpan", item)
+}
+
+func (h *Handler) UpdateOvenLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var dto application.UpdateOvenLogDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload update monitoring oven tidak valid")
+	}
+	item, err := uc.UpdateOvenLog(c.Context(), id, dto)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Monitoring proses oven berhasil diperbarui", item)
+}
+
+func (h *Handler) DeleteOvenLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	if err := uc.DeleteOvenLog(c.Context(), id); err != nil {
+		return err
+	}
+	return response.OK(c, "Monitoring proses oven berhasil dihapus", fiber.Map{"id": id})
+}
+
+

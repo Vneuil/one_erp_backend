@@ -301,6 +301,17 @@ type InventoryRepository interface {
 	UpdateOpname(ctx context.Context, o *StockOpname) error
 	UpdateOpnameLine(ctx context.Context, l *StockOpnameLine) error
 
+	// Raw material warehouse stock entries (Form Stok Gudang Bahan Baku — GDG-002-SBB)
+	CreateRawMaterialStockEntry(ctx context.Context, e *RawMaterialStockEntry) error
+	GetRawMaterialStockEntry(ctx context.Context, id uuid.UUID) (*RawMaterialStockEntry, error)
+	UpdateRawMaterialStockEntry(ctx context.Context, e *RawMaterialStockEntry) error
+	DeleteRawMaterialStockEntry(ctx context.Context, id uuid.UUID) error
+	ListRawMaterialStockEntries(ctx context.Context, f RawMaterialStockFilter) ([]RawMaterialStockEntry, error)
+	ListAvailableRawMaterialLots(ctx context.Context, productID, warehouseID *uuid.UUID) ([]RawMaterialStockEntry, error)
+	CountRawMaterialStockEntriesByPrefix(ctx context.Context, prefix string) (int64, error)
+	CreateRawMaterialStockLog(ctx context.Context, l *RawMaterialStockLog) error
+	ListRawMaterialStockLogs(ctx context.Context, entryID uuid.UUID) ([]RawMaterialStockLog, error)
+
 	// Transactional stock mutation used by transfers and opname finalization
 	WithTransaction(ctx context.Context, fn func(txRepo InventoryRepository) error) error
 }

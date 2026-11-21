@@ -269,16 +269,27 @@ func stepResponses(o *domain.ProductionOrder) []StepResponseDTO {
 // Requisitions (BPB, PBPK, LPC)
 
 type MaterialRequisitionLineDTO struct {
-	ProductID         uuid.UUID `json:"productId"`
-	ProductName       string    `json:"productName"`
-	BatchNo           string    `json:"batchNo,omitempty"`
-	QuantityRequested float64   `json:"quantityRequested"`
-	QuantityIssued    float64   `json:"quantityIssued"`
-	QuantityUsed      float64   `json:"quantityUsed"`
-	QuantityReject    float64   `json:"quantityReject"`
-	QuantityReturned  float64   `json:"quantityReturned"`
-	UoM               string    `json:"uom"`
-	Notes             string    `json:"notes,omitempty"`
+	RawMaterialStockID    *uuid.UUID `json:"rawMaterialStockId,omitempty"`
+	SBBEntryNo            string     `json:"sbbEntryNo,omitempty"`
+	ProductID             uuid.UUID  `json:"productId"`
+	ProductSKU            string     `json:"productSku,omitempty"`
+	ProductName           string     `json:"productName"`
+	BatchNo               string     `json:"batchNo,omitempty"`
+	SupplierName          string     `json:"supplierName,omitempty"`
+	ArrivalDateRef        string     `json:"arrivalDateRef,omitempty"`
+	RackLocation          string     `json:"rackLocation,omitempty"`
+	PalletNo              string     `json:"palletNo,omitempty"`
+	MoistureContent       *float64   `json:"moistureContent,omitempty"`
+	QuantityRequested     float64    `json:"quantityRequested"`
+	QuantityIssued        float64    `json:"quantityIssued"`
+	QuantityUsed          float64    `json:"quantityUsed"`
+	QuantityReject        float64    `json:"quantityReject"`
+	QuantityReturned      float64    `json:"quantityReturned"`
+	PackageCountRequested int        `json:"packageCountRequested,omitempty"`
+	PackageCountIssued    int        `json:"packageCountIssued,omitempty"`
+	PackageUnit           string     `json:"packageUnit,omitempty"`
+	UoM                   string     `json:"uom"`
+	Notes                 string     `json:"notes,omitempty"`
 }
 
 type LiquidSugarDispensingDTO struct {
@@ -293,6 +304,10 @@ type LiquidSugarDispensingDTO struct {
 
 type CreateMaterialRequisitionDTO struct {
 	RequisitionType   string                       `json:"requisitionType"`
+	DocumentCode      string                       `json:"documentCode,omitempty"`
+	MaterialCategory  string                       `json:"materialCategory,omitempty"` // GSKN, GCKN, NVCO
+	FairtradeStatus   string                       `json:"fairtradeStatus,omitempty"` // Fairtrade, Non-Fairtrade
+	WarehouseID       *uuid.UUID                   `json:"warehouseId,omitempty"`
 	ProductionOrderID *uuid.UUID                   `json:"productionOrderId,omitempty"`
 	OrderNumber       string                       `json:"orderNumber,omitempty"`
 	RequestDate       string                       `json:"requestDate"`
@@ -306,6 +321,71 @@ type CreateMaterialRequisitionDTO struct {
 type UpdateRequisitionStatusDTO struct {
 	Status   string `json:"status"`
 	IssuedBy string `json:"issuedBy,omitempty"`
+}
+
+type ApproveRequisitionByWarehouseDTO struct {
+	WarehouseApprovedBy string `json:"warehouseApprovedBy"`
+	Notes               string `json:"notes,omitempty"`
+}
+
+type EnterProductionDTO struct {
+	EnteredProductionBy string `json:"enteredProductionBy"`
+	Notes               string `json:"notes,omitempty"`
+}
+
+type RejectRequisitionDTO struct {
+	RejectionReason string `json:"rejectionReason"`
+}
+
+type CreateLBBBagEntryDTO struct {
+	RowNumber   int      `json:"rowNumber"`
+	ColumnGroup int      `json:"columnGroup,omitempty"`
+	LotCode     string   `json:"lotCode,omitempty"`
+	WeightValue *float64 `json:"weightValue,omitempty"`
+}
+
+type CreateLBBReportDTO struct {
+	RequisitionID      *uuid.UUID             `json:"requisitionId,omitempty"`
+	RequisitionLineID  *uuid.UUID             `json:"requisitionLineId,omitempty"`
+	BPBNo              string                 `json:"bpbNo,omitempty"`
+	RawMaterialStockID *uuid.UUID             `json:"rawMaterialStockId,omitempty"`
+	SBBEntryNo         string                 `json:"sbbEntryNo,omitempty"`
+	ProductionOrderID  *uuid.UUID             `json:"productionOrderId,omitempty"`
+	OrderNumber        string                 `json:"orderNumber,omitempty"`
+	ReportDate         string                 `json:"reportDate"`
+	VariantType        string                 `json:"variantType"` // GSKN | VCO
+	FairtradeStatus    string                 `json:"fairtradeStatus,omitempty"`
+	ProductID          uuid.UUID              `json:"productId"`
+	MaterialCode       string                 `json:"materialCode"`
+	ProductName        string                 `json:"productName"`
+	SupplierName       string                 `json:"supplierName,omitempty"`
+	CustomerName       string                 `json:"customerName,omitempty"`
+	MachineNo          string                 `json:"machineNo,omitempty"`
+	MeshSize           string                 `json:"meshSize,omitempty"`
+	UoM                string                 `json:"uom,omitempty"`
+	PlasticTarePerBag  float64                `json:"plasticTarePerBag,omitempty"`
+	OperatorRole       string                 `json:"operatorRole,omitempty"`
+	PreparedBy         string                 `json:"preparedBy,omitempty"`
+	PreparedDate       string                 `json:"preparedDate,omitempty"`
+	AcknowledgedBy     string                 `json:"acknowledgedBy,omitempty"`
+	AcknowledgedDate   string                 `json:"acknowledgedDate,omitempty"`
+	Notes              string                 `json:"notes,omitempty"`
+	BagEntries         []CreateLBBBagEntryDTO `json:"bagEntries,omitempty"`
+}
+
+type UpdateLBBReportDTO struct {
+	ReportDate        string                 `json:"reportDate,omitempty"`
+	CustomerName      string                 `json:"customerName,omitempty"`
+	MachineNo         string                 `json:"machineNo,omitempty"`
+	MeshSize          string                 `json:"meshSize,omitempty"`
+	PlasticTarePerBag *float64               `json:"plasticTarePerBag,omitempty"`
+	OperatorRole      string                 `json:"operatorRole,omitempty"`
+	PreparedBy        string                 `json:"preparedBy,omitempty"`
+	PreparedDate      string                 `json:"preparedDate,omitempty"`
+	AcknowledgedBy    string                 `json:"acknowledgedBy,omitempty"`
+	AcknowledgedDate  string                 `json:"acknowledgedDate,omitempty"`
+	Notes             string                 `json:"notes,omitempty"`
+	BagEntries        []CreateLBBBagEntryDTO `json:"bagEntries,omitempty"`
 }
 
 // Oven Logs (LHO)

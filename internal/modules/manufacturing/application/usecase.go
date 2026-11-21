@@ -47,11 +47,38 @@ type ManufacturingUseCase interface {
 	GetRequisitionByID(ctx context.Context, id uuid.UUID) (*domain.MaterialRequisition, error)
 	ListRequisitions(ctx context.Context, reqType string, status string) ([]domain.MaterialRequisition, error)
 	UpdateRequisitionStatus(ctx context.Context, id uuid.UUID, dto UpdateRequisitionStatusDTO) error
+	ApproveRequisitionByWarehouse(ctx context.Context, id uuid.UUID, dto ApproveRequisitionByWarehouseDTO) (*domain.MaterialRequisition, error)
+	EnterProductionFromRequisition(ctx context.Context, id uuid.UUID, dto EnterProductionDTO) (*domain.MaterialRequisition, error)
+	RejectRequisition(ctx context.Context, id uuid.UUID, dto RejectRequisitionDTO) (*domain.MaterialRequisition, error)
+
+	// LBB (Laporan Permintaan Bahan Baku — GDG-013-LBB)
+	CreateLBBReport(ctx context.Context, dto CreateLBBReportDTO) (*domain.RawMaterialRequestReport, error)
+	GetLBBReportByID(ctx context.Context, id uuid.UUID) (*domain.RawMaterialRequestReport, error)
+	ListLBBReports(ctx context.Context, requisitionID *uuid.UUID, variantType, status string) ([]domain.RawMaterialRequestReport, error)
+	UpdateLBBReport(ctx context.Context, id uuid.UUID, dto UpdateLBBReportDTO) (*domain.RawMaterialRequestReport, error)
+	DeleteLBBReport(ctx context.Context, id uuid.UUID) error
 
 	// Oven Logs (LHO)
 	CreateOvenLog(ctx context.Context, dto CreateOvenLogDTO) (*domain.OvenProductionLog, error)
 	GetOvenLogByID(ctx context.Context, id uuid.UUID) (*domain.OvenProductionLog, error)
 	ListOvenLogs(ctx context.Context, date string, ovenNumber string) ([]domain.OvenProductionLog, error)
+
+	// LHP (PRO-002-LHP)
+	CreateLHP(ctx context.Context, input CreateLHPInput) (*domain.ProductionOutputReport, error)
+	GetLHP(ctx context.Context, id uuid.UUID) (*domain.ProductionOutputReport, error)
+	ListLHP(ctx context.Context, orderID *uuid.UUID, batchNo, status string) ([]domain.ProductionOutputReport, error)
+	UpdateLHP(ctx context.Context, id uuid.UUID, input UpdateLHPInput) (*domain.ProductionOutputReport, error)
+	DeleteLHP(ctx context.Context, id uuid.UUID) error
+
+	// LST (GDG-009-LST)
+	CreateLST(ctx context.Context, input CreateLSTInput) (*domain.HandoverReport, error)
+	GetLST(ctx context.Context, id uuid.UUID) (*domain.HandoverReport, error)
+	ListLST(ctx context.Context, lhpID *uuid.UUID, batchNo, status string) ([]domain.HandoverReport, error)
+	UpdateLST(ctx context.Context, id uuid.UUID, input UpdateLSTInput) (*domain.HandoverReport, error)
+	VerifyLSTByQC(ctx context.Context, id uuid.UUID, qcName string) (*domain.HandoverReport, error)
+	AcceptLSTByWarehouse(ctx context.Context, id uuid.UUID, warehouseName string) (*domain.HandoverReport, error)
+	DeleteLST(ctx context.Context, id uuid.UUID) error
+	GenerateLSTFromLHP(ctx context.Context, lhpID uuid.UUID, createdBy string) (*domain.HandoverReport, error)
 
 	// Reports
 	DailyReport(ctx context.Context, from, to string) (*DailyReportDTO, error)
@@ -100,6 +127,9 @@ func NewManufacturingUseCase(repo domain.ManufacturingRepository, inventoryRepo 
 }
 
 func (uc *manufacturingUseCase) productInfo(ctx context.Context, id uuid.UUID) (sku, name string) {
+	if uc.productRepo == nil {
+		return "", ""
+	}
 	p, err := uc.productRepo.GetByID(ctx, id)
 	if err != nil || p == nil {
 		return "", ""
@@ -108,6 +138,9 @@ func (uc *manufacturingUseCase) productInfo(ctx context.Context, id uuid.UUID) (
 }
 
 func (uc *manufacturingUseCase) warehouseName(ctx context.Context, id uuid.UUID) string {
+	if uc.inventoryRepo == nil {
+		return ""
+	}
 	w, err := uc.inventoryRepo.GetWarehouseByID(ctx, id)
 	if err != nil || w == nil {
 		return ""
@@ -852,96 +885,8 @@ func (uc *manufacturingUseCase) GetBackwardTraceability(ctx context.Context, fgB
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Requisitions (BPB, PBPK, LPC) Implementation
+// Requisitions (BPB, PBPK, LPC) and LBB are implemented in bpb_lbb.go
 // ─────────────────────────────────────────────────────────────────────────────
-
-func (uc *manufacturingUseCase) CreateRequisition(ctx context.Context, dto CreateMaterialRequisitionDTO) (*domain.MaterialRequisition, error) {
-	prefix := "REQ"
-	switch dto.RequisitionType {
-	case domain.RequisitionTypeRawMaterial:
-		prefix = "BPB"
-	case domain.RequisitionTypePackaging:
-		prefix = "BPK"
-	case domain.RequisitionTypeLiquidSugar:
-		prefix = "LPC"
-	}
-	reqNo := fmt.Sprintf("%s-%s-%04d", prefix, time.Now().Format("200601"), time.Now().Unix()%10000)
-
-	lines := make([]domain.MaterialRequisitionLine, 0, len(dto.Lines))
-	for _, l := range dto.Lines {
-		lines = append(lines, domain.MaterialRequisitionLine{
-			ProductID:         l.ProductID,
-			ProductName:       l.ProductName,
-			BatchNo:           l.BatchNo,
-			QuantityRequested: l.QuantityRequested,
-			QuantityIssued:    l.QuantityIssued,
-			QuantityUsed:      l.QuantityUsed,
-			QuantityReject:    l.QuantityReject,
-			QuantityReturned:  l.QuantityReturned,
-			UoM:               l.UoM,
-			Notes:             l.Notes,
-		})
-	}
-
-	dispensing := make([]domain.LiquidSugarDispensingItem, 0, len(dto.DispensingItems))
-	for _, d := range dto.DispensingItems {
-		netWeight := d.GrossWeight - d.TareWeight
-		if netWeight < 0 {
-			netWeight = 0
-		}
-		dispensing = append(dispensing, domain.LiquidSugarDispensingItem{
-			JerryCanNo:  d.JerryCanNo,
-			GrossWeight: d.GrossWeight,
-			TareWeight:  d.TareWeight,
-			NetWeight:   netWeight,
-			Brix:        d.Brix,
-			AromaColor:  d.AromaColor,
-			Notes:       d.Notes,
-		})
-	}
-
-	req := &domain.MaterialRequisition{
-		RequestNo:         reqNo,
-		RequisitionType:   dto.RequisitionType,
-		ProductionOrderID: dto.ProductionOrderID,
-		OrderNumber:       dto.OrderNumber,
-		RequestDate:       dto.RequestDate,
-		Department:        dto.Department,
-		RequestedBy:       dto.RequestedBy,
-		Status:            "submitted",
-		Notes:             dto.Notes,
-		Lines:             lines,
-		DispensingItems:   dispensing,
-	}
-
-	if err := uc.repo.CreateRequisition(ctx, req); err != nil {
-		return nil, apperrors.NewInternal(err, "Failed to create material requisition")
-	}
-	return req, nil
-}
-
-func (uc *manufacturingUseCase) GetRequisitionByID(ctx context.Context, id uuid.UUID) (*domain.MaterialRequisition, error) {
-	req, err := uc.repo.GetRequisitionByID(ctx, id)
-	if err != nil {
-		return nil, apperrors.NewNotFound("Material requisition not found")
-	}
-	return req, nil
-}
-
-func (uc *manufacturingUseCase) ListRequisitions(ctx context.Context, reqType string, status string) ([]domain.MaterialRequisition, error) {
-	list, err := uc.repo.ListRequisitions(ctx, reqType, status)
-	if err != nil {
-		return nil, apperrors.NewInternal(err, "Failed to list material requisitions")
-	}
-	return list, nil
-}
-
-func (uc *manufacturingUseCase) UpdateRequisitionStatus(ctx context.Context, id uuid.UUID, dto UpdateRequisitionStatusDTO) error {
-	if err := uc.repo.UpdateRequisitionStatus(ctx, id, dto.Status, dto.IssuedBy); err != nil {
-		return apperrors.NewInternal(err, "Failed to update requisition status")
-	}
-	return nil
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Oven Logs (LHO) Implementation

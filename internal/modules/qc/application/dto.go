@@ -437,3 +437,517 @@ type IncomingCheckResponseDTO struct {
 	CreatedAt          time.Time  `json:"createdAt"`
 	UpdatedAt          time.Time  `json:"updatedAt"`
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sprint 2 (Tahap 3): Monitoring Ayak (MNA, CMT, MNM) & Oven (MNO) DTOs
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─── MNA (Sieving Monitoring Log) DTOs ───────────────────────────────────────
+
+type CreateSievingLogDTO struct {
+	MachineNo         string     `json:"machineNo" validate:"required"`
+	CheckMonth        string     `json:"checkMonth,omitempty"` // YYYY-MM
+	CheckDate         string     `json:"checkDate" validate:"required"` // YYYY-MM-DD
+	Category          string     `json:"category,omitempty"` // Mentah, Oven (default: Mentah)
+	ProductionOrderID *uuid.UUID `json:"productionOrderId,omitempty"`
+	ProductionStepID  *uuid.UUID `json:"productionStepId,omitempty"`
+	RequisitionID     *uuid.UUID `json:"requisitionId,omitempty"`
+	ProductID         *uuid.UUID `json:"productId,omitempty"`
+	ProductName       string     `json:"productName" validate:"required"`
+	BatchNo           string     `json:"batchNo" validate:"required"`
+	OvenDate          string     `json:"ovenDate,omitempty"`
+	MeshSize          string     `json:"meshSize" validate:"required"`
+
+	// Pemeriksaan AWAL
+	InitialCondition  string `json:"initialCondition,omitempty"`
+	InitialFindings   string `json:"initialFindings,omitempty"`
+	InitialAction     string `json:"initialAction,omitempty"`
+	InitialPICName    string `json:"initialPicName" validate:"required"`
+	InitialQCName     string `json:"initialQcName,omitempty"`
+	InitialQCPassed   *bool  `json:"initialQcPassed,omitempty"`
+
+	// Pemeriksaan AKHIR
+	FinalCondition    string `json:"finalCondition,omitempty"`
+	FinalFindings     string `json:"finalFindings,omitempty"`
+	FinalAction       string `json:"finalAction,omitempty"`
+	FinalPICName      string `json:"finalPicName" validate:"required"`
+	FinalQCName       string `json:"finalQcName,omitempty"`
+	FinalQCPassed     *bool  `json:"finalQcPassed,omitempty"`
+
+	OverallStatus     string `json:"overallStatus,omitempty"`
+	Notes             string `json:"notes,omitempty"`
+}
+
+type UpdateSievingLogDTO struct {
+	MachineNo         string     `json:"machineNo,omitempty"`
+	CheckMonth        string     `json:"checkMonth,omitempty"`
+	CheckDate         string     `json:"checkDate,omitempty"`
+	Category          string     `json:"category,omitempty"`
+	ProductionOrderID *uuid.UUID `json:"productionOrderId,omitempty"`
+	ProductionStepID  *uuid.UUID `json:"productionStepId,omitempty"`
+	RequisitionID     *uuid.UUID `json:"requisitionId,omitempty"`
+	ProductID         *uuid.UUID `json:"productId,omitempty"`
+	ProductName       string     `json:"productName,omitempty"`
+	BatchNo           string     `json:"batchNo,omitempty"`
+	OvenDate          string     `json:"ovenDate,omitempty"`
+	MeshSize          string     `json:"meshSize,omitempty"`
+
+	InitialCondition  string `json:"initialCondition,omitempty"`
+	InitialFindings   string `json:"initialFindings,omitempty"`
+	InitialAction     string `json:"initialAction,omitempty"`
+	InitialPICName    string `json:"initialPicName,omitempty"`
+	InitialQCName     string `json:"initialQcName,omitempty"`
+	InitialQCPassed   *bool  `json:"initialQcPassed,omitempty"`
+
+	FinalCondition    string `json:"finalCondition,omitempty"`
+	FinalFindings     string `json:"finalFindings,omitempty"`
+	FinalAction       string `json:"finalAction,omitempty"`
+	FinalPICName      string `json:"finalPicName,omitempty"`
+	FinalQCName       string `json:"finalQcName,omitempty"`
+	FinalQCPassed     *bool  `json:"finalQcPassed,omitempty"`
+
+	OverallStatus     string `json:"overallStatus,omitempty"`
+	Notes             string `json:"notes,omitempty"`
+}
+
+// ─── CMT (Magnet Trap Log) DTOs ─────────────────────────────────────────────
+
+type CreateMagnetTrapLogDTO struct {
+	CheckMonth        string     `json:"checkMonth,omitempty"`
+	CheckDate         string     `json:"checkDate" validate:"required"`
+	Room              string     `json:"room,omitempty"` // Ayak Mentah, Ayak Matang
+	MachineNo         string     `json:"machineNo" validate:"required"`
+	PICResponsible    string     `json:"picResponsible" validate:"required"`
+	ProductionOrderID *uuid.UUID `json:"productionOrderId,omitempty"`
+	ProductionStepID  *uuid.UUID `json:"productionStepId,omitempty"`
+	BatchNo           string     `json:"batchNo,omitempty"`
+
+	IsClean            *bool   `json:"isClean,omitempty"`
+	GaussPoint1        float64 `json:"gaussPoint1"`
+	GaussPoint2        float64 `json:"gaussPoint2"`
+	GaussPoint3        float64 `json:"gaussPoint3"`
+	ForeignMatterFound string  `json:"foreignMatterFound,omitempty"`
+	Issues             string  `json:"issues,omitempty"`
+	ActionTaken        string  `json:"actionTaken,omitempty"`
+	PICName            string  `json:"picName" validate:"required"`
+	QCName             string  `json:"qcName,omitempty"`
+	QCPassed           *bool   `json:"qcPassed,omitempty"`
+	QAVerifiedBy       string  `json:"qaVerifiedBy,omitempty"`
+	Notes              string  `json:"notes,omitempty"`
+}
+
+type UpdateMagnetTrapLogDTO struct {
+	CheckMonth        string     `json:"checkMonth,omitempty"`
+	CheckDate         string     `json:"checkDate,omitempty"`
+	Room              string     `json:"room,omitempty"`
+	MachineNo         string     `json:"machineNo,omitempty"`
+	PICResponsible    string     `json:"picResponsible,omitempty"`
+	ProductionOrderID *uuid.UUID `json:"productionOrderId,omitempty"`
+	ProductionStepID  *uuid.UUID `json:"productionStepId,omitempty"`
+	BatchNo           string     `json:"batchNo,omitempty"`
+
+	IsClean            *bool   `json:"isClean,omitempty"`
+	GaussPoint1        *float64 `json:"gaussPoint1,omitempty"`
+	GaussPoint2        *float64 `json:"gaussPoint2,omitempty"`
+	GaussPoint3        *float64 `json:"gaussPoint3,omitempty"`
+	ForeignMatterFound string   `json:"foreignMatterFound,omitempty"`
+	Issues             string   `json:"issues,omitempty"`
+	ActionTaken        string   `json:"actionTaken,omitempty"`
+	PICName            string   `json:"picName,omitempty"`
+	QCName             string   `json:"qcName,omitempty"`
+	QCPassed           *bool    `json:"qcPassed,omitempty"`
+	QAVerifiedBy       string   `json:"qaVerifiedBy,omitempty"`
+	OverallStatus      string   `json:"overallStatus,omitempty"`
+	Notes              string   `json:"notes,omitempty"`
+}
+
+// ─── MNM (Mesh Bolt Monitoring Log) DTOs ────────────────────────────────────
+
+type CreateMeshBoltLogDTO struct {
+	CheckMonth        string     `json:"checkMonth,omitempty"`
+	CheckDate         string     `json:"checkDate" validate:"required"`
+	Room              string     `json:"room,omitempty"`
+	MachineNo         string     `json:"machineNo" validate:"required"`
+	MeshSize          string     `json:"meshSize" validate:"required"`
+	PICResponsible    string     `json:"picResponsible" validate:"required"`
+	ProductionOrderID *uuid.UUID `json:"productionOrderId,omitempty"`
+	ProductionStepID  *uuid.UUID `json:"productionStepId,omitempty"`
+	BatchNo           string     `json:"batchNo,omitempty"`
+
+	InitialBoltCount  int    `json:"initialBoltCount"`
+	InitialIsComplete *bool  `json:"initialIsComplete,omitempty"`
+	InitialIsTight    *bool  `json:"initialIsTight,omitempty"`
+	InitialCondition  string `json:"initialCondition,omitempty"`
+	InitialFindings   string `json:"initialFindings,omitempty"`
+	InitialAction     string `json:"initialAction,omitempty"`
+	InitialPICName    string `json:"initialPicName" validate:"required"`
+	InitialQCName     string `json:"initialQcName,omitempty"`
+
+	FinalBoltCount    int    `json:"finalBoltCount"`
+	FinalIsComplete   *bool  `json:"finalIsComplete,omitempty"`
+	FinalIsTight      *bool  `json:"finalIsTight,omitempty"`
+	FinalFindings     string `json:"finalFindings,omitempty"`
+	FinalAction       string `json:"finalAction,omitempty"`
+	FinalPICName      string `json:"finalPicName" validate:"required"`
+	FinalQCName       string `json:"finalQcName,omitempty"`
+
+	QAVerifiedBy      string `json:"qaVerifiedBy,omitempty"`
+	Notes             string `json:"notes,omitempty"`
+}
+
+type UpdateMeshBoltLogDTO struct {
+	CheckMonth        string     `json:"checkMonth,omitempty"`
+	CheckDate         string     `json:"checkDate,omitempty"`
+	Room              string     `json:"room,omitempty"`
+	MachineNo         string     `json:"machineNo,omitempty"`
+	MeshSize          string     `json:"meshSize,omitempty"`
+	PICResponsible    string     `json:"picResponsible,omitempty"`
+	ProductionOrderID *uuid.UUID `json:"productionOrderId,omitempty"`
+	ProductionStepID  *uuid.UUID `json:"productionStepId,omitempty"`
+	BatchNo           string     `json:"batchNo,omitempty"`
+
+	InitialBoltCount  *int   `json:"initialBoltCount,omitempty"`
+	InitialIsComplete *bool  `json:"initialIsComplete,omitempty"`
+	InitialIsTight    *bool  `json:"initialIsTight,omitempty"`
+	InitialCondition  string `json:"initialCondition,omitempty"`
+	InitialFindings   string `json:"initialFindings,omitempty"`
+	InitialAction     string `json:"initialAction,omitempty"`
+	InitialPICName    string `json:"initialPicName,omitempty"`
+	InitialQCName     string `json:"initialQcName,omitempty"`
+
+	FinalBoltCount    *int   `json:"finalBoltCount,omitempty"`
+	FinalIsComplete   *bool  `json:"finalIsComplete,omitempty"`
+	FinalIsTight      *bool  `json:"finalIsTight,omitempty"`
+	FinalFindings     string `json:"finalFindings,omitempty"`
+	FinalAction       string `json:"finalAction,omitempty"`
+	FinalPICName      string `json:"finalPicName,omitempty"`
+	FinalQCName       string `json:"finalQcName,omitempty"`
+
+	QAVerifiedBy      string `json:"qaVerifiedBy,omitempty"`
+	OverallStatus     string `json:"overallStatus,omitempty"`
+	Notes             string `json:"notes,omitempty"`
+}
+
+// ─── MNO (Oven Monitoring Log) DTOs ─────────────────────────────────────────
+
+type CreateOvenLogDTO struct {
+	CheckMonth         string     `json:"checkMonth,omitempty"`
+	CheckDate          string     `json:"checkDate" validate:"required"`
+	OvenNo             string     `json:"ovenNo" validate:"required"`
+	ProductionOrderID  *uuid.UUID `json:"productionOrderId,omitempty"`
+	ProductionStepID   *uuid.UUID `json:"productionStepId,omitempty"`
+	BatchNo            string     `json:"batchNo" validate:"required"`
+	ProductName        string     `json:"productName" validate:"required"`
+
+	InitialTemperature float64    `json:"initialTemperature"`
+	InitialTime        string     `json:"initialTime" validate:"required"`
+	InitialMoisture    float64    `json:"initialMoisture"`
+
+	StabilizedTime     string     `json:"stabilizedTime" validate:"required"`
+
+	ProcessTemperature float64    `json:"processTemperature"`
+	ProcessMoisture1   *float64   `json:"processMoisture1,omitempty"`
+	ProcessMoisture2   *float64   `json:"processMoisture2,omitempty"`
+	ProcessMoisture3   *float64   `json:"processMoisture3,omitempty"`
+	ProcessMoisture4   *float64   `json:"processMoisture4,omitempty"`
+
+	FinalTemperature   float64    `json:"finalTemperature"`
+	FinalTime          string     `json:"finalTime" validate:"required"`
+	FinalMoisture      float64    `json:"finalMoisture"`
+
+	Issues             string     `json:"issues,omitempty"`
+	ActionTaken        string     `json:"actionTaken,omitempty"`
+	PICName            string     `json:"picName" validate:"required"`
+	QCVerifierName     string     `json:"qcVerifierName,omitempty"`
+	QCPassed           *bool      `json:"qcPassed,omitempty"`
+	Notes              string     `json:"notes,omitempty"`
+}
+
+type UpdateOvenLogDTO struct {
+	CheckMonth         string     `json:"checkMonth,omitempty"`
+	CheckDate          string     `json:"checkDate,omitempty"`
+	OvenNo             string     `json:"ovenNo,omitempty"`
+	ProductionOrderID  *uuid.UUID `json:"productionOrderId,omitempty"`
+	ProductionStepID   *uuid.UUID `json:"productionStepId,omitempty"`
+	BatchNo            string     `json:"batchNo,omitempty"`
+	ProductName        string     `json:"productName,omitempty"`
+
+	InitialTemperature *float64   `json:"initialTemperature,omitempty"`
+	InitialTime        string     `json:"initialTime,omitempty"`
+	InitialMoisture    *float64   `json:"initialMoisture,omitempty"`
+
+	StabilizedTime     string     `json:"stabilizedTime,omitempty"`
+
+	ProcessTemperature *float64   `json:"processTemperature,omitempty"`
+	ProcessMoisture1   *float64   `json:"processMoisture1,omitempty"`
+	ProcessMoisture2   *float64   `json:"processMoisture2,omitempty"`
+	ProcessMoisture3   *float64   `json:"processMoisture3,omitempty"`
+	ProcessMoisture4   *float64   `json:"processMoisture4,omitempty"`
+
+	FinalTemperature   *float64   `json:"finalTemperature,omitempty"`
+	FinalTime          string     `json:"finalTime,omitempty"`
+	FinalMoisture      *float64   `json:"finalMoisture,omitempty"`
+
+	Issues             string     `json:"issues,omitempty"`
+	ActionTaken        string     `json:"actionTaken,omitempty"`
+	PICName            string     `json:"picName,omitempty"`
+	QCVerifierName     string     `json:"qcVerifierName,omitempty"`
+	QCPassed           *bool      `json:"qcPassed,omitempty"`
+	OverallStatus      string     `json:"overallStatus,omitempty"`
+	Notes              string     `json:"notes,omitempty"`
+}
+
+// ─── MNJ (Needle Monitoring Log) DTOs ───────────────────────────────────────
+
+type CreateNeedleLogDTO struct {
+	CheckMonth        string `json:"checkMonth,omitempty"`
+	CheckDate         string `json:"checkDate" validate:"required"`
+	SewingMachineNo   string `json:"sewingMachineNo" validate:"required"`
+	PICResponsible    string `json:"picResponsible" validate:"required"`
+
+	InitialIsPresent  *bool  `json:"initialIsPresent,omitempty"`
+	InitialCondition  string `json:"initialCondition,omitempty"`
+	InitialAnalysis   string `json:"initialAnalysis,omitempty"`
+	InitialAction     string `json:"initialAction,omitempty"`
+
+	FinalIsPresent    *bool  `json:"finalIsPresent,omitempty"`
+	FinalCondition    string `json:"finalCondition,omitempty"`
+	FinalAnalysis     string `json:"finalAnalysis,omitempty"`
+	FinalAction       string `json:"finalAction,omitempty"`
+
+	NeedleStockInRoom int    `json:"needleStockInRoom"`
+	PICName           string `json:"picName" validate:"required"`
+	QCVerifierName    string `json:"qcVerifierName,omitempty"`
+	Notes             string `json:"notes,omitempty"`
+}
+
+type UpdateNeedleLogDTO struct {
+	CheckMonth        string `json:"checkMonth,omitempty"`
+	CheckDate         string `json:"checkDate,omitempty"`
+	SewingMachineNo   string `json:"sewingMachineNo,omitempty"`
+	PICResponsible    string `json:"picResponsible,omitempty"`
+
+	InitialIsPresent  *bool  `json:"initialIsPresent,omitempty"`
+	InitialCondition  string `json:"initialCondition,omitempty"`
+	InitialAnalysis   string `json:"initialAnalysis,omitempty"`
+	InitialAction     string `json:"initialAction,omitempty"`
+
+	FinalIsPresent    *bool  `json:"finalIsPresent,omitempty"`
+	FinalCondition    string `json:"finalCondition,omitempty"`
+	FinalAnalysis     string `json:"finalAnalysis,omitempty"`
+	FinalAction       string `json:"finalAction,omitempty"`
+
+	NeedleStockInRoom *int   `json:"needleStockInRoom,omitempty"`
+	PICName           string `json:"picName,omitempty"`
+	QCVerifierName    string `json:"qcVerifierName,omitempty"`
+	OverallStatus     string `json:"overallStatus,omitempty"`
+	Notes             string `json:"notes,omitempty"`
+}
+
+// ─── MNG (Scissor Monitoring Log) DTOs ──────────────────────────────────────
+
+type CreateScissorLogDTO struct {
+	CheckMonth       string `json:"checkMonth,omitempty"`
+	CheckDate        string `json:"checkDate" validate:"required"`
+	Location         string `json:"location,omitempty"`
+	PICResponsible   string `json:"picResponsible" validate:"required"`
+
+	InitialCount     int    `json:"initialCount"`
+	InitialCondition string `json:"initialCondition,omitempty"`
+	InitialAnalysis  string `json:"initialAnalysis,omitempty"`
+	InitialAction    string `json:"initialAction,omitempty"`
+
+	FinalCount       int    `json:"finalCount"`
+	FinalCondition   string `json:"finalCondition,omitempty"`
+	FinalAnalysis    string `json:"finalAnalysis,omitempty"`
+	FinalAction      string `json:"finalAction,omitempty"`
+
+	PICName          string `json:"picName" validate:"required"`
+	QCVerifierName   string `json:"qcVerifierName,omitempty"`
+	Notes            string `json:"notes,omitempty"`
+}
+
+type UpdateScissorLogDTO struct {
+	CheckMonth       string `json:"checkMonth,omitempty"`
+	CheckDate        string `json:"checkDate,omitempty"`
+	Location         string `json:"location,omitempty"`
+	PICResponsible   string `json:"picResponsible,omitempty"`
+
+	InitialCount     *int   `json:"initialCount,omitempty"`
+	InitialCondition string `json:"initialCondition,omitempty"`
+	InitialAnalysis  string `json:"initialAnalysis,omitempty"`
+	InitialAction    string `json:"initialAction,omitempty"`
+
+	FinalCount       *int   `json:"finalCount,omitempty"`
+	FinalCondition   string `json:"finalCondition,omitempty"`
+	FinalAnalysis    string `json:"finalAnalysis,omitempty"`
+	FinalAction      string `json:"finalAction,omitempty"`
+
+	PICName          string `json:"picName,omitempty"`
+	QCVerifierName   string `json:"qcVerifierName,omitempty"`
+	OverallStatus    string `json:"overallStatus,omitempty"`
+	Notes            string `json:"notes,omitempty"`
+}
+
+// ─── CPP (Metal Detector Cleaning Log) DTOs ─────────────────────────────────
+
+type CreateMetalCleaningLogDTO struct {
+	CheckMonth           string  `json:"checkMonth,omitempty"`
+	CheckDate            string  `json:"checkDate" validate:"required"`
+	MachineNo            string  `json:"machineNo,omitempty"`
+	Location             string  `json:"location,omitempty"`
+	CleaningType         string  `json:"cleaningType,omitempty"`
+
+	SensorCleanliness    string  `json:"sensorCleanliness,omitempty"`
+	BeltCleanliness      string  `json:"beltCleanliness,omitempty"`
+	RejectBinCleanliness string  `json:"rejectBinCleanliness,omitempty"`
+	PhysicalCondition    string  `json:"physicalCondition,omitempty"`
+
+	StartTime            string  `json:"startTime" validate:"required"`
+	EndTime              string  `json:"endTime" validate:"required"`
+	TotalHours           float64 `json:"totalHours,omitempty"`
+
+	OperatorName         string  `json:"operatorName" validate:"required"`
+	QCInspectorName      string  `json:"qcInspectorName,omitempty"`
+	Notes                string  `json:"notes,omitempty"`
+}
+
+type UpdateMetalCleaningLogDTO struct {
+	CheckMonth           string   `json:"checkMonth,omitempty"`
+	CheckDate            string   `json:"checkDate,omitempty"`
+	MachineNo            string   `json:"machineNo,omitempty"`
+	Location             string   `json:"location,omitempty"`
+	CleaningType         string   `json:"cleaningType,omitempty"`
+
+	SensorCleanliness    string   `json:"sensorCleanliness,omitempty"`
+	BeltCleanliness      string   `json:"beltCleanliness,omitempty"`
+	RejectBinCleanliness string   `json:"rejectBinCleanliness,omitempty"`
+	PhysicalCondition    string   `json:"physicalCondition,omitempty"`
+
+	StartTime            string   `json:"startTime,omitempty"`
+	EndTime              string   `json:"endTime,omitempty"`
+	TotalHours           *float64 `json:"totalHours,omitempty"`
+
+	OperatorName         string   `json:"operatorName,omitempty"`
+	QCInspectorName      string   `json:"qcInspectorName,omitempty"`
+	OverallStatus        string   `json:"overallStatus,omitempty"`
+	Notes                string   `json:"notes,omitempty"`
+}
+
+// ─── VMD (Metal Detector Verification Log) DTOs ─────────────────────────────
+
+type CreateMetalVerificationLogDTO struct {
+	CheckMonth           string `json:"checkMonth,omitempty"`
+	CheckDate            string `json:"checkDate" validate:"required"`
+	ProductType          string `json:"productType,omitempty"`
+	Location             string `json:"location,omitempty"`
+	PackageCategory      string `json:"packageCategory,omitempty"`
+	MonitoringRound      int    `json:"monitoringRound"`
+	CheckTime            string `json:"checkTime" validate:"required"`
+
+	FeTestPieceSize      string `json:"feTestPieceSize,omitempty"`
+	FeAlarmTriggered     *bool  `json:"feAlarmTriggered,omitempty"`
+	FeConveyorStopped    *bool  `json:"feConveyorStopped,omitempty"`
+
+	NonFeTestPieceSize   string `json:"nonFeTestPieceSize,omitempty"`
+	NonFeAlarmTriggered  *bool  `json:"nonFeAlarmTriggered,omitempty"`
+	NonFeConveyorStopped *bool  `json:"nonFeConveyorStopped,omitempty"`
+
+	SSTestPieceSize      string `json:"ssTestPieceSize,omitempty"`
+	SSAlarmTriggered     *bool  `json:"ssAlarmTriggered,omitempty"`
+	SSConveyorStopped    *bool  `json:"ssConveyorStopped,omitempty"`
+
+	CorrectiveAction     string `json:"correctiveAction,omitempty"`
+	PICName              string `json:"picName" validate:"required"`
+	QCVerifierName       string `json:"qcVerifierName,omitempty"`
+	Notes                string `json:"notes,omitempty"`
+}
+
+type UpdateMetalVerificationLogDTO struct {
+	CheckMonth           string `json:"checkMonth,omitempty"`
+	CheckDate            string `json:"checkDate,omitempty"`
+	ProductType          string `json:"productType,omitempty"`
+	Location             string `json:"location,omitempty"`
+	PackageCategory      string `json:"packageCategory,omitempty"`
+	MonitoringRound      *int   `json:"monitoringRound,omitempty"`
+	CheckTime            string `json:"checkTime,omitempty"`
+
+	FeTestPieceSize      string `json:"feTestPieceSize,omitempty"`
+	FeAlarmTriggered     *bool  `json:"feAlarmTriggered,omitempty"`
+	FeConveyorStopped    *bool  `json:"feConveyorStopped,omitempty"`
+
+	NonFeTestPieceSize   string `json:"nonFeTestPieceSize,omitempty"`
+	NonFeAlarmTriggered  *bool  `json:"nonFeAlarmTriggered,omitempty"`
+	NonFeConveyorStopped *bool  `json:"nonFeConveyorStopped,omitempty"`
+
+	SSTestPieceSize      string `json:"ssTestPieceSize,omitempty"`
+	SSAlarmTriggered     *bool  `json:"ssAlarmTriggered,omitempty"`
+	SSConveyorStopped    *bool  `json:"ssConveyorStopped,omitempty"`
+
+	CorrectiveAction     string `json:"correctiveAction,omitempty"`
+	PICName              string `json:"picName,omitempty"`
+	QCVerifierName       string `json:"qcVerifierName,omitempty"`
+	OverallStatus        string `json:"overallStatus,omitempty"`
+	Notes                string `json:"notes,omitempty"`
+}
+
+// ─── PJD (Finished Goods Inspection Log) DTOs ───────────────────────────────
+
+type CreateFinishedGoodsDTO struct {
+	CheckMonth          string     `json:"checkMonth,omitempty"`
+	CheckDate           string     `json:"checkDate" validate:"required"`
+	ProductName         string     `json:"productName" validate:"required"`
+	BatchNo             string     `json:"batchNo" validate:"required"`
+	RawMaterialCode     string     `json:"rawMaterialCode,omitempty"`
+	ProductionOrderID   *uuid.UUID `json:"productionOrderId,omitempty"`
+
+	PrimaryPackaging    string     `json:"primaryPackaging,omitempty"`
+	SecondaryPackaging  string     `json:"secondaryPackaging,omitempty"`
+	NetWeight           float64    `json:"netWeight"`
+	GrossWeight         float64    `json:"grossWeight"`
+
+	AppearanceShape     string     `json:"appearanceShape,omitempty"`
+	Aroma               string     `json:"aroma,omitempty"`
+	ColorScore          int        `json:"colorScore"`
+	ColorDescription    string     `json:"colorDescription,omitempty"`
+	Taste               string     `json:"taste,omitempty"`
+
+	IsFreeForeignMatter *bool      `json:"isFreeForeignMatter,omitempty"`
+	ForeignMatterNotes  string     `json:"foreignMatterNotes,omitempty"`
+	MoistureContent     float64    `json:"moistureContent"`
+
+	InspectionDecision  string     `json:"inspectionDecision,omitempty"`
+	Notes               string     `json:"notes,omitempty"`
+	QCPersonnelName     string     `json:"qcPersonnelName" validate:"required"`
+	QAVerifiedBy        string     `json:"qaVerifiedBy,omitempty"`
+}
+
+type UpdateFinishedGoodsDTO struct {
+	CheckMonth          string     `json:"checkMonth,omitempty"`
+	CheckDate           string     `json:"checkDate,omitempty"`
+	ProductName         string     `json:"productName,omitempty"`
+	BatchNo             string     `json:"batchNo,omitempty"`
+	RawMaterialCode     string     `json:"rawMaterialCode,omitempty"`
+	ProductionOrderID   *uuid.UUID `json:"productionOrderId,omitempty"`
+
+	PrimaryPackaging    string     `json:"primaryPackaging,omitempty"`
+	SecondaryPackaging  string     `json:"secondaryPackaging,omitempty"`
+	NetWeight           *float64   `json:"netWeight,omitempty"`
+	GrossWeight         *float64   `json:"grossWeight,omitempty"`
+
+	AppearanceShape     string     `json:"appearanceShape,omitempty"`
+	Aroma               string     `json:"aroma,omitempty"`
+	ColorScore          *int       `json:"colorScore,omitempty"`
+	ColorDescription    string     `json:"colorDescription,omitempty"`
+	Taste               string     `json:"taste,omitempty"`
+
+	IsFreeForeignMatter *bool      `json:"isFreeForeignMatter,omitempty"`
+	ForeignMatterNotes  string     `json:"foreignMatterNotes,omitempty"`
+	MoistureContent     *float64   `json:"moistureContent,omitempty"`
+
+	InspectionDecision  string     `json:"inspectionDecision,omitempty"`
+	Notes               string     `json:"notes,omitempty"`
+	QCPersonnelName     string     `json:"qcPersonnelName,omitempty"`
+	QAVerifiedBy        string     `json:"qaVerifiedBy,omitempty"`
+}
+

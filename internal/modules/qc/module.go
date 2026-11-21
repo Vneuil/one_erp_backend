@@ -30,6 +30,18 @@ func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager
 				&domain.PackagingQualityCheck{},
 				&domain.SupplierArmadaCheck{},
 				&domain.RawMaterialIncomingCheck{},
+				&domain.SievingMonitoringLog{},
+				&domain.MagnetTrapLog{},
+				&domain.MeshBoltMonitoringLog{},
+				&domain.OvenMonitoringLog{},
+				&domain.NeedleMonitoringLog{},
+				&domain.ScissorMonitoringLog{},
+				&domain.MetalDetectorCleaningLog{},
+				&domain.MetalDetectorVerificationLog{},
+				&domain.FinishedGoodsInspectionLog{},
+				&domain.PackagingLabelCheckLog{},
+				&domain.PackagingLabelCheckItem{},
+				&domain.ContainerChecklistLog{},
 			)
 		},
 		Seed: func(tenantDB *gorm.DB) error {

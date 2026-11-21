@@ -40,6 +40,8 @@ func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager
 				&domain.StockOpnameLine{},
 				&domain.StockDocument{},
 				&domain.StockDocumentLine{},
+				&domain.RawMaterialStockEntry{},
+				&domain.RawMaterialStockLog{},
 			)
 		},
 		Seed: func(tenantDB *gorm.DB) error {

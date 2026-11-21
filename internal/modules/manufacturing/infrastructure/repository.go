@@ -293,6 +293,7 @@ func (r *manufacturingRepository) GetRequisitionByID(ctx context.Context, id uui
 	err := r.db.WithContext(ctx).
 		Preload("Lines").
 		Preload("DispensingItems").
+		Preload("LBBReports").
 		First(&req, "id = ?", id).Error
 	if err != nil {
 		return nil, err
@@ -304,7 +305,8 @@ func (r *manufacturingRepository) ListRequisitions(ctx context.Context, reqType 
 	var list []domain.MaterialRequisition
 	q := r.db.WithContext(ctx).Model(&domain.MaterialRequisition{}).
 		Preload("Lines").
-		Preload("DispensingItems")
+		Preload("DispensingItems").
+		Preload("LBBReports")
 	if reqType != "" {
 		q = q.Where("requisition_type = ?", reqType)
 	}
@@ -315,12 +317,102 @@ func (r *manufacturingRepository) ListRequisitions(ctx context.Context, reqType 
 	return list, err
 }
 
+func (r *manufacturingRepository) UpdateRequisition(ctx context.Context, req *domain.MaterialRequisition) error {
+	return r.db.WithContext(ctx).Save(req).Error
+}
+
+func (r *manufacturingRepository) UpdateRequisitionLine(ctx context.Context, line *domain.MaterialRequisitionLine) error {
+	return r.db.WithContext(ctx).Save(line).Error
+}
+
 func (r *manufacturingRepository) UpdateRequisitionStatus(ctx context.Context, id uuid.UUID, status string, issuedBy string) error {
 	updates := map[string]interface{}{"status": status}
 	if issuedBy != "" {
 		updates["issued_by"] = issuedBy
 	}
 	return r.db.WithContext(ctx).Model(&domain.MaterialRequisition{}).Where("id = ?", id).Updates(updates).Error
+}
+
+func (r *manufacturingRepository) CountRequisitionsByPrefix(ctx context.Context, prefix string) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&domain.MaterialRequisition{}).
+		Where("request_no LIKE ?", prefix+"%").
+		Count(&count).Error
+	return count, err
+}
+
+// LBB (Laporan Permintaan Bahan Baku — GDG-013-LBB)
+
+func (r *manufacturingRepository) CreateLBBReport(ctx context.Context, rep *domain.RawMaterialRequestReport) error {
+	return r.db.WithContext(ctx).Create(rep).Error
+}
+
+func (r *manufacturingRepository) GetLBBReportByID(ctx context.Context, id uuid.UUID) (*domain.RawMaterialRequestReport, error) {
+	var rep domain.RawMaterialRequestReport
+	err := r.db.WithContext(ctx).
+		Preload("BagEntries", func(db *gorm.DB) *gorm.DB {
+			return db.Order("row_number ASC")
+		}).
+		First(&rep, "id = ?", id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &rep, nil
+}
+
+func (r *manufacturingRepository) ListLBBReports(ctx context.Context, requisitionID *uuid.UUID, variantType, status string) ([]domain.RawMaterialRequestReport, error) {
+	var list []domain.RawMaterialRequestReport
+	q := r.db.WithContext(ctx).Model(&domain.RawMaterialRequestReport{}).
+		Preload("BagEntries", func(db *gorm.DB) *gorm.DB {
+			return db.Order("row_number ASC")
+		})
+	if requisitionID != nil {
+		q = q.Where("requisition_id = ?", *requisitionID)
+	}
+	if variantType != "" {
+		q = q.Where("variant_type = ?", variantType)
+	}
+	if status != "" {
+		q = q.Where("status = ?", status)
+	}
+	err := q.Order("report_date DESC, created_at DESC").Find(&list).Error
+	return list, err
+}
+
+func (r *manufacturingRepository) UpdateLBBReport(ctx context.Context, rep *domain.RawMaterialRequestReport) error {
+	return r.db.WithContext(ctx).Save(rep).Error
+}
+
+func (r *manufacturingRepository) ReplaceLBBBagEntries(ctx context.Context, reportID uuid.UUID, entries []domain.RawMaterialRequestBagEntry) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("report_id = ?", reportID).Delete(&domain.RawMaterialRequestBagEntry{}).Error; err != nil {
+			return err
+		}
+		if len(entries) > 0 {
+			for i := range entries {
+				entries[i].ReportID = reportID
+			}
+			return tx.Create(&entries).Error
+		}
+		return nil
+	})
+}
+
+func (r *manufacturingRepository) DeleteLBBReport(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("report_id = ?", id).Delete(&domain.RawMaterialRequestBagEntry{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&domain.RawMaterialRequestReport{}, "id = ?", id).Error
+	})
+}
+
+func (r *manufacturingRepository) CountLBBReportsByPrefix(ctx context.Context, prefix string) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&domain.RawMaterialRequestReport{}).
+		Where("report_no LIKE ?", prefix+"%").
+		Count(&count).Error
+	return count, err
 }
 
 func (r *manufacturingRepository) CreateOvenLog(ctx context.Context, log *domain.OvenProductionLog) error {
@@ -349,4 +441,116 @@ func (r *manufacturingRepository) ListOvenLogs(ctx context.Context, date string,
 	}
 	err := q.Order("date DESC, created_at DESC").Find(&logs).Error
 	return logs, err
+}
+
+// LHP (PRO-002-LHP)
+func (r *manufacturingRepository) CreateLHP(ctx context.Context, rep *domain.ProductionOutputReport) error {
+	return r.db.WithContext(ctx).Create(rep).Error
+}
+
+func (r *manufacturingRepository) GetLHPByID(ctx context.Context, id uuid.UUID) (*domain.ProductionOutputReport, error) {
+	var rep domain.ProductionOutputReport
+	err := r.db.WithContext(ctx).Preload("Items").First(&rep, "id = ?", id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &rep, nil
+}
+
+func (r *manufacturingRepository) ListLHP(ctx context.Context, orderID *uuid.UUID, batchNo, status string) ([]domain.ProductionOutputReport, error) {
+	var reports []domain.ProductionOutputReport
+	q := r.db.WithContext(ctx).Model(&domain.ProductionOutputReport{}).Preload("Items")
+	if orderID != nil {
+		q = q.Where("production_order_id = ?", *orderID)
+	}
+	if status != "" {
+		q = q.Where("status = ?", status)
+	}
+	if batchNo != "" {
+		q = q.Where("id IN (SELECT report_id FROM manufacturing_production_output_report_items WHERE batch_no ILIKE ?)", "%"+batchNo+"%")
+	}
+	err := q.Order("packing_date DESC, created_at DESC").Find(&reports).Error
+	return reports, err
+}
+
+func (r *manufacturingRepository) UpdateLHP(ctx context.Context, rep *domain.ProductionOutputReport) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("report_id = ?", rep.ID).Delete(&domain.ProductionOutputReportItem{}).Error; err != nil {
+			return err
+		}
+		return tx.Save(rep).Error
+	})
+}
+
+func (r *manufacturingRepository) DeleteLHP(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("report_id = ?", id).Delete(&domain.ProductionOutputReportItem{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&domain.ProductionOutputReport{}, "id = ?", id).Error
+	})
+}
+
+func (r *manufacturingRepository) CountLHPByPrefix(ctx context.Context, prefix string) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&domain.ProductionOutputReport{}).
+		Where("report_no LIKE ?", prefix+"%").
+		Count(&count).Error
+	return count, err
+}
+
+// LST (GDG-009-LST)
+func (r *manufacturingRepository) CreateLST(ctx context.Context, rep *domain.HandoverReport) error {
+	return r.db.WithContext(ctx).Create(rep).Error
+}
+
+func (r *manufacturingRepository) GetLSTByID(ctx context.Context, id uuid.UUID) (*domain.HandoverReport, error) {
+	var rep domain.HandoverReport
+	err := r.db.WithContext(ctx).Preload("Items").First(&rep, "id = ?", id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &rep, nil
+}
+
+func (r *manufacturingRepository) ListLST(ctx context.Context, lhpID *uuid.UUID, batchNo, status string) ([]domain.HandoverReport, error) {
+	var reports []domain.HandoverReport
+	q := r.db.WithContext(ctx).Model(&domain.HandoverReport{}).Preload("Items")
+	if lhpID != nil {
+		q = q.Where("lhp_id = ?", *lhpID)
+	}
+	if status != "" {
+		q = q.Where("status = ?", status)
+	}
+	if batchNo != "" {
+		q = q.Where("id IN (SELECT report_id FROM manufacturing_handover_report_items WHERE batch_no ILIKE ?)", "%"+batchNo+"%")
+	}
+	err := q.Order("handover_date DESC, created_at DESC").Find(&reports).Error
+	return reports, err
+}
+
+func (r *manufacturingRepository) UpdateLST(ctx context.Context, rep *domain.HandoverReport) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("report_id = ?", rep.ID).Delete(&domain.HandoverReportItem{}).Error; err != nil {
+			return err
+		}
+		return tx.Save(rep).Error
+	})
+}
+
+func (r *manufacturingRepository) DeleteLST(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("report_id = ?", id).Delete(&domain.HandoverReportItem{}).Error; err != nil {
+			return err
+		}
+		return tx.Delete(&domain.HandoverReport{}, "id = ?", id).Error
+	})
+}
+
+func (r *manufacturingRepository) CountLSTByPrefix(ctx context.Context, prefix string) (int64, error) {
+	var count int64
+	err := r.db.WithContext(ctx).Model(&domain.HandoverReport{}).
+		Where("report_no LIKE ?", prefix+"%").
+		Count(&count).Error
+	return count, err
 }
