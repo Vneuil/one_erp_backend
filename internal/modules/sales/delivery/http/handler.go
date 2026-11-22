@@ -87,7 +87,7 @@ func (h *Handler) CreateOrder(c *fiber.Ctx) error {
 
 	var dto application.CreateSalesOrderDTO
 	if err := c.BodyParser(&dto); err != nil {
-		return apperrors.NewBadRequest("Invalid request body")
+		return apperrors.NewBadRequest("Invalid request body: " + err.Error())
 	}
 
 	order, err := uc.CreateOrder(h.ctx(c), dto)
@@ -151,7 +151,7 @@ func (h *Handler) UpdateOrder(c *fiber.Ctx) error {
 
 	var dto application.UpdateSalesOrderDTO
 	if err := c.BodyParser(&dto); err != nil {
-		return apperrors.NewBadRequest("Invalid request body")
+		return apperrors.NewBadRequest("Invalid request body: " + err.Error())
 	}
 
 	order, err := uc.UpdateOrder(h.ctx(c), id, dto)
@@ -235,7 +235,7 @@ func (h *Handler) CreateQuotation(c *fiber.Ctx) error {
 
 	var dto application.CreateQuotationDTO
 	if err := c.BodyParser(&dto); err != nil {
-		return apperrors.NewBadRequest("Invalid request body")
+		return apperrors.NewBadRequest("Invalid request body: " + err.Error())
 	}
 
 	quo, err := uc.CreateQuotation(h.ctx(c), dto)
@@ -297,7 +297,7 @@ func (h *Handler) UpdateQuotation(c *fiber.Ctx) error {
 
 	var dto application.UpdateQuotationDTO
 	if err := c.BodyParser(&dto); err != nil {
-		return apperrors.NewBadRequest("Invalid request body")
+		return apperrors.NewBadRequest("Invalid request body: " + err.Error())
 	}
 
 	quo, err := uc.UpdateQuotation(h.ctx(c), id, dto)
@@ -361,7 +361,7 @@ func (h *Handler) CreateInvoice(c *fiber.Ctx) error {
 
 	var dto application.CreateInvoiceDTO
 	if err := c.BodyParser(&dto); err != nil {
-		return apperrors.NewBadRequest("Invalid request body")
+		return apperrors.NewBadRequest("Invalid request body: " + err.Error())
 	}
 
 	inv, err := uc.CreateInvoice(h.ctx(c), dto)
@@ -405,7 +405,7 @@ func (h *Handler) RecordInvoicePayment(c *fiber.Ctx) error {
 
 	var dto application.RecordSalesPaymentDTO
 	if err := c.BodyParser(&dto); err != nil {
-		return apperrors.NewBadRequest("Invalid request body")
+		return apperrors.NewBadRequest("Invalid request body: " + err.Error())
 	}
 
 	inv, err := uc.RecordInvoicePayment(h.ctx(c), id, dto)
@@ -424,7 +424,7 @@ func (h *Handler) CreateDelivery(c *fiber.Ctx) error {
 
 	var dto application.CreateDeliveryDTO
 	if err := c.BodyParser(&dto); err != nil {
-		return apperrors.NewBadRequest("Invalid request body")
+		return apperrors.NewBadRequest("Invalid request body: " + err.Error())
 	}
 
 	d, err := uc.CreateDelivery(h.ctx(c), dto)
@@ -464,7 +464,7 @@ func (h *Handler) CreateDownPayment(c *fiber.Ctx) error {
 
 	var dto application.CreateSalesDownPaymentDTO
 	if err := c.BodyParser(&dto); err != nil {
-		return apperrors.NewBadRequest("Invalid request body")
+		return apperrors.NewBadRequest("Invalid request body: " + err.Error())
 	}
 	dp, err := uc.CreateDownPayment(h.ctx(c), dto)
 	if err != nil {
@@ -504,7 +504,7 @@ func (h *Handler) ApplyDownPayment(c *fiber.Ctx) error {
 
 	var dto application.ApplySalesDownPaymentDTO
 	if err := c.BodyParser(&dto); err != nil {
-		return apperrors.NewBadRequest("Invalid request body")
+		return apperrors.NewBadRequest("Invalid request body: " + err.Error())
 	}
 	dp, err := uc.ApplyDownPayment(h.ctx(c), id, dto)
 	if err != nil {
@@ -523,7 +523,7 @@ func (h *Handler) CreateSalesReturn(c *fiber.Ctx) error {
 
 	var dto application.CreateSalesReturnDTO
 	if err := c.BodyParser(&dto); err != nil {
-		return apperrors.NewBadRequest("Invalid request body")
+		return apperrors.NewBadRequest("Invalid request body: " + err.Error())
 	}
 	ret, err := uc.CreateSalesReturn(h.ctx(c), dto)
 	if err != nil {
@@ -688,7 +688,7 @@ func (h *Handler) CreateTradeInvoice(c *fiber.Ctx) error {
 	}
 	var dto application.CreateTradeInvoiceDTO
 	if err := c.BodyParser(&dto); err != nil {
-		return apperrors.NewBadRequest("Invalid request body")
+		return apperrors.NewBadRequest("Invalid request body: " + err.Error())
 	}
 	inv, err := uc.Create(h.ctx(c), dto)
 	if err != nil {
@@ -765,7 +765,7 @@ func (h *Handler) CreateOrderFromTradeInvoice(c *fiber.Ctx) error {
 	}
 	var dto application.OrderFromPIDTO
 	if err := c.BodyParser(&dto); err != nil {
-		return apperrors.NewBadRequest("Invalid request body")
+		return apperrors.NewBadRequest("Invalid request body: " + err.Error())
 	}
 	pi, err := tuc.Get(h.ctx(c), id)
 	if err != nil {

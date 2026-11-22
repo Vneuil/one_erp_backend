@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -23,6 +24,29 @@ type TradeLineDTO struct {
 	Unit        string     `json:"unit"`
 	Quantity    float64    `json:"quantity"`
 	UnitPrice   float64    `json:"unitPrice"`
+}
+
+func (l *TradeLineDTO) UnmarshalJSON(data []byte) error {
+	type Alias TradeLineDTO
+	aux := struct {
+		ProductID *string `json:"productId,omitempty"`
+		*Alias
+	}{
+		Alias: (*Alias)(l),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if aux.ProductID != nil && strings.TrimSpace(*aux.ProductID) != "" {
+		id, err := uuid.Parse(strings.TrimSpace(*aux.ProductID))
+		if err != nil {
+			return fmt.Errorf("invalid productId: %w", err)
+		}
+		l.ProductID = &id
+	} else {
+		l.ProductID = nil
+	}
+	return nil
 }
 
 // CreateTradeInvoiceDTO creates a PI/CI. At most one source may be given: a Sales
@@ -52,6 +76,54 @@ type CreateTradeInvoiceDTO struct {
 	Notes                string         `json:"notes,omitempty"`
 	VATExempt            *bool          `json:"vatExempt,omitempty"`
 	Lines                []TradeLineDTO `json:"lines,omitempty"`
+}
+
+func (dto *CreateTradeInvoiceDTO) UnmarshalJSON(data []byte) error {
+	type Alias CreateTradeInvoiceDTO
+	aux := struct {
+		SalesOrderID  *string `json:"salesOrderId,omitempty"`
+		QuotationID   *string `json:"quotationId,omitempty"`
+		CustomerPOID  *string `json:"customerPoId,omitempty"`
+		ParentID      *string `json:"parentId,omitempty"`
+		PaymentTermID *string `json:"paymentTermId,omitempty"`
+		TaxRateID     *string `json:"taxRateId,omitempty"`
+		*Alias
+	}{
+		Alias: (*Alias)(dto),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	parseOptionalUUID := func(s *string) (*uuid.UUID, error) {
+		if s == nil || strings.TrimSpace(*s) == "" {
+			return nil, nil
+		}
+		id, err := uuid.Parse(strings.TrimSpace(*s))
+		if err != nil {
+			return nil, err
+		}
+		return &id, nil
+	}
+	var err error
+	if dto.SalesOrderID, err = parseOptionalUUID(aux.SalesOrderID); err != nil {
+		return fmt.Errorf("invalid salesOrderId: %w", err)
+	}
+	if dto.QuotationID, err = parseOptionalUUID(aux.QuotationID); err != nil {
+		return fmt.Errorf("invalid quotationId: %w", err)
+	}
+	if dto.CustomerPOID, err = parseOptionalUUID(aux.CustomerPOID); err != nil {
+		return fmt.Errorf("invalid customerPoId: %w", err)
+	}
+	if dto.ParentID, err = parseOptionalUUID(aux.ParentID); err != nil {
+		return fmt.Errorf("invalid parentId: %w", err)
+	}
+	if dto.PaymentTermID, err = parseOptionalUUID(aux.PaymentTermID); err != nil {
+		return fmt.Errorf("invalid paymentTermId: %w", err)
+	}
+	if dto.TaxRateID, err = parseOptionalUUID(aux.TaxRateID); err != nil {
+		return fmt.Errorf("invalid taxRateId: %w", err)
+	}
+	return nil
 }
 
 type TradeInvoiceUseCase interface {

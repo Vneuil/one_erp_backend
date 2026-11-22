@@ -1,6 +1,7 @@
 package application
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/google/uuid"
@@ -84,5 +85,53 @@ func TestOrderFromPI(t *testing.T) {
 	pi.Lines[0].ProductID = nil
 	if _, err := OrderFromPI(pi, OrderFromPIDTO{}); err == nil {
 		t.Fatal("free-text lines cannot become order lines")
+	}
+}
+
+func TestCreateTradeInvoiceDTO_UnmarshalEmptyUUIDStrings(t *testing.T) {
+	rawJSON := `{
+		"kind": "PI",
+		"customerPoId": "",
+		"customerPoNumber": "PO-0134",
+		"salesOrderId": "",
+		"quotationId": "",
+		"parentId": "",
+		"paymentTermId": "",
+		"taxRateId": "",
+		"lines": [
+			{
+				"productId": "",
+				"description": "Item 1",
+				"quantity": 10,
+				"unitPrice": 500
+			}
+		]
+	}`
+
+	var dto CreateTradeInvoiceDTO
+	if err := json.Unmarshal([]byte(rawJSON), &dto); err != nil {
+		t.Fatalf("failed to unmarshal JSON with empty UUID strings: %v", err)
+	}
+
+	if dto.CustomerPOID != nil {
+		t.Errorf("expected CustomerPOID to be nil, got %v", dto.CustomerPOID)
+	}
+	if dto.SalesOrderID != nil {
+		t.Errorf("expected SalesOrderID to be nil, got %v", dto.SalesOrderID)
+	}
+	if dto.QuotationID != nil {
+		t.Errorf("expected QuotationID to be nil, got %v", dto.QuotationID)
+	}
+	if dto.ParentID != nil {
+		t.Errorf("expected ParentID to be nil, got %v", dto.ParentID)
+	}
+	if dto.PaymentTermID != nil {
+		t.Errorf("expected PaymentTermID to be nil, got %v", dto.PaymentTermID)
+	}
+	if dto.TaxRateID != nil {
+		t.Errorf("expected TaxRateID to be nil, got %v", dto.TaxRateID)
+	}
+	if len(dto.Lines) != 1 || dto.Lines[0].ProductID != nil {
+		t.Errorf("expected line ProductID to be nil, got %+v", dto.Lines)
 	}
 }
