@@ -138,6 +138,21 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	container.Put("/cco/:id", h.UpdateContainerChecklist)
 	container.Delete("/cco/:id", h.DeleteContainerChecklist)
 
+	// Laporan Brontol & Retur Barang Reject (Form REP-013-KSB)
+	brontol := qc.Group("/brontol")
+	brontol.Get("/", h.ListBrontolReports)
+	brontol.Post("/", h.CreateBrontolReport)
+	brontol.Get("/stats", h.GetBrontolStats)
+	brontol.Get("/stock-card", h.GetBrontolStockCard)
+	brontol.Get("/returns", h.ListRejectReturns)
+	brontol.Get("/returns/:id", h.GetRejectReturn)
+	brontol.Put("/returns/:id", h.UpdateRejectReturn)
+	brontol.Delete("/returns/:id", h.DeleteRejectReturn)
+	brontol.Get("/:id", h.GetBrontolReport)
+	brontol.Put("/:id", h.UpdateBrontolReport)
+	brontol.Delete("/:id", h.DeleteBrontolReport)
+	brontol.Post("/:id/return", h.CreateRejectReturn)
+
 	// Lot traceability (moved from legacy certification module)
 	router.Get("/traceability/lot/:lot", protected, tenantCtx, h.TraceLot)
 }

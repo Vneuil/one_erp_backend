@@ -115,6 +115,38 @@ func (uc *qcUseCase) CreateSievingLog(ctx context.Context, dto CreateSievingLogD
 	if err := uc.repo.CreateSievingLog(ctx, item); err != nil {
 		return nil, apperrors.NewInternal(err, "Gagal menyimpan monitoring proses ayak")
 	}
+
+	if item.OverallStatus == "failed" || !item.InitialQCPassed || !item.FinalQCPassed {
+		matType := "BM"
+		if item.Category == "Oven" {
+			matType = "BO"
+		}
+		defect := "Gagal QC Ayak: " + item.InitialFindings
+		if item.FinalFindings != "" {
+			defect += "; " + item.FinalFindings
+		}
+		if defect == "Gagal QC Ayak: " {
+			defect = "Kondisi saringan ayak tidak lolos standar"
+		}
+		_, _ = uc.AutoCreateBrontolOnQCFailure(ctx, AutoBrontolTrigger{
+			SourceStage:        domain.StageSieving,
+			SourceInspectionID: &item.ID,
+			SourceInspectionNo: item.DocumentNo,
+			ProductionOrderID:  item.ProductionOrderID,
+			ProductID:          item.ProductID,
+			ProductName:        item.ProductName,
+			BatchNo:            item.BatchNo,
+			MachineNo:          item.MachineNo,
+			MeshSize:           item.MeshSize,
+			MaterialType:       matType,
+			DefectReason:       defect,
+			ActionDisposition:  domain.ActionRework,
+			OperatorName:       item.InitialPICName,
+			QCInspectorName:    item.InitialQCName,
+			Notes:              item.Notes,
+		})
+	}
+
 	return item, nil
 }
 
@@ -321,6 +353,32 @@ func (uc *qcUseCase) CreateMagnetTrapLog(ctx context.Context, dto CreateMagnetTr
 	if err := uc.repo.CreateMagnetTrapLog(ctx, item); err != nil {
 		return nil, apperrors.NewInternal(err, "Gagal mencatat pemakaian magnet trap")
 	}
+
+	if !item.QCPassed || !item.IsPowerSufficient || item.OverallStatus == "warning" || item.OverallStatus == "replaced" {
+		defect := "Magnet Trap: " + item.Issues
+		if item.ForeignMatterFound != "" {
+			defect += "; Benda Asing: " + item.ForeignMatterFound
+		}
+		if defect == "Magnet Trap: " {
+			defect = "Kekuatan magnet trap tidak mencukupi standar (di bawah 700 mT)"
+		}
+		_, _ = uc.AutoCreateBrontolOnQCFailure(ctx, AutoBrontolTrigger{
+			SourceStage:        domain.StageMagnetTrap,
+			SourceInspectionID: &item.ID,
+			SourceInspectionNo: item.DocumentNo,
+			ProductionOrderID:  item.ProductionOrderID,
+			BatchNo:            item.BatchNo,
+			ProductName:        "Gula Semut (Line " + item.Room + ")",
+			MachineNo:          item.MachineNo,
+			MaterialType:       "BM",
+			DefectReason:       defect,
+			ActionDisposition:  domain.ActionHold,
+			OperatorName:       item.PICName,
+			QCInspectorName:    item.QCName,
+			Notes:              item.Notes,
+		})
+	}
+
 	return item, nil
 }
 
@@ -544,6 +602,30 @@ func (uc *qcUseCase) CreateMeshBoltLog(ctx context.Context, dto CreateMeshBoltLo
 	if err := uc.repo.CreateMeshBoltLog(ctx, item); err != nil {
 		return nil, apperrors.NewInternal(err, "Gagal mencatat kondisi mur & baut mesh ayakan")
 	}
+
+	if !item.IsCountMatched || item.OverallStatus == "hazard_alert" {
+		defect := "Bahaya Fisik Baut Lepas: Jumlah baut awal dan akhir tidak cocok"
+		if item.FinalFindings != "" {
+			defect += "; " + item.FinalFindings
+		}
+		_, _ = uc.AutoCreateBrontolOnQCFailure(ctx, AutoBrontolTrigger{
+			SourceStage:        domain.StageMeshBolt,
+			SourceInspectionID: &item.ID,
+			SourceInspectionNo: item.DocumentNo,
+			ProductionOrderID:  item.ProductionOrderID,
+			BatchNo:            item.BatchNo,
+			ProductName:        "Gula Semut (Line " + item.Room + ")",
+			MachineNo:          item.MachineNo,
+			MeshSize:           item.MeshSize,
+			MaterialType:       "BM",
+			DefectReason:       defect,
+			ActionDisposition:  domain.ActionHold,
+			OperatorName:       item.FinalPICName,
+			QCInspectorName:    item.FinalQCName,
+			Notes:              item.Notes,
+		})
+	}
+
 	return item, nil
 }
 
@@ -749,6 +831,29 @@ func (uc *qcUseCase) CreateOvenLog(ctx context.Context, dto CreateOvenLogDTO) (*
 	if err := uc.repo.CreateOvenLog(ctx, item); err != nil {
 		return nil, apperrors.NewInternal(err, "Gagal mencatat monitoring oven")
 	}
+
+	if !item.QCPassed || !item.IsTargetMoistureReached || item.OverallStatus == "failed" || item.OverallStatus == "re_oven" {
+		defect := fmt.Sprintf("Kadar air oven %.2f%% (target <= 2.0%%)", item.FinalMoisture)
+		if item.Issues != "" {
+			defect += "; " + item.Issues
+		}
+		_, _ = uc.AutoCreateBrontolOnQCFailure(ctx, AutoBrontolTrigger{
+			SourceStage:        domain.StageOven,
+			SourceInspectionID: &item.ID,
+			SourceInspectionNo: item.DocumentNo,
+			ProductionOrderID:  item.ProductionOrderID,
+			ProductName:        item.ProductName,
+			BatchNo:            item.BatchNo,
+			MachineNo:          item.OvenNo,
+			MaterialType:       "BO",
+			DefectReason:       defect,
+			ActionDisposition:  domain.ActionReOven,
+			OperatorName:       item.PICName,
+			QCInspectorName:    item.QCVerifierName,
+			Notes:              item.Notes,
+		})
+	}
+
 	return item, nil
 }
 

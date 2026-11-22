@@ -177,6 +177,38 @@ func (uc *qcUseCase) CreatePackagingLabelCheck(ctx context.Context, dto CreatePa
 		return nil, fmt.Errorf("gagal membuat laporan PLK: %w", err)
 	}
 
+	if overall == "ditolak" || hasRejected {
+		var totalRejQty float64
+		prodName := "Bahan Kemas Berlabel"
+		if len(items) > 0 {
+			prodName = items[0].ItemName
+			for _, it := range items {
+				totalRejQty += float64(it.RejectedQty)
+			}
+		}
+		if totalRejQty <= 0 {
+			totalRejQty = 1.0
+		}
+		defect := "Pemeriksaan label kemasan (PLK) ditolak"
+		if log.Notes != "" {
+			defect += ": " + log.Notes
+		}
+		_, _ = uc.AutoCreateBrontolOnQCFailure(ctx, AutoBrontolTrigger{
+			SourceStage:        domain.StagePackagingLabel,
+			SourceInspectionID: &log.ID,
+			SourceInspectionNo: log.DocumentNo,
+			ProductName:        prodName,
+			BatchNo:            log.BatchNo,
+			Quantity:           totalRejQty,
+			Unit:               "PCS",
+			MaterialType:       "BK",
+			DefectReason:       defect,
+			ActionDisposition:  domain.ActionReturnToSupplier,
+			QCInspectorName:    log.QCInspectorName,
+			Notes:              log.Notes,
+		})
+	}
+
 	return log, nil
 }
 

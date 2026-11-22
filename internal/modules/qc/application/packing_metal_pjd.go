@@ -658,6 +658,36 @@ func (uc *qcUseCase) CreateMetalVerificationLog(ctx context.Context, dto CreateM
 	if err := uc.repo.CreateMetalVerificationLog(ctx, log); err != nil {
 		return nil, apperrors.NewInternal(err)
 	}
+
+	if !log.IsAllPiecesPassed || log.OverallStatus == "failed" {
+		defect := "Uji CCP Metal Detector gagal: "
+		if !log.FePassed {
+			defect += "Fe tidak terdeteksi; "
+		}
+		if !log.NonFePassed {
+			defect += "Non-Fe tidak terdeteksi; "
+		}
+		if !log.SSPassed {
+			defect += "SS tidak terdeteksi; "
+		}
+		if log.CorrectiveAction != "" {
+			defect += "Tindakan: " + log.CorrectiveAction
+		}
+		_, _ = uc.AutoCreateBrontolOnQCFailure(ctx, AutoBrontolTrigger{
+			SourceStage:        domain.StageMetalDetector,
+			SourceInspectionID: &log.ID,
+			SourceInspectionNo: log.DocumentNo,
+			ProductName:        "Produk Line Packing (" + log.ProductType + ")",
+			BatchNo:            log.CheckDate + "-" + log.CheckTime,
+			MaterialType:       "FG",
+			DefectReason:       defect,
+			ActionDisposition:  domain.ActionHold,
+			OperatorName:       log.PICName,
+			QCInspectorName:    log.QCVerifierName,
+			Notes:              log.Notes,
+		})
+	}
+
 	return log, nil
 }
 
@@ -884,6 +914,42 @@ func (uc *qcUseCase) CreateFinishedGoodsLog(ctx context.Context, dto CreateFinis
 	if err := uc.repo.CreateFinishedGoodsLog(ctx, log); err != nil {
 		return nil, apperrors.NewInternal(err)
 	}
+
+	if log.InspectionDecision == "ditolak" || !log.IsMoistureStandard {
+		defect := "PJD Ditolak: "
+		if !log.IsMoistureStandard {
+			defect += fmt.Sprintf("Kadar air %.2f%% > 2.0%%; ", log.MoistureContent)
+		}
+		if !log.IsFreeForeignMatter {
+			defect += "Terdeteksi benda asing (" + log.ForeignMatterNotes + "); "
+		}
+		if !strings.EqualFold(log.PrimaryPackaging, "Baik") {
+			defect += "Kemasan primer: " + log.PrimaryPackaging + "; "
+		}
+		if log.Notes != "" {
+			defect += log.Notes
+		}
+		qty := log.NetWeight
+		if qty <= 0 {
+			qty = log.GrossWeight
+		}
+		_, _ = uc.AutoCreateBrontolOnQCFailure(ctx, AutoBrontolTrigger{
+			SourceStage:        domain.StageFinishedGoods,
+			SourceInspectionID: &log.ID,
+			SourceInspectionNo: log.DocumentNo,
+			ProductionOrderID:  log.ProductionOrderID,
+			ProductName:        log.ProductName,
+			BatchNo:            log.BatchNo,
+			Quantity:           qty,
+			Unit:               "KG",
+			MaterialType:       "FG",
+			DefectReason:       defect,
+			ActionDisposition:  domain.ActionRework,
+			QCInspectorName:    log.QCPersonnelName,
+			Notes:              log.Notes,
+		})
+	}
+
 	return log, nil
 }
 

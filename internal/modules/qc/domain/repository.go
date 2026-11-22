@@ -149,6 +149,23 @@ type QCRepository interface {
 	UpdateContainerChecklist(ctx context.Context, log *ContainerChecklistLog) error
 	DeleteContainerChecklist(ctx context.Context, id uuid.UUID) error
 
+	// Brontol & Reject Return Reports (Form REP-013-KSB)
+	CreateBrontolReport(ctx context.Context, report *BrontolReport) error
+	GetBrontolReportByID(ctx context.Context, id uuid.UUID) (*BrontolReport, error)
+	GetBrontolReportByNo(ctx context.Context, reportNo string) (*BrontolReport, error)
+	ListBrontolReports(ctx context.Context, month, stage, action, status, search string) ([]BrontolReport, error)
+	UpdateBrontolReport(ctx context.Context, report *BrontolReport) error
+	DeleteBrontolReport(ctx context.Context, id uuid.UUID) error
+
+	CreateRejectReturnReport(ctx context.Context, ret *RejectReturnReport) error
+	GetRejectReturnReportByID(ctx context.Context, id uuid.UUID) (*RejectReturnReport, error)
+	GetRejectReturnReportByBrontolID(ctx context.Context, brontolReportID uuid.UUID) (*RejectReturnReport, error)
+	ListRejectReturnReports(ctx context.Context, month, status, search string) ([]RejectReturnReport, error)
+	UpdateRejectReturnReport(ctx context.Context, ret *RejectReturnReport) error
+	DeleteRejectReturnReport(ctx context.Context, id uuid.UUID) error
+
+	GetBrontolStats(ctx context.Context) (totalCount int64, totalQuantityKg float64, returnCount int64, returnQtyKg float64, reworkCount int64, err error)
+
 	// Document numbering helper
 	CountLogsByPrefix(ctx context.Context, tableName string, prefix string) (int64, error)
 }

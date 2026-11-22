@@ -271,7 +271,7 @@ func (RawMaterialIncomingCheck) TableName() string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sprint 2 (Tahap 3): Monitoring Ayak (MNA, CMT, MNM) & Oven (MNO)
+// Monitoring Ayak (MNA, CMT, MNM) & Oven (MNO)
 // ─────────────────────────────────────────────────────────────────────────────
 
 // SievingMonitoringLog records sieve mesh inspection at start/end of batch (Form QC-009-MNA.01)
@@ -455,7 +455,7 @@ func (OvenMonitoringLog) TableName() string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sprint 2 (Tahap 4): Kontrol Ruang Packing (MNJ, MNG), Metal Detector CCP (CPP, VMD), & Produk Jadi (PJD)
+// Kontrol Ruang Packing (MNJ, MNG), Metal Detector CCP (CPP, VMD), & Produk Jadi (PJD)
 // ─────────────────────────────────────────────────────────────────────────────
 
 // NeedleMonitoringLog records sewing machine needle status & stock to prevent needle fragments (Form QC-011-MNJ.01)

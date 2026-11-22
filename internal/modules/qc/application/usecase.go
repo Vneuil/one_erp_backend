@@ -135,6 +135,23 @@ type QCUseCase interface {
 	ListContainerChecklists(ctx context.Context, month string, containerNo string, destination string, decision string) ([]domain.ContainerChecklistLog, error)
 	UpdateContainerChecklist(ctx context.Context, id uuid.UUID, dto UpdateContainerChecklistDTO) (*domain.ContainerChecklistLog, error)
 	DeleteContainerChecklist(ctx context.Context, id uuid.UUID) error
+
+	// Brontol & Reject Return Reports (Form REP-013-KSB)
+	CreateBrontolReport(ctx context.Context, dto CreateBrontolReportDTO) (*domain.BrontolReport, error)
+	GetBrontolReportByID(ctx context.Context, id uuid.UUID) (*domain.BrontolReport, error)
+	ListBrontolReports(ctx context.Context, month, stage, action, status, search string) ([]domain.BrontolReport, error)
+	UpdateBrontolReport(ctx context.Context, id uuid.UUID, dto UpdateBrontolReportDTO) (*domain.BrontolReport, error)
+	DeleteBrontolReport(ctx context.Context, id uuid.UUID) error
+
+	CreateRejectReturn(ctx context.Context, brontolID uuid.UUID, dto CreateRejectReturnDTO) (*domain.RejectReturnReport, error)
+	GetRejectReturnByID(ctx context.Context, id uuid.UUID) (*domain.RejectReturnReport, error)
+	ListRejectReturns(ctx context.Context, month, status, search string) ([]domain.RejectReturnReport, error)
+	UpdateRejectReturn(ctx context.Context, id uuid.UUID, dto UpdateRejectReturnDTO) (*domain.RejectReturnReport, error)
+	DeleteRejectReturn(ctx context.Context, id uuid.UUID) error
+
+	GetBrontolStats(ctx context.Context) (*BrontolStatsResponseDTO, error)
+	GetBrontolStockCard(ctx context.Context, month string, productCode string) ([]BrontolStockCardItemDTO, error)
+	AutoCreateBrontolOnQCFailure(ctx context.Context, trigger AutoBrontolTrigger) (*domain.BrontolReport, error)
 }
 
 type qcUseCase struct {
@@ -379,6 +396,25 @@ func (uc *qcUseCase) CreateInspection(ctx context.Context, inspectorID uuid.UUID
 
 	if err := uc.repo.CreateInspection(ctx, insp); err != nil {
 		return nil, apperrors.NewInternal(err)
+	}
+
+	if insp.OverallStatus == domain.QCStatusFailed {
+		action := domain.ActionRework
+		if insp.TargetType == domain.TargetGoodsReceipt {
+			action = domain.ActionReturnToSupplier
+		}
+		_, _ = uc.AutoCreateBrontolOnQCFailure(ctx, AutoBrontolTrigger{
+			SourceStage:        domain.StageProductionStep,
+			SourceInspectionID: &insp.ID,
+			SourceInspectionNo: insp.InspectionNo,
+			ProductionOrderID:  insp.ProductionOrderID,
+			BatchNo:            insp.BatchNo,
+			ProductID:          &insp.ProductID,
+			DefectReason:       fmt.Sprintf("Gagal inspeksi QC parameter (%s)", insp.InspectionNo),
+			ActionDisposition:  action,
+			QCInspectorName:    insp.InspectorName,
+			Notes:              insp.Notes,
+		})
 	}
 
 	dtoRes := mapInspectionToDTO(insp)
@@ -703,6 +739,35 @@ func (uc *qcUseCase) CreatePackagingCheck(ctx context.Context, dto CreatePackagi
 
 	if err := uc.repo.CreatePackagingCheck(ctx, check); err != nil {
 		return nil, apperrors.NewInternal(err)
+	}
+
+	if check.OverallStatus == "failed" || check.FailedQty > 0 {
+		failQty := float64(check.FailedQty)
+		if failQty <= 0 {
+			failQty = float64(check.TotalQty)
+		}
+		defect := check.FailedCondition
+		if defect == "" {
+			defect = "Bahan kemas cacat / gagal spesifikasi QC-003-PBK"
+		}
+		_, _ = uc.AutoCreateBrontolOnQCFailure(ctx, AutoBrontolTrigger{
+			SourceStage:        domain.StageIncomingPackaging,
+			SourceInspectionID: &check.ID,
+			SourceInspectionNo: check.LBMNo,
+			ProductName:        check.ItemName,
+			ProductCode:        check.ItemCode,
+			BatchNo:            check.CheckMonth,
+			MaterialType:       "BK",
+			SupplierID:         check.SupplierID,
+			SupplierName:       check.SupplierName,
+			Quantity:           failQty,
+			Unit:               "PCS",
+			DefectReason:       defect,
+			ActionDisposition:  domain.ActionReturnToSupplier,
+			QCInspectorName:    check.QCName,
+			Notes:              check.Notes,
+			GoodsReceiptNo:     check.LBMNo,
+		})
 	}
 
 	res := mapPackagingCheckToDTO(check)
@@ -1169,6 +1234,36 @@ func (uc *qcUseCase) CreateIncomingCheck(ctx context.Context, dto CreateIncoming
 
 	if err := uc.repo.CreateIncomingCheck(ctx, check); err != nil {
 		return nil, apperrors.NewInternal(err)
+	}
+
+	if check.OverallStatus == "rejected" || check.RejectedWeight > 0 {
+		rejQty := check.RejectedWeight
+		if rejQty <= 0 {
+			rejQty = check.NetWeight
+		}
+		defect := fmt.Sprintf("Kondisi: %s; %s", check.SugarCondition, check.RecommendedAction)
+		if check.MoistureContent != nil && *check.MoistureContent > 2.0 {
+			defect += fmt.Sprintf(" (Kadar Air %.2f%%)", *check.MoistureContent)
+		}
+		_, _ = uc.AutoCreateBrontolOnQCFailure(ctx, AutoBrontolTrigger{
+			SourceStage:        domain.StageIncomingRawMaterial,
+			SourceInspectionID: &check.ID,
+			SourceInspectionNo: check.LBMNo,
+			ProductName:        check.ProductName,
+			BatchNo:            check.BatchNo,
+			MaterialType:       "BM",
+			SupplierID:         check.SupplierID,
+			SupplierName:       check.SupplierName,
+			Quantity:           rejQty,
+			Unit:               "KG",
+			DefectReason:       defect,
+			ActionDisposition:  domain.ActionReturnToSupplier,
+			QCInspectorName:    check.QCName,
+			Notes:              check.Notes,
+			PONo:               check.PONo,
+			GoodsReceiptNo:     check.LBMNo,
+			DeliveryNoteNo:     check.DeliveryNoteNo,
+		})
 	}
 
 	res := mapIncomingCheckToDTO(check)

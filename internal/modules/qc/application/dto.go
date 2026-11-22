@@ -439,7 +439,7 @@ type IncomingCheckResponseDTO struct {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Sprint 2 (Tahap 3): Monitoring Ayak (MNA, CMT, MNM) & Oven (MNO) DTOs
+// Monitoring Ayak (MNA, CMT, MNM) & Oven (MNO) DTOs
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─── MNA (Sieving Monitoring Log) DTOs ───────────────────────────────────────

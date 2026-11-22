@@ -761,6 +761,132 @@ func (r *qcRepository) DeleteContainerChecklist(ctx context.Context, id uuid.UUI
 	return r.db.WithContext(ctx).Delete(&domain.ContainerChecklistLog{}, "id = ?", id).Error
 }
 
+// ─── Brontol & Reject Return Reports (REP-013-KSB) ──────────────────────────
+
+func (r *qcRepository) CreateBrontolReport(ctx context.Context, report *domain.BrontolReport) error {
+	return r.db.WithContext(ctx).Create(report).Error
+}
+
+func (r *qcRepository) GetBrontolReportByID(ctx context.Context, id uuid.UUID) (*domain.BrontolReport, error) {
+	var item domain.BrontolReport
+	if err := r.db.WithContext(ctx).Preload("ReturnReport").First(&item, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *qcRepository) GetBrontolReportByNo(ctx context.Context, reportNo string) (*domain.BrontolReport, error) {
+	var item domain.BrontolReport
+	if err := r.db.WithContext(ctx).Preload("ReturnReport").First(&item, "report_no = ?", reportNo).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *qcRepository) ListBrontolReports(ctx context.Context, month, stage, action, status, search string) ([]domain.BrontolReport, error) {
+	var reports []domain.BrontolReport
+	q := r.db.WithContext(ctx).Model(&domain.BrontolReport{}).Preload("ReturnReport")
+
+	if month != "" {
+		q = q.Where("report_month = ?", month)
+	}
+	if stage != "" {
+		q = q.Where("source_stage = ?", stage)
+	}
+	if action != "" {
+		q = q.Where("action_disposition = ?", action)
+	}
+	if status != "" {
+		q = q.Where("status = ?", status)
+	}
+	if search != "" {
+		pat := "%" + strings.ToLower(search) + "%"
+		q = q.Where("LOWER(report_no) LIKE ? OR LOWER(batch_no) LIKE ? OR LOWER(product_name) LIKE ? OR LOWER(supplier_name) LIKE ?", pat, pat, pat, pat)
+	}
+
+	err := q.Order("report_date DESC, created_at DESC").Find(&reports).Error
+	return reports, err
+}
+
+func (r *qcRepository) UpdateBrontolReport(ctx context.Context, report *domain.BrontolReport) error {
+	return r.db.WithContext(ctx).Save(report).Error
+}
+
+func (r *qcRepository) DeleteBrontolReport(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.BrontolReport{}, "id = ?", id).Error
+}
+
+func (r *qcRepository) CreateRejectReturnReport(ctx context.Context, ret *domain.RejectReturnReport) error {
+	return r.db.WithContext(ctx).Create(ret).Error
+}
+
+func (r *qcRepository) GetRejectReturnReportByID(ctx context.Context, id uuid.UUID) (*domain.RejectReturnReport, error) {
+	var item domain.RejectReturnReport
+	if err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *qcRepository) GetRejectReturnReportByBrontolID(ctx context.Context, brontolReportID uuid.UUID) (*domain.RejectReturnReport, error) {
+	var item domain.RejectReturnReport
+	if err := r.db.WithContext(ctx).First(&item, "brontol_report_id = ?", brontolReportID).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *qcRepository) ListRejectReturnReports(ctx context.Context, month, status, search string) ([]domain.RejectReturnReport, error) {
+	var returns []domain.RejectReturnReport
+	q := r.db.WithContext(ctx).Model(&domain.RejectReturnReport{})
+
+	if month != "" {
+		q = q.Where("return_date LIKE ?", month+"%")
+	}
+	if status != "" {
+		q = q.Where("status = ?", status)
+	}
+	if search != "" {
+		pat := "%" + strings.ToLower(search) + "%"
+		q = q.Where("LOWER(return_no) LIKE ? OR LOWER(batch_no) LIKE ? OR LOWER(product_name) LIKE ? OR LOWER(supplier_name) LIKE ?", pat, pat, pat, pat)
+	}
+
+	err := q.Order("return_date DESC, created_at DESC").Find(&returns).Error
+	return returns, err
+}
+
+func (r *qcRepository) UpdateRejectReturnReport(ctx context.Context, ret *domain.RejectReturnReport) error {
+	return r.db.WithContext(ctx).Save(ret).Error
+}
+
+func (r *qcRepository) DeleteRejectReturnReport(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.RejectReturnReport{}, "id = ?", id).Error
+}
+
+func (r *qcRepository) GetBrontolStats(ctx context.Context) (totalCount int64, totalQuantityKg float64, returnCount int64, returnQtyKg float64, reworkCount int64, err error) {
+	db := r.db.WithContext(ctx).Model(&domain.BrontolReport{})
+
+	if err = db.Count(&totalCount).Error; err != nil {
+		return
+	}
+
+	type sumResult struct {
+		TotalQty float64
+	}
+	var sumRes sumResult
+	_ = r.db.WithContext(ctx).Model(&domain.BrontolReport{}).Select("COALESCE(SUM(quantity), 0) as total_qty").Scan(&sumRes)
+	totalQuantityKg = sumRes.TotalQty
+
+	_ = r.db.WithContext(ctx).Model(&domain.BrontolReport{}).Where("action_disposition = ?", domain.ActionReturnToSupplier).Count(&returnCount)
+	var retSum sumResult
+	_ = r.db.WithContext(ctx).Model(&domain.BrontolReport{}).Where("action_disposition = ?", domain.ActionReturnToSupplier).Select("COALESCE(SUM(quantity), 0) as total_qty").Scan(&retSum)
+	returnQtyKg = retSum.TotalQty
+
+	_ = r.db.WithContext(ctx).Model(&domain.BrontolReport{}).Where("action_disposition IN (?, ?)", domain.ActionRework, domain.ActionReOven).Count(&reworkCount)
+
+	return
+}
+
 // ─── Helper Prefix Counter ───────────────────────────────────────────────────
 
 func (r *qcRepository) CountLogsByPrefix(ctx context.Context, tableName string, prefix string) (int64, error) {
