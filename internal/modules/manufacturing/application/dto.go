@@ -416,3 +416,17 @@ type CreateOvenLogDTO struct {
 	Notes             string             `json:"notes,omitempty"`
 	Cycles            []OvenCycleLineDTO `json:"cycles,omitempty"`
 }
+
+// Serial Numbers Generation
+type GenerateSerialNumbersDTO struct {
+	BatchNo      string `json:"batchNo"`
+	SupplierCode string `json:"supplierCode"`
+	Quantity     int    `json:"quantity"`
+	Format       string `json:"format"`
+}
+
+type SerialNumbersResponseDTO struct {
+	BatchNo string   `json:"batchNo"`
+	Serials []string `json:"serials"`
+	Count   int      `json:"count"`
+}

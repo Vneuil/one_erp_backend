@@ -635,3 +635,19 @@ func (h *Handler) GetForwardTraceability(c *fiber.Ctx) error {
 	}
 	return response.OK(c, "Data ketertelusuran batch (forward) berhasil dimuat", records)
 }
+
+func (h *Handler) GenerateSerialNumbers(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var dto application.GenerateSerialNumbersDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload serial numbers tidak valid")
+	}
+	res, err := uc.GenerateSerialNumbers(h.ctx(c), dto)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Serial barcode berhasil dibuat", res)
+}

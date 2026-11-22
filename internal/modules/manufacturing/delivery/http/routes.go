@@ -85,4 +85,7 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	lst.Delete("/:id", h.DeleteLST)
 	lst.Post("/:id/verify-qc", h.VerifyLSTByQC)
 	lst.Post("/:id/accept-warehouse", h.AcceptLSTByWarehouse)
+
+	// Serial numbers generator
+	manufacturing.Post("/serial-numbers/generate", h.GenerateSerialNumbers)
 }

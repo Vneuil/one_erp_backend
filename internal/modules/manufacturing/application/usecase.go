@@ -79,6 +79,7 @@ type ManufacturingUseCase interface {
 	AcceptLSTByWarehouse(ctx context.Context, id uuid.UUID, warehouseName string) (*domain.HandoverReport, error)
 	DeleteLST(ctx context.Context, id uuid.UUID) error
 	GenerateLSTFromLHP(ctx context.Context, lhpID uuid.UUID, createdBy string) (*domain.HandoverReport, error)
+	GenerateSerialNumbers(ctx context.Context, dto GenerateSerialNumbersDTO) (*SerialNumbersResponseDTO, error)
 
 	// Reports
 	DailyReport(ctx context.Context, from, to string) (*DailyReportDTO, error)
@@ -979,4 +980,26 @@ func (uc *manufacturingUseCase) GetForwardTraceability(ctx context.Context, mate
 		return nil, apperrors.NewInternal(err, "Failed to load forward traceability")
 	}
 	return records, nil
+}
+
+func (uc *manufacturingUseCase) GenerateSerialNumbers(ctx context.Context, dto GenerateSerialNumbersDTO) (*SerialNumbersResponseDTO, error) {
+	if dto.Quantity <= 0 {
+		return nil, apperrors.NewBadRequest("Kuantitas serial barcode harus lebih dari 0")
+	}
+	if dto.Quantity > 5000 {
+		return nil, apperrors.NewBadRequest("Maksimal 5000 barcode serial per generate")
+	}
+	suppCode := strings.TrimSpace(dto.SupplierCode)
+	if suppCode == "" {
+		suppCode = "PW"
+	}
+	serials := make([]string, dto.Quantity)
+	for i := 1; i <= dto.Quantity; i++ {
+		serials[i-1] = fmt.Sprintf("26N48%s%03d", suppCode, i)
+	}
+	return &SerialNumbersResponseDTO{
+		BatchNo: dto.BatchNo,
+		Serials: serials,
+		Count:   len(serials),
+	}, nil
 }
