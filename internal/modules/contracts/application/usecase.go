@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/divinecoid/one-backend/internal/modules/contracts/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/google/uuid"
@@ -78,11 +79,11 @@ func (uc *contractsUseCase) CreateContract(ctx context.Context, dto CreateContra
 
 	contractNumber := dto.ContractNumber
 	if contractNumber == "" {
-		count, err := uc.repo.CountContracts(ctx)
+		var err error
+		contractNumber, err = docseq.Next(ctx, uc.repo, "CTR", dto.StartDate)
 		if err != nil {
 			return nil, apperrors.NewInternal(err, "Failed to generate contract number")
 		}
-		contractNumber = generateContractNumber(count + 1)
 	}
 
 	c := &domain.Contract{
@@ -225,21 +226,22 @@ func (uc *contractsUseCase) RenewContract(ctx context.Context, id uuid.UUID) (*C
 	newStart := oldEnd.AddDate(0, 0, 1)
 	newEnd := newStart.Add(duration)
 
-	count, err := uc.repo.CountContracts(ctx)
+	startDate := newStart.Format("2006-01-02")
+	contractNumber, err := docseq.Next(ctx, uc.repo, "CTR", startDate)
 	if err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to generate contract number")
 	}
 
 	renewed := &domain.Contract{
 		CompanyID:      old.CompanyID,
-		ContractNumber: generateContractNumber(count + 1),
+		ContractNumber: contractNumber,
 		PartyType:      old.PartyType,
 		PartyID:        old.PartyID,
 		PartyName:      old.PartyName,
 		Title:          old.Title,
 		Description:    old.Description,
 		ContractValue:  old.ContractValue,
-		StartDate:      newStart.Format("2006-01-02"),
+		StartDate:      startDate,
 		EndDate:        newEnd.Format("2006-01-02"),
 		Status:         "active",
 		PaymentTerms:   old.PaymentTerms,

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/divinecoid/one-backend/internal/modules/qc/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/google/uuid"
 )
@@ -46,13 +47,10 @@ func (uc *qcUseCase) CreateSievingLog(ctx context.Context, dto CreateSievingLogD
 		meshSize = "Mesh 18"
 	}
 
-	prefixTag := "MNA-"
-	if strings.EqualFold(category, "Matang") {
-		prefixTag = "MNA-MAT-"
+	docNo, err := docseq.Next(ctx, uc.repo, "MNA", dto.CheckDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen MNA")
 	}
-	prefixWithDate := fmt.Sprintf("%s%s-", prefixTag, time.Now().Format("200601"))
-	count, _ := uc.repo.CountLogsByPrefix(ctx, "qc_sieving_monitoring_logs", prefixWithDate)
-	docNo := fmt.Sprintf("%s%04d", prefixWithDate, count+1)
 
 	initCond := dto.InitialCondition
 	if initCond == "" {
@@ -285,13 +283,10 @@ func (uc *qcUseCase) CreateMagnetTrapLog(ctx context.Context, dto CreateMagnetTr
 		room = "Ayak Mentah"
 	}
 
-	prefixTag := "CMT-"
-	if strings.Contains(strings.ToLower(room), "matang") {
-		prefixTag = "CMT-MAT-"
+	docNo, err := docseq.Next(ctx, uc.repo, "CMT", dto.CheckDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen CMT")
 	}
-	prefixWithDate := fmt.Sprintf("%s%s-", prefixTag, time.Now().Format("200601"))
-	count, _ := uc.repo.CountLogsByPrefix(ctx, "qc_magnet_trap_logs", prefixWithDate)
-	docNo := fmt.Sprintf("%s%04d", prefixWithDate, count+1)
 
 	isClean := true
 	if dto.IsClean != nil {
@@ -514,13 +509,10 @@ func (uc *qcUseCase) CreateMeshBoltLog(ctx context.Context, dto CreateMeshBoltLo
 		room = "Ayak Mentah"
 	}
 
-	prefixTag := "MNM-"
-	if strings.Contains(strings.ToLower(room), "matang") {
-		prefixTag = "MNM-MAT-"
+	docNo, err := docseq.Next(ctx, uc.repo, "MNM", dto.CheckDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen MNM")
 	}
-	prefixWithDate := fmt.Sprintf("%s%s-", prefixTag, time.Now().Format("200601"))
-	count, _ := uc.repo.CountLogsByPrefix(ctx, "qc_mesh_bolt_monitoring_logs", prefixWithDate)
-	docNo := fmt.Sprintf("%s%04d", prefixWithDate, count+1)
 
 	initCount := dto.InitialBoltCount
 	if initCount <= 0 {
@@ -779,9 +771,10 @@ func (uc *qcUseCase) CreateOvenLog(ctx context.Context, dto CreateOvenLogDTO) (*
 		month = dto.CheckDate[:7]
 	}
 
-	prefixWithDate := fmt.Sprintf("MNO-%s-", time.Now().Format("200601"))
-	count, _ := uc.repo.CountLogsByPrefix(ctx, "qc_oven_monitoring_logs", prefixWithDate)
-	docNo := fmt.Sprintf("%s%04d", prefixWithDate, count+1)
+	docNo, err := docseq.Next(ctx, uc.repo, "MNO", dto.CheckDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen MNO")
+	}
 
 	// Target Moisture Content <= 2.0%
 	targetReached := dto.FinalMoisture <= 2.0 && dto.FinalMoisture > 0

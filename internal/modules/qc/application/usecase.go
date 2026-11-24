@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/divinecoid/one-backend/internal/modules/qc/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/google/uuid"
 )
@@ -317,9 +318,10 @@ func (uc *qcUseCase) CreateInspection(ctx context.Context, inspectorID uuid.UUID
 	}
 
 	now := time.Now()
-	datePrefix := fmt.Sprintf("QC-%s", now.Format("200601"))
-	count, _ := uc.repo.GetInspectionCountToday(ctx, datePrefix)
-	inspNo := fmt.Sprintf("%s-%04d", datePrefix, count+1)
+	inspNo, err := docseq.Next(ctx, uc.repo, "QC", "")
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor inspeksi QC")
+	}
 
 	insp := &domain.QCInspection{
 		InspectionNo:      inspNo,
@@ -562,8 +564,13 @@ func mapInspectionToDTO(insp *domain.QCInspection) QCInspectionResponseDTO {
 // ─────────────────────────────────────────────────────────────────────────────
 
 func (uc *qcUseCase) CreateHygieneCheck(ctx context.Context, dto CreateHygieneCheckDTO) (*domain.PersonalHygieneCheck, error) {
+	docNo, err := docseq.Next(ctx, uc.repo, "CPH", dto.CheckDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen CPH")
+	}
 	isPassed := dto.WorkWearClean && dto.HairNet && dto.NailsClean && dto.NoJewelry && dto.WorkShoesClean && dto.HandWashing && dto.HealthFit
 	check := &domain.PersonalHygieneCheck{
+		DocumentNo:     docNo,
 		CheckDate:      dto.CheckDate,
 		Shift:          dto.Shift,
 		Line:           dto.Line,
@@ -602,6 +609,10 @@ func (uc *qcUseCase) DeleteHygieneCheck(ctx context.Context, id uuid.UUID) error
 }
 
 func (uc *qcUseCase) CreatePreOpCheck(ctx context.Context, dto CreatePreOpCheckDTO) (*domain.PreOpSanitationCheck, error) {
+	docNo, err := docseq.Next(ctx, uc.repo, "SSO", dto.CheckDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen SSO")
+	}
 	status := dto.Status
 	if status == "" {
 		allOk := dto.FloorClean && dto.WallCeilingClean && dto.EquipmentSanitized && dto.TrashBinClosed && dto.LightingProtected && dto.PestControlIntact
@@ -612,6 +623,7 @@ func (uc *qcUseCase) CreatePreOpCheck(ctx context.Context, dto CreatePreOpCheckD
 		}
 	}
 	check := &domain.PreOpSanitationCheck{
+		DocumentNo:         docNo,
 		CheckDate:          dto.CheckDate,
 		CheckTime:          dto.CheckTime,
 		Shift:              dto.Shift,
@@ -667,6 +679,7 @@ func computePBKStatus(passedQty, failedQty int) string {
 func mapPackagingCheckToDTO(c *domain.PackagingQualityCheck) PackagingCheckResponseDTO {
 	return PackagingCheckResponseDTO{
 		ID:              c.ID,
+		DocumentNo:      c.DocumentNo,
 		CheckMonth:      c.CheckMonth,
 		GoodsReceiptID:  c.GoodsReceiptID,
 		LBMNo:           c.LBMNo,
@@ -711,7 +724,12 @@ func (uc *qcUseCase) CreatePackagingCheck(ctx context.Context, dto CreatePackagi
 		qaDate = &now
 	}
 
+	docNo, err := docseq.Next(ctx, uc.repo, "PBK", dto.CheckDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen PBK")
+	}
 	check := &domain.PackagingQualityCheck{
+		DocumentNo:      docNo,
 		CheckMonth:      dto.CheckMonth,
 		GoodsReceiptID:  dto.GoodsReceiptID,
 		LBMNo:           dto.LBMNo,
@@ -895,6 +913,7 @@ func computeCASStatus(cabinSafe, undercarriageSafe, cargoAreaSafe, floorClean, w
 func mapArmadaCheckToDTO(c *domain.SupplierArmadaCheck) ArmadaCheckResponseDTO {
 	return ArmadaCheckResponseDTO{
 		ID:                c.ID,
+		DocumentNo:        c.DocumentNo,
 		GoodsReceiptID:    c.GoodsReceiptID,
 		LBMNo:             c.LBMNo,
 		CheckDate:         c.CheckDate,
@@ -950,7 +969,12 @@ func (uc *qcUseCase) CreateArmadaCheck(ctx context.Context, dto CreateArmadaChec
 		qaDate = &now
 	}
 
+	docNo, err := docseq.Next(ctx, uc.repo, "CAS", dto.CheckDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen CAS")
+	}
 	check := &domain.SupplierArmadaCheck{
+		DocumentNo:        docNo,
 		GoodsReceiptID:    dto.GoodsReceiptID,
 		LBMNo:             dto.LBMNo,
 		CheckDate:         dto.CheckDate,
@@ -1136,6 +1160,7 @@ func computePBDStatus(acceptedWeight, rejectedWeight float64, moisture *float64,
 func mapIncomingCheckToDTO(c *domain.RawMaterialIncomingCheck) IncomingCheckResponseDTO {
 	return IncomingCheckResponseDTO{
 		ID:                 c.ID,
+		DocumentNo:         c.DocumentNo,
 		GoodsReceiptID:     c.GoodsReceiptID,
 		LBMNo:              c.LBMNo,
 		CheckDate:          c.CheckDate,
@@ -1198,7 +1223,12 @@ func (uc *qcUseCase) CreateIncomingCheck(ctx context.Context, dto CreateIncoming
 		qaDate = &now
 	}
 
+	docNo, err := docseq.Next(ctx, uc.repo, "PBD", dto.CheckDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen PBD")
+	}
 	check := &domain.RawMaterialIncomingCheck{
+		DocumentNo:         docNo,
 		GoodsReceiptID:     dto.GoodsReceiptID,
 		LBMNo:              dto.LBMNo,
 		CheckDate:          dto.CheckDate,

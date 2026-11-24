@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/divinecoid/one-backend/internal/modules/qc/domain"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
@@ -82,14 +83,10 @@ func (uc *qcUseCase) CreatePackagingLabelCheck(ctx context.Context, dto CreatePa
 		month = dto.CheckDate[:7]
 	}
 
-	dateStr := dto.CheckDate
-	t, err := time.Parse("2006-01-02", dateStr)
+	docNo, err := docseq.Next(ctx, uc.repo, "PLK", dto.CheckDate)
 	if err != nil {
-		t = time.Now()
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen PLK")
 	}
-	prefix := fmt.Sprintf("PLK-%04d%02d-", t.Year(), t.Month())
-	count, _ := uc.repo.CountLogsByPrefix(ctx, "qc_packaging_label_checks", prefix)
-	docNo := fmt.Sprintf("%s%04d", prefix, count+1)
 
 	fairtrade := dto.FairtradeStatus
 	if fairtrade == "" {
@@ -430,14 +427,10 @@ func (uc *qcUseCase) CreateContainerChecklist(ctx context.Context, dto CreateCon
 		month = dto.CheckDate[:7]
 	}
 
-	dateStr := dto.CheckDate
-	t, err := time.Parse("2006-01-02", dateStr)
+	docNo, err := docseq.Next(ctx, uc.repo, "CCO", dto.CheckDate)
 	if err != nil {
-		t = time.Now()
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen CCO")
 	}
-	prefix := fmt.Sprintf("CCO-%04d%02d-", t.Year(), t.Month())
-	count, _ := uc.repo.CountLogsByPrefix(ctx, "qc_container_checklists", prefix)
-	docNo := fmt.Sprintf("%s%04d", prefix, count+1)
 
 	// Decision evaluation: if any suspicious item, or dirty, or leak, mark as ditolak unless overridden
 	overall := dto.OverallDecision

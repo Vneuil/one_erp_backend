@@ -2,12 +2,11 @@ package application
 
 import (
 	"context"
-	"fmt"
 	"strings"
-	"time"
 
 	"github.com/divinecoid/one-backend/internal/modules/cooperative/domain"
 	hrmdomain "github.com/divinecoid/one-backend/internal/modules/hrm/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/google/uuid"
@@ -40,12 +39,7 @@ func NewCooperativeUseCase(repo domain.CooperativeRepository, hrmRepo hrmdomain.
 // tenant/company and stay roughly sequential even though this is not
 // strictly race-safe under high concurrency.
 func (uc *cooperativeUseCase) generateLoanNo(ctx context.Context) (string, error) {
-	count, err := uc.repo.CountLoans(ctx)
-	if err != nil {
-		return "", err
-	}
-	year := time.Now().Year()
-	return fmt.Sprintf("KOP-%d-%04d", year, count+1), nil
+	return docseq.Next(ctx, uc.repo, "KOP", "")
 }
 
 func (uc *cooperativeUseCase) CreateLoan(ctx context.Context, dto CreateLoanDTO) (*LoanResponseDTO, error) {

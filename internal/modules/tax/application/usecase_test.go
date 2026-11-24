@@ -219,7 +219,7 @@ func TestFakturFromSalesInvoiceSnapshotsBuyerAndAllocatesLines(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d.Direction != "output" || d.Status != "draft" || d.Number != "FPK-202603-0001" || d.TransactionCode != "04" || d.Period != "2026-03" {
+	if d.Direction != "output" || d.Status != "draft" || d.Number != "FPK-001-0326" || d.TransactionCode != "04" || d.Period != "2026-03" {
 		t.Fatalf("unexpected draft: %+v", d)
 	}
 	if d.CounterpartyNPWP != "0987654321098000" || d.CounterpartyAddress != "Jl. Mawar 1" || d.SourceReference != "INV-1" {
@@ -346,7 +346,7 @@ func TestPurchaseFakturMasukanRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if d.Direction != "input" || d.Number != "FPM-202603-0001" || d.Period != "2026-04" || d.CounterpartyNPWP != "0111222233334000" {
+	if d.Direction != "input" || d.Number != "FPM-001-0326" || d.Period != "2026-04" || d.CounterpartyNPWP != "0111222233334000" {
 		t.Fatalf("unexpected: %+v", d)
 	}
 	if _, err := f.uc.Issue(ctx, d.ID); err == nil {

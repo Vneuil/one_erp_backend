@@ -11,6 +11,7 @@ import (
 	financeApp "github.com/divinecoid/one-backend/internal/modules/finance/application"
 	"github.com/divinecoid/one-backend/internal/modules/inventory/domain"
 	"github.com/divinecoid/one-backend/internal/shared/actor"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/google/uuid"
 )
@@ -125,12 +126,11 @@ func StockDocumentLedgerEntry(d *domain.StockDocument) financeApp.LedgerEntry {
 }
 
 func (uc *inventoryUseCase) nextDocNumber(ctx context.Context, docType, date string) (string, error) {
-	prefix := fmt.Sprintf("%s-%s-", docKinds[docType].prefix, strings.ReplaceAll(date[:7], "-", ""))
-	n, err := uc.repo.CountStockDocuments(ctx, docType, prefix)
+	num, err := docseq.Next(ctx, uc.repo, docKinds[docType].prefix, date)
 	if err != nil {
 		return "", apperrors.NewInternal(err, "Failed to number the document")
 	}
-	return fmt.Sprintf("%s%04d", prefix, n+1), nil
+	return num, nil
 }
 
 // CreateStockDocument validates, moves the stock of every line, saves the

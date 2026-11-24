@@ -15,6 +15,7 @@ import (
 	productDomain "github.com/divinecoid/one-backend/internal/modules/product/domain"
 	salesDomain "github.com/divinecoid/one-backend/internal/modules/sales/domain"
 	"github.com/divinecoid/one-backend/internal/shared/actor"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/sod"
 	"github.com/divinecoid/one-backend/internal/shared/types"
@@ -190,11 +191,15 @@ func (uc *posUseCase) Checkout(ctx context.Context, dto CheckoutDTO) (*POSTransa
 		tendered = totals.Total
 	}
 
-	orderNo := fmt.Sprintf("POS-%s-%04d", time.Now().Format("060102"), time.Now().Nanosecond()%10000)
+	orderDate := time.Now().Format("2006-01-02")
+	orderNo, err := docseq.Next(ctx, uc.salesRepo, "POS", orderDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to generate POS order number")
+	}
 	order := &salesDomain.SalesOrder{
 		OrderNumber: orderNo, CustomerName: customer, TotalAmount: totals.Total, BaseAmount: totals.Total,
 		Status: "Completed", PaymentStatus: "Paid", Channel: "POS", CreatedByEmail: caller,
-		OrderDate: time.Now().Format("2006-01-02"), WarehouseID: dto.WarehouseID, Lines: soLines,
+		OrderDate: orderDate, WarehouseID: dto.WarehouseID, Lines: soLines,
 	}
 	if err := uc.salesRepo.CreateOrder(ctx, order); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to create sales order for POS transaction")

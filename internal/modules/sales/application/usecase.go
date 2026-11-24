@@ -19,6 +19,7 @@ import (
 	financeApp "github.com/divinecoid/one-backend/internal/modules/finance/application"
 	inventoryApp "github.com/divinecoid/one-backend/internal/modules/inventory/application"
 	"github.com/divinecoid/one-backend/internal/modules/sales/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/google/uuid"
@@ -175,9 +176,14 @@ func (uc *salesUseCase) CreateOrder(ctx context.Context, dto CreateSalesOrderDTO
 		}
 	}
 
+	orderDate := time.Now().Format("2006-01-02")
 	orderNum := dto.OrderNumber
 	if orderNum == "" {
-		orderNum = fmt.Sprintf("SO-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000)
+		var err error
+		orderNum, err = docseq.Next(ctx, uc.repo, "SO", orderDate)
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to generate sales order number")
+		}
 	}
 
 	status := dto.Status
@@ -193,7 +199,6 @@ func (uc *salesUseCase) CreateOrder(ctx context.Context, dto CreateSalesOrderDTO
 		channel = "Direct B2B"
 	}
 
-	orderDate := time.Now().Format("2006-01-02")
 	dueDate := dto.DueDate
 	if dueDate == "" && dto.PaymentTerm != "" {
 		days := parseDaysFromTerm(dto.PaymentTerm)
@@ -903,7 +908,11 @@ func (uc *salesUseCase) CreateQuotation(ctx context.Context, dto CreateQuotation
 	}
 
 	if quoNum == "" {
-		quoNum = fmt.Sprintf("QUO-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000)
+		var err error
+		quoNum, err = docseq.Next(ctx, uc.repo, "QUO", "")
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to generate quotation number")
+		}
 	}
 
 	validUntil := dto.ValidUntil
@@ -1185,7 +1194,11 @@ func (uc *salesUseCase) CreateInvoice(ctx context.Context, dto CreateInvoiceDTO)
 
 	invNum := dto.InvoiceNumber
 	if invNum == "" {
-		invNum = fmt.Sprintf("INV-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000)
+		var err error
+		invNum, err = docseq.Next(ctx, uc.repo, "INV", "")
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to generate invoice number")
+		}
 	}
 
 	dueDate := dto.DueDate
@@ -1406,10 +1419,13 @@ func (uc *salesUseCase) CreateDelivery(ctx context.Context, dto CreateDeliveryDT
 		lines = append(lines, domain.DeliveryLine{ProductID: l.ProductID, Quantity: l.Quantity})
 	}
 
-	deliveryNum := fmt.Sprintf("DO-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000)
 	deliveryDate := dto.DeliveryDate
 	if deliveryDate == "" {
 		deliveryDate = time.Now().Format("2006-01-02")
+	}
+	deliveryNum, err := docseq.Next(ctx, uc.repo, "DO", deliveryDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to generate delivery number")
 	}
 
 	soID := dto.SalesOrderID
@@ -1474,8 +1490,12 @@ func (uc *salesUseCase) CreateDownPayment(ctx context.Context, dto CreateSalesDo
 		paymentDate = time.Now().Format("2006-01-02")
 	}
 
+	dpNo, err := docseq.Next(ctx, uc.repo, "SDP", paymentDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to generate down payment number")
+	}
 	dp := &domain.SalesDownPayment{
-		DPNumber:      fmt.Sprintf("SDP-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000),
+		DPNumber:      dpNo,
 		SalesOrderID:  dto.SalesOrderID,
 		CustomerName:  customerName,
 		Amount:        dto.Amount,

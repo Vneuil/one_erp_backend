@@ -9,6 +9,7 @@ import (
 
 	inventoryDomain "github.com/divinecoid/one-backend/internal/modules/inventory/domain"
 	"github.com/divinecoid/one-backend/internal/modules/manufacturing/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/google/uuid"
 )
@@ -35,9 +36,10 @@ func (uc *manufacturingUseCase) CreateRequisition(ctx context.Context, dto Creat
 		docCode = dto.DocumentCode
 	}
 
-	prefixWithDate := fmt.Sprintf("%s-%s-", prefix, time.Now().Format("200601"))
-	count, _ := uc.repo.CountRequisitionsByPrefix(ctx, prefixWithDate)
-	reqNo := fmt.Sprintf("%s%04d", prefixWithDate, count+1)
+	reqNo, err := docseq.Next(ctx, uc.repo, prefix, dto.RequestDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen permintaan")
+	}
 
 	matCategory := dto.MaterialCategory
 	if matCategory == "" {
@@ -164,7 +166,7 @@ func (uc *manufacturingUseCase) CreateRequisition(ctx context.Context, dto Creat
 	}
 
 	// Atomic save requisition and reserve SBB lot stock
-	err := uc.repo.WithTransactionAndInventory(ctx, func(txRepo domain.ManufacturingRepository, txInv inventoryDomain.InventoryRepository) error {
+	err = uc.repo.WithTransactionAndInventory(ctx, func(txRepo domain.ManufacturingRepository, txInv inventoryDomain.InventoryRepository) error {
 		if err := txRepo.CreateRequisition(ctx, req); err != nil {
 			return err
 		}
@@ -518,9 +520,10 @@ func (uc *manufacturingUseCase) RejectRequisition(ctx context.Context, id uuid.U
 // ─────────────────────────────────────────────────────────────────────────────
 
 func (uc *manufacturingUseCase) CreateLBBReport(ctx context.Context, dto CreateLBBReportDTO) (*domain.RawMaterialRequestReport, error) {
-	prefixWithDate := fmt.Sprintf("LBB-%s-", time.Now().Format("200601"))
-	count, _ := uc.repo.CountLBBReportsByPrefix(ctx, prefixWithDate)
-	reportNo := fmt.Sprintf("%s%04d", prefixWithDate, count+1)
+	reportNo, err := docseq.Next(ctx, uc.repo, "LBB", dto.ReportDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor laporan LBB")
+	}
 
 	variant := strings.ToUpper(strings.TrimSpace(dto.VariantType))
 	if variant != "VCO" {

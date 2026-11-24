@@ -212,6 +212,7 @@ type UpdatePackagingCheckDTO struct {
 
 type PackagingCheckResponseDTO struct {
 	ID              uuid.UUID  `json:"id"`
+	DocumentNo      string     `json:"documentNo"`
 	CheckMonth      string     `json:"checkMonth"`
 	GoodsReceiptID  *uuid.UUID `json:"goodsReceiptId,omitempty"`
 	LBMNo           string     `json:"lbmNo,omitempty"`
@@ -303,6 +304,7 @@ type UpdateArmadaCheckDTO struct {
 
 type ArmadaCheckResponseDTO struct {
 	ID                uuid.UUID  `json:"id"`
+	DocumentNo        string     `json:"documentNo"`
 	GoodsReceiptID    *uuid.UUID `json:"goodsReceiptId,omitempty"`
 	LBMNo             string     `json:"lbmNo,omitempty"`
 	CheckDate         string     `json:"checkDate"`
@@ -403,6 +405,7 @@ type UpdateIncomingCheckDTO struct {
 
 type IncomingCheckResponseDTO struct {
 	ID                 uuid.UUID  `json:"id"`
+	DocumentNo         string     `json:"documentNo"`
 	GoodsReceiptID     *uuid.UUID `json:"goodsReceiptId,omitempty"`
 	LBMNo              string     `json:"lbmNo,omitempty"`
 	CheckDate          string     `json:"checkDate"`

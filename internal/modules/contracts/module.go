@@ -9,6 +9,7 @@ import (
 	"github.com/divinecoid/one-backend/internal/modules/contracts/delivery/http"
 	"github.com/divinecoid/one-backend/internal/modules/contracts/domain"
 	"github.com/divinecoid/one-backend/internal/modules/contracts/infrastructure"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
 )
@@ -30,7 +31,7 @@ func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager
 		Seed: func(tenantDB *gorm.DB) error {
 			repo := infrastructure.NewContractsRepository(tenantDB)
 			uc := application.NewContractsUseCase(repo)
-			return uc.SeedInitialData(context.Background())
+			return uc.SeedInitialData(docseq.WithDB(context.Background(), tenantDB))
 		},
 	})
 

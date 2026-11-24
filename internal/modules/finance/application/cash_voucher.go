@@ -8,6 +8,7 @@ import (
 
 	"github.com/divinecoid/one-backend/internal/modules/finance/domain"
 	"github.com/divinecoid/one-backend/internal/shared/actor"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/google/uuid"
 )
@@ -117,14 +118,13 @@ func (uc *financeUseCase) CreateCashVoucher(ctx context.Context, in CashVoucherI
 	if in.Type == "payment" {
 		prefix = "BKK"
 	}
-	numberPrefix := fmt.Sprintf("%s-%s-", prefix, strings.ReplaceAll(date[:7], "-", ""))
-	n, err := uc.repo.CountCashVouchers(ctx, in.Type, numberPrefix)
+	docNo, err := docseq.Next(ctx, uc.repo, prefix, date)
 	if err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to number the voucher")
 	}
 
 	v := &domain.CashVoucher{
-		Number: fmt.Sprintf("%s%04d", numberPrefix, n+1), Type: in.Type, Date: date, CashAccountCode: cashCode,
+		Number: docNo, Type: in.Type, Date: date, CashAccountCode: cashCode,
 		Counterparty: strings.TrimSpace(in.Counterparty), Description: strings.TrimSpace(in.Description),
 		Total: round2(total), CreatedByEmail: actor.EmailFrom(ctx), Lines: lines,
 	}

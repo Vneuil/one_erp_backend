@@ -112,8 +112,8 @@ func TestMaterialIssueMovesStockNumbersAndPostsToWIP(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	prefix := "PBH-" + time.Now().In(batchZone).Format("200601") + "-"
-	if d.Number != prefix+"0001" || d.Direction != "out" || d.TotalValue != 170_000 || !d.Posted || len(d.Lines) != 2 {
+	suffix := time.Now().In(batchZone).Format("0106")
+	if d.Number != "PBH-001-"+suffix || d.Direction != "out" || d.TotalValue != 170_000 || !d.Posted || len(d.Lines) != 2 {
 		t.Fatalf("document: %+v", d)
 	}
 	if f.qty(f.a) != 70 || f.qty(f.b) != 90 {
@@ -127,7 +127,7 @@ func TestMaterialIssueMovesStockNumbersAndPostsToWIP(t *testing.T) {
 		t.Fatalf("journal: %+v", e)
 	}
 	d2, _ := f.uc.CreateStockDocument(ctx, CreateStockDocumentDTO{Type: domain.DocMaterialIssue, WarehouseID: f.wh, Lines: []StockDocumentLineInput{{ProductID: f.a, Quantity: 1}}})
-	if d2.Number != prefix+"0002" {
+	if d2.Number != "PBH-002-"+suffix {
 		t.Fatalf("second number: %s", d2.Number)
 	}
 }

@@ -41,6 +41,7 @@ type PickWaveLineResponseDTO struct {
 
 type PickWaveResponseDTO struct {
 	ID            uuid.UUID                 `json:"id"`
+	WaveNo        string                    `json:"waveNo"`
 	WarehouseID   uuid.UUID                 `json:"warehouseId"`
 	WarehouseName string                    `json:"warehouseName"`
 	SalesOrderID  *uuid.UUID                `json:"salesOrderId,omitempty"`
@@ -64,6 +65,7 @@ type CompletePackingSessionDTO struct {
 
 type PackingSessionResponseDTO struct {
 	ID           uuid.UUID `json:"id"`
+	SessionNo    string    `json:"sessionNo"`
 	PickWaveID   uuid.UUID `json:"pickWaveId"`
 	Status       string    `json:"status"`
 	PackageCount int       `json:"packageCount"`
@@ -85,6 +87,7 @@ type CreateShipmentDTO struct {
 
 type ShipmentResponseDTO struct {
 	ID                 uuid.UUID  `json:"id"`
+	ShipmentNo         string     `json:"shipmentNo"`
 	PickWaveID         uuid.UUID  `json:"pickWaveId"`
 	PackingSessionID   *uuid.UUID `json:"packingSessionId,omitempty"`
 	Carrier            string     `json:"carrier"`
@@ -101,6 +104,7 @@ func ToPackingSessionResponse(s *domain.PackingSession) *PackingSessionResponseD
 	}
 	return &PackingSessionResponseDTO{
 		ID:           s.ID,
+		SessionNo:    s.SessionNo,
 		PickWaveID:   s.PickWaveID,
 		Status:       s.Status,
 		PackageCount: s.PackageCount,
@@ -117,6 +121,7 @@ func ToShipmentResponse(s *domain.Shipment) *ShipmentResponseDTO {
 	}
 	return &ShipmentResponseDTO{
 		ID:                 s.ID,
+		ShipmentNo:         s.ShipmentNo,
 		PickWaveID:         s.PickWaveID,
 		PackingSessionID:   s.PackingSessionID,
 		Carrier:            s.Carrier,

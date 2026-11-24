@@ -131,7 +131,7 @@ func TestCashVoucherPostsBalancedEntryAndNumbers(t *testing.T) {
 	p := voucher(t, uc, "payment", "2026-03-10", "1010",
 		CashVoucherLineInput{AccountCode: AccountExpense, Amount: 60}, CashVoucherLineInput{AccountCode: AccountDeliveryExpense, Amount: 40})
 
-	if a.Number != "BKM-202603-0001" || b.Number != "BKM-202603-0002" || p.Number != "BKK-202603-0001" {
+	if a.Number != "BKM-001-0326" || b.Number != "BKM-002-0326" || p.Number != "BKK-001-0326" {
 		t.Fatalf("unexpected numbers %s %s %s", a.Number, b.Number, p.Number)
 	}
 	if !p.Posted || p.Total != 100 || len(repo.entries) != 3 {

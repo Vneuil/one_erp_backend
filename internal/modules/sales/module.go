@@ -20,6 +20,7 @@ import (
 	"github.com/divinecoid/one-backend/internal/modules/sales/delivery/http"
 	"github.com/divinecoid/one-backend/internal/modules/sales/domain"
 	"github.com/divinecoid/one-backend/internal/modules/sales/infrastructure"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
 )
@@ -46,7 +47,7 @@ func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager
 			productRepo := productInfra.NewProductRepository(tenantDB)
 			approvalRepo := approvalInfra.NewApprovalRepository(tenantDB)
 			uc := application.NewSalesUseCase(repo, currencyApp.NewCurrencyUseCase(currencyRepo), inventoryApp.NewInventoryUseCase(inventoryRepo, productRepo), approvalApp.NewApprovalUseCase(approvalRepo))
-			return uc.SeedInitialData(context.Background())
+			return uc.SeedInitialData(docseq.WithDB(context.Background(), tenantDB))
 		},
 	})
 

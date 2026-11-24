@@ -7,6 +7,7 @@ import (
 
 	"github.com/divinecoid/one-backend/internal/modules/finance/application"
 	"github.com/divinecoid/one-backend/internal/modules/finance/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -22,10 +23,10 @@ func TestCashVoucherAndLedgerAgainstPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&domain.Account{}, &domain.JournalEntry{}, &domain.JournalLine{}, &domain.CashVoucher{}, &domain.CashVoucherLine{}); err != nil {
+	if err := db.AutoMigrate(&docseq.DocumentSequence{}, &domain.Account{}, &domain.JournalEntry{}, &domain.JournalLine{}, &domain.CashVoucher{}, &domain.CashVoucherLine{}); err != nil {
 		t.Fatal(err)
 	}
-	ctx := context.Background()
+	ctx := docseq.WithDB(context.Background(), db)
 	repo := NewFinanceRepository(db)
 	uc := application.NewFinanceUseCase(repo)
 	if err := uc.SeedInitialData(ctx); err != nil {
@@ -48,7 +49,7 @@ func TestCashVoucherAndLedgerAgainstPostgres(t *testing.T) {
 	}
 
 	got, err := uc.GetCashVoucher(ctx, pay.ID)
-	if err != nil || len(got.Lines) != 1 || got.Number != "BKK-202603-0001" {
+	if err != nil || len(got.Lines) != 1 || got.Number != "BKK-001-0326" {
 		t.Fatalf("get voucher: %+v err=%v", got, err)
 	}
 	list, err := uc.ListCashVouchers(ctx, "receipt", "2026-03-01", "2026-03-31")

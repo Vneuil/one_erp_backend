@@ -126,6 +126,7 @@ const (
 type StockTransfer struct {
 	types.BaseEntity
 	TenantID        *uuid.UUID `gorm:"type:uuid;index" json:"tenantId,omitempty"`
+	TransferNo      string     `gorm:"type:varchar(50);index" json:"transferNo"`
 	ProductID       uuid.UUID  `gorm:"type:uuid;not null;index" json:"productId"`
 	FromWarehouseID uuid.UUID  `gorm:"type:uuid;not null;index" json:"fromWarehouseId"`
 	ToWarehouseID   uuid.UUID  `gorm:"type:uuid;not null;index" json:"toWarehouseId"`
@@ -150,6 +151,7 @@ const (
 type StockOpname struct {
 	types.BaseEntity
 	TenantID    *uuid.UUID        `gorm:"type:uuid;index" json:"tenantId,omitempty"`
+	OpnameNo    string            `gorm:"type:varchar(50);index" json:"opnameNo"`
 	WarehouseID uuid.UUID         `gorm:"type:uuid;not null;index" json:"warehouseId"`
 	AuditDate   string            `gorm:"type:varchar(50)" json:"auditDate"`
 	Status      string            `gorm:"type:varchar(20);default:'draft'" json:"status"`

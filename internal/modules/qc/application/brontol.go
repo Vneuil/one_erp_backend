@@ -2,12 +2,12 @@ package application
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"strings"
 	"time"
 
 	"github.com/divinecoid/one-backend/internal/modules/qc/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/google/uuid"
 )
@@ -21,14 +21,10 @@ func (uc *qcUseCase) CreateBrontolReport(ctx context.Context, dto CreateBrontolR
 	if len(month) >= 7 {
 		month = month[:7]
 	}
-	yyyymm := strings.ReplaceAll(month, "-", "")
-	prefix := fmt.Sprintf("BRT-%s-", yyyymm)
-
-	count, err := uc.repo.CountLogsByPrefix(ctx, "qc_brontol_reports", prefix)
+	reportNo, err := docseq.Next(ctx, uc.repo, "BRT", dto.ReportDate)
 	if err != nil {
-		count = 0
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor laporan brontol")
 	}
-	reportNo := fmt.Sprintf("%s%04d", prefix, count+1)
 
 	matType := strings.ToUpper(strings.TrimSpace(dto.MaterialType))
 	if matType == "" {
@@ -95,9 +91,10 @@ func (uc *qcUseCase) CreateBrontolReport(ctx context.Context, dto CreateBrontolR
 			}
 		}
 
-		retPrefix := fmt.Sprintf("RET-BRT-%s-", yyyymm)
-		retCount, _ := uc.repo.CountLogsByPrefix(ctx, "qc_reject_return_reports", retPrefix)
-		retNo := fmt.Sprintf("%s%04d", retPrefix, retCount+1)
+		retNo, err := docseq.Next(ctx, uc.repo, "RTR", retDTO.ReturnDate)
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Gagal membuat nomor laporan retur")
+		}
 
 		supplierName := retDTO.SupplierName
 		if supplierName == "" {
@@ -253,14 +250,10 @@ func (uc *qcUseCase) CreateRejectReturn(ctx context.Context, brontolID uuid.UUID
 	if dto.ReturnDate == "" {
 		dto.ReturnDate = time.Now().Format("2006-01-02")
 	}
-	month := dto.ReturnDate
-	if len(month) >= 7 {
-		month = month[:7]
+	returnNo, err := docseq.Next(ctx, uc.repo, "RTR", dto.ReturnDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor laporan retur")
 	}
-	yyyymm := strings.ReplaceAll(month, "-", "")
-	prefix := fmt.Sprintf("RET-BRT-%s-", yyyymm)
-	count, _ := uc.repo.CountLogsByPrefix(ctx, "qc_reject_return_reports", prefix)
-	returnNo := fmt.Sprintf("%s%04d", prefix, count+1)
 
 	unit := dto.Unit
 	if unit == "" {

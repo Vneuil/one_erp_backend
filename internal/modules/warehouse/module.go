@@ -11,6 +11,7 @@ import (
 	"github.com/divinecoid/one-backend/internal/modules/warehouse/delivery/http"
 	"github.com/divinecoid/one-backend/internal/modules/warehouse/domain"
 	"github.com/divinecoid/one-backend/internal/modules/warehouse/infrastructure"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	"github.com/gofiber/fiber/v2"
 	"gorm.io/gorm"
 )
@@ -41,7 +42,7 @@ func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager
 			inventoryRepo := inventoryInfra.NewInventoryRepository(tenantDB)
 			productRepo := productInfra.NewProductRepository(tenantDB)
 			uc := application.NewWarehouseUseCase(repo, inventoryRepo, productRepo)
-			return uc.SeedInitialData(context.Background())
+			return uc.SeedInitialData(docseq.WithDB(context.Background(), tenantDB))
 		},
 	})
 

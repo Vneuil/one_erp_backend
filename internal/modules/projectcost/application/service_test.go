@@ -204,12 +204,18 @@ func TestWorkOrderNumbersLifecycleAndSeparationOfDuties(t *testing.T) {
 	boss := actor.WithEmail(context.Background(), "boss@x.com")
 
 	w1, err := s.CreateWorkOrder(maker, WorkOrderInput{CustomerName: "PT A", Title: "Pasang rak", ContractValue: 50_000_000, StartDate: "2026-10-01", DueDate: "2026-10-31"})
-	if err != nil || w1.Number != "SPK-2026-001" || w1.Status != "draft" {
+	if err != nil || w1.Number != "SPK-001-1026" || w1.Status != "draft" {
 		t.Fatalf("first: %+v %v", w1, err)
 	}
 	w2, _ := s.CreateWorkOrder(maker, WorkOrderInput{CustomerName: "PT B", Title: "Servis"})
-	if w2.Number != "SPK-2026-002" {
-		t.Fatalf("second number: %s", w2.Number)
+	wib, _ := time.LoadLocation("Asia/Jakarta")
+	mmyy := time.Now().In(wib).Format("0106")
+	wantW2 := "SPK-001-" + mmyy
+	if mmyy == "1026" {
+		wantW2 = "SPK-002-1026"
+	}
+	if w2.Number != wantW2 {
+		t.Fatalf("second number: got %s, want %s", w2.Number, wantW2)
 	}
 	for _, bad := range []WorkOrderInput{{Title: "x"}, {CustomerName: "y"}, {CustomerName: "y", Title: "x", ContractValue: -1}, {CustomerName: "y", Title: "x", StartDate: "2026-10-05", DueDate: "2026-10-01"}, {CustomerName: "y", Title: "x", DueDate: "31/10/2026"}} {
 		if _, err := s.CreateWorkOrder(maker, bad); err == nil {

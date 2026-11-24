@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"fmt"
 	"log/slog"
 	"strings"
 	"time"
@@ -10,6 +9,7 @@ import (
 	financeApp "github.com/divinecoid/one-backend/internal/modules/finance/application"
 	"github.com/divinecoid/one-backend/internal/modules/reimbursement/domain"
 	"github.com/divinecoid/one-backend/internal/shared/actor"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/sod"
 	"github.com/divinecoid/one-backend/internal/shared/types"
@@ -61,13 +61,8 @@ func (uc *reimbursementUseCase) postLedger(ctx context.Context, sourceDoc, memo 
 // generateClaimNo builds a sequential, timestamp-seeded claim number of the
 // form "RMB-<year>-<0001>", derived from the current total claim count (+1)
 // scoped to the caller's tenant DB. Numbers restart per tenant/company.
-func (uc *reimbursementUseCase) generateClaimNo(ctx context.Context) (string, error) {
-	count, err := uc.repo.CountClaims(ctx)
-	if err != nil {
-		return "", err
-	}
-	year := time.Now().Year()
-	return fmt.Sprintf("RMB-%d-%04d", year, count+1), nil
+func (uc *reimbursementUseCase) generateClaimNo(ctx context.Context, date string) (string, error) {
+	return docseq.Next(ctx, uc.repo, "RMB", date)
 }
 
 func (uc *reimbursementUseCase) CreateClaim(ctx context.Context, dto CreateClaimDTO) (*ClaimResponseDTO, error) {
@@ -88,7 +83,7 @@ func (uc *reimbursementUseCase) CreateClaim(ctx context.Context, dto CreateClaim
 		date = time.Now().Format("2006-01-02")
 	}
 
-	claimNo, err := uc.generateClaimNo(ctx)
+	claimNo, err := uc.generateClaimNo(ctx, date)
 	if err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to generate claim number")
 	}

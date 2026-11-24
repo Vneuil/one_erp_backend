@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/divinecoid/one-backend/internal/modules/qc/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/google/uuid"
 )
@@ -31,9 +31,10 @@ func (uc *qcUseCase) CreateNeedleLog(ctx context.Context, dto CreateNeedleLogDTO
 		month = dto.CheckDate[:7]
 	}
 
-	prefixWithDate := fmt.Sprintf("MNJ-%s-", time.Now().Format("200601"))
-	count, _ := uc.repo.CountLogsByPrefix(ctx, "qc_needle_monitoring_logs", prefixWithDate)
-	docNo := fmt.Sprintf("%s%04d", prefixWithDate, count+1)
+	docNo, err := docseq.Next(ctx, uc.repo, "MNJ", dto.CheckDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen MNJ")
+	}
 
 	initPresent := true
 	if dto.InitialIsPresent != nil {
@@ -226,9 +227,10 @@ func (uc *qcUseCase) CreateScissorLog(ctx context.Context, dto CreateScissorLogD
 		overallStatus = "hazard_alert"
 	}
 
-	prefixWithDate := fmt.Sprintf("MNG-%s-", time.Now().Format("200601"))
-	count, _ := uc.repo.CountLogsByPrefix(ctx, "qc_scissor_monitoring_logs", prefixWithDate)
-	docNo := fmt.Sprintf("%s%04d", prefixWithDate, count+1)
+	docNo, err := docseq.Next(ctx, uc.repo, "MNG", dto.CheckDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen MNG")
+	}
 
 	log := &domain.ScissorMonitoringLog{
 		DocumentNo:       docNo,
@@ -407,9 +409,10 @@ func (uc *qcUseCase) CreateMetalCleaningLog(ctx context.Context, dto CreateMetal
 		overallStatus = "maintenance"
 	}
 
-	prefixWithDate := fmt.Sprintf("CPP-%s-", time.Now().Format("200601"))
-	count, _ := uc.repo.CountLogsByPrefix(ctx, "qc_metal_detector_cleaning_logs", prefixWithDate)
-	docNo := fmt.Sprintf("%s%04d", prefixWithDate, count+1)
+	docNo, err := docseq.Next(ctx, uc.repo, "CPP", dto.CheckDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen CPP")
+	}
 
 	log := &domain.MetalDetectorCleaningLog{
 		DocumentNo:           docNo,
@@ -621,9 +624,10 @@ func (uc *qcUseCase) CreateMetalVerificationLog(ctx context.Context, dto CreateM
 		overallStatus = "failed"
 	}
 
-	prefixWithDate := fmt.Sprintf("VMD-%s-", time.Now().Format("200601"))
-	count, _ := uc.repo.CountLogsByPrefix(ctx, "qc_metal_detector_verification_logs", prefixWithDate)
-	docNo := fmt.Sprintf("%s%04d", prefixWithDate, count+1)
+	docNo, err := docseq.Next(ctx, uc.repo, "VMD", dto.CheckDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen VMD")
+	}
 
 	log := &domain.MetalDetectorVerificationLog{
 		DocumentNo:           docNo,
@@ -879,9 +883,10 @@ func (uc *qcUseCase) CreateFinishedGoodsLog(ctx context.Context, dto CreateFinis
 		}
 	}
 
-	prefixWithDate := fmt.Sprintf("PJD-%s-", time.Now().Format("200601"))
-	count, _ := uc.repo.CountLogsByPrefix(ctx, "qc_finished_goods_inspection_logs", prefixWithDate)
-	docNo := fmt.Sprintf("%s%04d", prefixWithDate, count+1)
+	docNo, err := docseq.Next(ctx, uc.repo, "PJD", dto.CheckDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen PJD")
+	}
 
 	log := &domain.FinishedGoodsInspectionLog{
 		DocumentNo:          docNo,

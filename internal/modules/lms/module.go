@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	tenantMgr "github.com/divinecoid/one-backend/internal/foundation/tenant"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	hrminfra "github.com/divinecoid/one-backend/internal/modules/hrm/infrastructure"
 	"github.com/divinecoid/one-backend/internal/modules/lms/application"
 	"github.com/divinecoid/one-backend/internal/modules/lms/delivery/http"
@@ -38,7 +39,7 @@ func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager
 			repo := infrastructure.NewLMSRepository(tenantDB)
 			hrmRepo := hrminfra.NewHRMRepository(tenantDB)
 			uc := application.NewLMSUseCase(repo, hrmRepo)
-			return uc.SeedInitialData(context.Background())
+			return uc.SeedInitialData(docseq.WithDB(context.Background(), tenantDB))
 		},
 	})
 

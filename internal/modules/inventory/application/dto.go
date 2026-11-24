@@ -163,6 +163,7 @@ type CreateTransferDTO struct {
 
 type TransferResponseDTO struct {
 	ID                uuid.UUID `json:"id"`
+	TransferNo        string    `json:"transferNo"`
 	ProductID         uuid.UUID `json:"productId"`
 	ProductSKU        string    `json:"productSku"`
 	ProductName       string    `json:"productName"`
@@ -183,6 +184,7 @@ func ToTransferResponse(t *domain.StockTransfer, productSKU, productName, fromNa
 	}
 	return &TransferResponseDTO{
 		ID:                t.ID,
+		TransferNo:        t.TransferNo,
 		ProductID:         t.ProductID,
 		ProductSKU:        productSKU,
 		ProductName:       productName,
@@ -224,6 +226,7 @@ type OpnameLineResponseDTO struct {
 
 type OpnameResponseDTO struct {
 	ID            uuid.UUID               `json:"id"`
+	OpnameNo      string                  `json:"opnameNo"`
 	WarehouseID   uuid.UUID               `json:"warehouseId"`
 	WarehouseName string                  `json:"warehouseName"`
 	AuditDate     string                  `json:"auditDate"`

@@ -169,8 +169,8 @@ func TestLHPAndLSTFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateLHP failed: %v", err)
 	}
-	if !strings.HasPrefix(lhp.ReportNo, "PRO-002-LHP-") {
-		t.Errorf("expected reportNo prefix PRO-002-LHP-, got %s", lhp.ReportNo)
+	if lhp.ReportNo != "LHP-001-1126" {
+		t.Errorf("expected reportNo LHP-001-1126, got %s", lhp.ReportNo)
 	}
 	if lhp.TotalWeightKg != 1000.0 {
 		t.Errorf("expected TotalWeightKg 1000.0, got %f", lhp.TotalWeightKg)
@@ -184,8 +184,8 @@ func TestLHPAndLSTFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GenerateLSTFromLHP failed: %v", err)
 	}
-	if !strings.HasPrefix(lst.ReportNo, "GDG-009-LST-") {
-		t.Errorf("expected reportNo prefix GDG-009-LST-, got %s", lst.ReportNo)
+	if lst.ReportNo != "LST-001-1126" {
+		t.Errorf("expected reportNo LST-001-1126, got %s", lst.ReportNo)
 	}
 	if len(lst.Items) != 1 {
 		t.Fatalf("expected 1 LST item, got %d", len(lst.Items))

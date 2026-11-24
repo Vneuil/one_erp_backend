@@ -108,6 +108,7 @@ func (QCInspectionItem) TableName() string {
 // PersonalHygieneCheck records employee GMP hygiene checklist (Doc CPH / Catatan Personal Hygiene)
 type PersonalHygieneCheck struct {
 	types.BaseEntity
+	DocumentNo     string `gorm:"type:varchar(50);index" json:"documentNo"`
 	CheckDate      string `gorm:"type:varchar(10);not null;index" json:"checkDate"` // YYYY-MM-DD
 	Shift          string `gorm:"type:varchar(20);not null" json:"shift"`
 	Line           string `gorm:"type:varchar(100);not null" json:"line"`
@@ -132,6 +133,7 @@ func (PersonalHygieneCheck) TableName() string {
 // PreOpSanitationCheck records pre-operational room & equipment checklist (Doc SSO / Sarana Produksi Sebelum Operasional)
 type PreOpSanitationCheck struct {
 	types.BaseEntity
+	DocumentNo         string   `gorm:"type:varchar(50);index" json:"documentNo"`
 	CheckDate          string   `gorm:"type:varchar(10);not null;index" json:"checkDate"` // YYYY-MM-DD
 	CheckTime          string   `gorm:"type:varchar(10);not null" json:"checkTime"`       // HH:mm
 	Shift              string   `gorm:"type:varchar(20);not null" json:"shift"`
@@ -157,6 +159,7 @@ func (PreOpSanitationCheck) TableName() string {
 // PackagingQualityCheck records incoming packaging material inspection (QC-003-PBK)
 type PackagingQualityCheck struct {
 	types.BaseEntity
+	DocumentNo      string     `gorm:"type:varchar(50);index" json:"documentNo"`
 	CheckMonth      string     `gorm:"type:varchar(7);not null;index" json:"checkMonth"` // YYYY-MM
 	GoodsReceiptID  *uuid.UUID `gorm:"type:uuid;index" json:"goodsReceiptId,omitempty"`
 	LBMNo           string     `gorm:"type:varchar(50);index" json:"lbmNo,omitempty"`
@@ -189,6 +192,7 @@ func (PackagingQualityCheck) TableName() string {
 // SupplierArmadaCheck records supplier vehicle & driver checklist (QC-007-CAS)
 type SupplierArmadaCheck struct {
 	types.BaseEntity
+	DocumentNo        string     `gorm:"type:varchar(50);index" json:"documentNo"`
 	GoodsReceiptID    *uuid.UUID `gorm:"type:uuid;index" json:"goodsReceiptId,omitempty"`
 	LBMNo             string     `gorm:"type:varchar(50);index" json:"lbmNo,omitempty"`
 	CheckDate         string     `gorm:"type:varchar(10);not null;index" json:"checkDate"` // YYYY-MM-DD
@@ -228,6 +232,7 @@ func (SupplierArmadaCheck) TableName() string {
 // RawMaterialIncomingCheck records incoming raw material quality inspection (QC-001-PBD / Pemeriksaan Bahan Datang)
 type RawMaterialIncomingCheck struct {
 	types.BaseEntity
+	DocumentNo         string     `gorm:"type:varchar(50);index" json:"documentNo"`
 	GoodsReceiptID     *uuid.UUID `gorm:"type:uuid;index" json:"goodsReceiptId,omitempty"`
 	LBMNo              string     `gorm:"type:varchar(50);index" json:"lbmNo,omitempty"`
 	CheckDate          string     `gorm:"type:varchar(10);not null;index" json:"checkDate"` // YYYY-MM-DD

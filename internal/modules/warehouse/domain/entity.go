@@ -19,6 +19,7 @@ const (
 type PickWave struct {
 	types.BaseEntity
 	TenantID     *uuid.UUID     `gorm:"type:uuid;index" json:"tenantId,omitempty"`
+	WaveNo       string         `gorm:"type:varchar(50);index" json:"waveNo"`
 	WarehouseID  uuid.UUID      `gorm:"type:uuid;not null;index" json:"warehouseId"`
 	SalesOrderID *uuid.UUID     `gorm:"type:uuid;index" json:"salesOrderId,omitempty"`
 	Status       string         `gorm:"type:varchar(20);default:'pending'" json:"status"`
@@ -54,6 +55,7 @@ const (
 type PackingSession struct {
 	types.BaseEntity
 	TenantID     *uuid.UUID `gorm:"type:uuid;index" json:"tenantId,omitempty"`
+	SessionNo    string     `gorm:"type:varchar(50);index" json:"sessionNo"`
 	PickWaveID   uuid.UUID  `gorm:"type:uuid;not null;index" json:"pickWaveId"`
 	Status       string     `gorm:"type:varchar(20);default:'open'" json:"status"`
 	PackageCount int        `gorm:"default:0" json:"packageCount"`
@@ -78,6 +80,7 @@ const (
 type Shipment struct {
 	types.BaseEntity
 	TenantID           *uuid.UUID `gorm:"type:uuid;index" json:"tenantId,omitempty"`
+	ShipmentNo         string     `gorm:"type:varchar(50);index" json:"shipmentNo"`
 	PackingSessionID   *uuid.UUID `gorm:"type:uuid;index" json:"packingSessionId,omitempty"`
 	PickWaveID         uuid.UUID  `gorm:"type:uuid;not null;index" json:"pickWaveId"`
 	Carrier            string     `gorm:"type:varchar(150)" json:"carrier"`

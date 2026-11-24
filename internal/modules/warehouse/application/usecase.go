@@ -8,6 +8,7 @@ import (
 	inventoryDomain "github.com/divinecoid/one-backend/internal/modules/inventory/domain"
 	productDomain "github.com/divinecoid/one-backend/internal/modules/product/domain"
 	"github.com/divinecoid/one-backend/internal/modules/warehouse/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/google/uuid"
@@ -71,7 +72,7 @@ func (uc *warehouseUseCase) toPickWaveResponse(ctx context.Context, w *domain.Pi
 		}
 	}
 	return &PickWaveResponseDTO{
-		ID: w.ID, WarehouseID: w.WarehouseID, WarehouseName: uc.warehouseName(ctx, w.WarehouseID),
+		ID: w.ID, WaveNo: w.WaveNo, WarehouseID: w.WarehouseID, WarehouseName: uc.warehouseName(ctx, w.WarehouseID),
 		SalesOrderID: w.SalesOrderID, Status: w.Status, AssignedTo: w.AssignedTo,
 		Lines: lines, CreatedAt: w.CreatedAt,
 	}
@@ -114,7 +115,12 @@ func (uc *warehouseUseCase) CreatePickWave(ctx context.Context, dto CreatePickWa
 		}
 	}
 
+	waveNo, err := docseq.Next(ctx, uc.repo, "PCK", "")
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to generate pick wave number")
+	}
 	w := &domain.PickWave{
+		WaveNo:       waveNo,
 		WarehouseID:  dto.WarehouseID,
 		SalesOrderID: dto.SalesOrderID,
 		Status:       domain.PickWavePending,
@@ -249,10 +255,14 @@ func (uc *warehouseUseCase) CompletePickWave(ctx context.Context, id uuid.UUID) 
 				if err := txInv.UpsertStockLevel(ctx, level); err != nil {
 					return apperrors.NewInternal(err, "Failed to update stock level")
 				}
+				ref := w.WaveNo
+				if ref == "" {
+					ref = w.ID.String()
+				}
 				movement := &inventoryDomain.StockMovement{
 					ProductID: w.Lines[i].ProductID, WarehouseID: w.WarehouseID,
 					Type: inventoryDomain.MovementOut, Quantity: -qty, Balance: level.Quantity,
-					Reference: w.ID.String(), Reason: "Picked for shipment",
+					Reference: ref, Reason: "Picked for shipment",
 				}
 				if err := txInv.CreateMovement(ctx, movement); err != nil {
 					return apperrors.NewInternal(err, "Failed to record pick movement")
@@ -317,8 +327,13 @@ func (uc *warehouseUseCase) CreatePackingSession(ctx context.Context, dto Create
 		return nil, apperrors.NewBadRequest("Pick wave must be in progress or completed before packing can start")
 	}
 
+	sessionNo, err := docseq.Next(ctx, uc.repo, "PKG", "")
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to generate packing session number")
+	}
 	now := time.Now().Format(time.RFC3339)
 	s := &domain.PackingSession{
+		SessionNo:  sessionNo,
 		PickWaveID: dto.PickWaveID,
 		Status:     domain.PackingPacking,
 		Notes:      dto.Notes,
@@ -400,7 +415,12 @@ func (uc *warehouseUseCase) CreateShipment(ctx context.Context, dto CreateShipme
 		}
 	}
 
+	shipmentNo, err := docseq.Next(ctx, uc.repo, "SHP", "")
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to generate shipment number")
+	}
 	s := &domain.Shipment{
+		ShipmentNo:         shipmentNo,
 		PickWaveID:         dto.PickWaveID,
 		PackingSessionID:   dto.PackingSessionID,
 		Carrier:            dto.Carrier,

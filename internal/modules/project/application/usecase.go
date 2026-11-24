@@ -2,12 +2,11 @@ package application
 
 import (
 	"context"
-	"fmt"
 	"strings"
-	"time"
 
 	"github.com/divinecoid/one-backend/internal/modules/project/domain"
 	taskdomain "github.com/divinecoid/one-backend/internal/modules/projecttask/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/google/uuid"
@@ -53,11 +52,11 @@ func (uc *projectUseCase) Create(ctx context.Context, dto CreateProjectDTO) (*Pr
 	// The code is generated when the client does not supply one, so the UI never
 	// has to invent (and possibly collide on) project numbers.
 	if code == "" {
-		count, err := uc.repo.Count(ctx)
+		var err error
+		code, err = docseq.Next(ctx, uc.repo, "PRJ", "")
 		if err != nil {
 			return nil, apperrors.NewInternal(err, "Failed to generate project code")
 		}
-		code = fmt.Sprintf("PRJ-%d-%03d", time.Now().Year(), count+1)
 	}
 
 	status := dto.Status

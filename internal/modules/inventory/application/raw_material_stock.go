@@ -9,6 +9,7 @@ import (
 
 	"github.com/divinecoid/one-backend/internal/modules/inventory/domain"
 	"github.com/divinecoid/one-backend/internal/shared/actor"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/google/uuid"
 )
@@ -662,16 +663,7 @@ func (uc *inventoryUseCase) GetLBMInboundContext(ctx context.Context, goodsRecei
 }
 
 func (uc *inventoryUseCase) nextRawMaterialEntryNo(ctx context.Context, entryDate string) (string, error) {
-	ym := strings.ReplaceAll(today()[:7], "-", "")
-	if len(entryDate) >= 7 {
-		ym = strings.ReplaceAll(entryDate[:7], "-", "")
-	}
-	prefix := fmt.Sprintf("SBB-%s-", ym)
-	n, err := uc.repo.CountRawMaterialStockEntriesByPrefix(ctx, prefix)
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%s%04d", prefix, n+1), nil
+	return docseq.Next(ctx, uc.repo, "SBB", entryDate)
 }
 
 // CreateRawMaterialStockEntry creates a draft (or immediately posted) Form Stok Gudang Bahan Baku (GDG-002-SBB).

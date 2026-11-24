@@ -9,6 +9,7 @@ import (
 
 	"github.com/divinecoid/one-backend/internal/modules/tax/domain"
 	"github.com/divinecoid/one-backend/internal/shared/actor"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/taxid"
 	"github.com/divinecoid/one-backend/internal/shared/types"
@@ -200,16 +201,15 @@ func (uc *taxUseCase) GetTaxInvoice(ctx context.Context, id uuid.UUID) (*domain.
 }
 
 func (uc *taxUseCase) nextNumber(ctx context.Context, direction, date string) (string, error) {
-	prefix := "FPK-"
+	prefix := "FPK"
 	if direction == domain.DirectionInput {
-		prefix = "FPM-"
+		prefix = "FPM"
 	}
-	prefix += strings.ReplaceAll(date[:7], "-", "") + "-"
-	n, err := uc.repo.CountTaxInvoices(ctx, direction, prefix)
+	num, err := docseq.Next(ctx, uc.repo, prefix, date)
 	if err != nil {
 		return "", apperrors.NewInternal(err, "Failed to number the Faktur Pajak")
 	}
-	return fmt.Sprintf("%s%04d", prefix, n+1), nil
+	return num, nil
 }
 
 // allocateLines spreads an invoice's tax base, "nilai lain" base and PPN over

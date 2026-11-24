@@ -76,6 +76,7 @@ import (
 	"github.com/divinecoid/one-backend/internal/modules/user"
 	"github.com/divinecoid/one-backend/internal/modules/warehouse"
 	"github.com/divinecoid/one-backend/internal/modules/workspace"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 )
 
 func main() {
@@ -165,6 +166,12 @@ func main() {
 	)
 
 	objectStore := storage.NewWithLocalFallback(cfg.R2, cfg.Storage.LocalDir)
+
+	tenantMgr.RegisterSchema(tenantMgr.SchemaMigrator{
+		Name:     "docseq",
+		Migrate:  docseq.AutoMigrate,
+		SeedKind: tenantMgr.SeedReference,
+	})
 
 	product.NewModule(server.V1, cfg.JWT.Secret, tenantManager, objectStore)
 	customer.NewModule(server.V1, cfg.JWT.Secret, tenantManager)

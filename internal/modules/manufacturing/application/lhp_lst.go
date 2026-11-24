@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/divinecoid/one-backend/internal/modules/manufacturing/domain"
 	"github.com/google/uuid"
@@ -104,40 +105,14 @@ type UpdateLSTInput struct {
 	Items               []CreateLSTItemInput `json:"items,omitempty"`
 }
 
-// Generate next LHP Report No (PRO-002-LHP-YYYYMM-XXXX)
+// Generate next LHP Report No (LHP-001-1126)
 func (uc *manufacturingUseCase) generateLHPNumber(ctx context.Context, packingDate string) (string, error) {
-	dateStr := packingDate
-	if dateStr == "" {
-		dateStr = time.Now().Format("2006-01-02")
-	}
-	t, err := time.Parse("2006-01-02", dateStr)
-	if err != nil {
-		t = time.Now()
-	}
-	prefix := fmt.Sprintf("PRO-002-LHP-%04d%02d-", t.Year(), t.Month())
-	count, err := uc.repo.CountLHPByPrefix(ctx, prefix)
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%s%04d", prefix, count+1), nil
+	return docseq.Next(ctx, uc.repo, "LHP", packingDate)
 }
 
-// Generate next LST Report No (GDG-009-LST-YYYYMM-XXXX)
+// Generate next LST Report No (LST-001-1126)
 func (uc *manufacturingUseCase) generateLSTNumber(ctx context.Context, handoverDate string) (string, error) {
-	dateStr := handoverDate
-	if dateStr == "" {
-		dateStr = time.Now().Format("2006-01-02")
-	}
-	t, err := time.Parse("2006-01-02", dateStr)
-	if err != nil {
-		t = time.Now()
-	}
-	prefix := fmt.Sprintf("GDG-009-LST-%04d%02d-", t.Year(), t.Month())
-	count, err := uc.repo.CountLSTByPrefix(ctx, prefix)
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%s%04d", prefix, count+1), nil
+	return docseq.Next(ctx, uc.repo, "LST", handoverDate)
 }
 
 // LHP Use Case methods

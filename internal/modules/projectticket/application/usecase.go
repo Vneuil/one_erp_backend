@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/divinecoid/one-backend/internal/modules/projectticket/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/google/uuid"
@@ -52,8 +53,13 @@ func (uc *projectTicketUseCase) Create(ctx context.Context, dto CreateProjectTic
 		return nil, apperrors.NewBadRequest("ProjectCode, Subject, and CustomerName are required")
 	}
 
+	ticketNo, err := docseq.Next(ctx, uc.repo, "PTK", "")
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to generate ticket number")
+	}
+
 	ticket := &domain.ProjectTicket{
-		TicketNo:       generateTicketNo(),
+		TicketNo:       ticketNo,
 		ProjectCode:    projectCode,
 		Subject:        subject,
 		CustomerName:   customerName,

@@ -6,6 +6,7 @@ import (
 
 	hrmdomain "github.com/divinecoid/one-backend/internal/modules/hrm/domain"
 	"github.com/divinecoid/one-backend/internal/modules/lms/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/google/uuid"
@@ -260,16 +261,14 @@ func (uc *lmsUseCase) CompleteEnrollment(ctx context.Context, id uuid.UUID) (*En
 }
 
 func (uc *lmsUseCase) issueCertificate(ctx context.Context, enrollment *domain.Enrollment) error {
-	count, err := uc.repo.CountCertificates(ctx)
+	certNo, err := docseq.Next(ctx, uc.repo, "CERT", enrollment.EnrolledDate)
 	if err != nil {
-		return apperrors.NewInternal(err, "Failed to count certificates")
+		return apperrors.NewInternal(err, "Failed to number certificate")
 	}
-
-	year := currentYear()
 	cert := &domain.Certificate{
 		CompanyID:         enrollment.CompanyID,
 		EnrollmentID:      enrollment.ID,
-		CertificateNumber: domain.GenerateCertificateNumber(year, count+1),
+		CertificateNumber: certNo,
 		IssuedDate:        enrollment.EnrolledDate,
 	}
 	if err := uc.repo.CreateCertificate(ctx, cert); err != nil {

@@ -158,6 +158,14 @@ func (m *mockSievingOvenRepo) DeleteOvenLog(ctx context.Context, id uuid.UUID) e
 	return nil
 }
 
+func (m *mockSievingOvenRepo) CreateBrontolReport(ctx context.Context, report *domain.BrontolReport) error {
+	return nil
+}
+
+func (m *mockSievingOvenRepo) CreateRejectReturnReport(ctx context.Context, report *domain.RejectReturnReport) error {
+	return nil
+}
+
 func (m *mockSievingOvenRepo) CountLogsByPrefix(ctx context.Context, tableName string, prefix string) (int64, error) {
 	m.prefixCounters[prefix]++
 	return m.prefixCounters[prefix], nil

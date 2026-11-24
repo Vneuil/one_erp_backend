@@ -13,6 +13,7 @@ import (
 	supplierDomain "github.com/divinecoid/one-backend/internal/modules/supplier/domain"
 	"github.com/divinecoid/one-backend/internal/modules/tax/application"
 	"github.com/divinecoid/one-backend/internal/modules/tax/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	"github.com/google/uuid"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -29,12 +30,12 @@ func TestTaxAgainstPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&domain.TaxSettings{}, &domain.SerialRange{}, &domain.TaxInvoice{}, &domain.TaxInvoiceLine{},
+	if err := db.AutoMigrate(&docseq.DocumentSequence{}, &domain.TaxSettings{}, &domain.SerialRange{}, &domain.TaxInvoice{}, &domain.TaxInvoiceLine{},
 		&salesDomain.Invoice{}, &salesDomain.SalesOrder{}, &salesDomain.SalesOrderLine{}, &procDomain.PurchaseInvoice{},
 		&customerDomain.Customer{}, &supplierDomain.Supplier{}, &productDomain.Product{}); err != nil {
 		t.Fatal(err)
 	}
-	ctx := context.Background()
+	ctx := docseq.WithDB(context.Background(), db)
 	uc := application.NewTaxUseCase(NewTaxRepository(db), NewSourceReader(db))
 
 	if _, err := uc.UpdateSettings(ctx, application.SettingsInput{TaxpayerName: "PT Contoh", NPWP: "01.234.567.8-901.000", IsPKP: true}); err != nil {

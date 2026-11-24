@@ -10,6 +10,7 @@ import (
 	financeApp "github.com/divinecoid/one-backend/internal/modules/finance/application"
 	inventoryApp "github.com/divinecoid/one-backend/internal/modules/inventory/application"
 	"github.com/divinecoid/one-backend/internal/modules/sales/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/google/uuid"
 )
@@ -171,8 +172,12 @@ func (uc *salesUseCase) CreateSalesReturn(ctx context.Context, dto CreateSalesRe
 		}
 	}
 
+	retNo, err := docseq.Next(ctx, uc.repo, "SRET", returnDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to generate sales return number")
+	}
 	ret := &domain.SalesReturn{
-		ReturnNo:       fmt.Sprintf("SRET-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000),
+		ReturnNo:       retNo,
 		DeliveryID:     dto.DeliveryID,
 		CustomerName:   delivery.CustomerName,
 		ReturnDate:     returnDate,

@@ -175,6 +175,14 @@ func (m *mockPackingMetalPJDRepo) DeleteFinishedGoodsLog(ctx context.Context, id
 	return nil
 }
 
+func (m *mockPackingMetalPJDRepo) CreateBrontolReport(ctx context.Context, report *domain.BrontolReport) error {
+	return nil
+}
+
+func (m *mockPackingMetalPJDRepo) CreateRejectReturnReport(ctx context.Context, report *domain.RejectReturnReport) error {
+	return nil
+}
+
 // ─── Test Cases ─────────────────────────────────────────────────────────────
 
 func TestNeedleMonitoring_BrokenHazardAlert(t *testing.T) {

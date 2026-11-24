@@ -8,6 +8,7 @@ import (
 
 	"github.com/divinecoid/one-backend/internal/modules/finance/domain"
 	"github.com/divinecoid/one-backend/internal/shared/actor"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/google/uuid"
 )
@@ -77,13 +78,12 @@ func (uc *financeUseCase) IssueTempAdvance(ctx context.Context, in TempAdvanceIn
 	if err != nil {
 		return nil, err
 	}
-	numberPrefix := "KBS-" + strings.ReplaceAll(date[:7], "-", "") + "-"
-	n, err := uc.repo.CountTempAdvances(ctx, numberPrefix)
+	kbsNo, err := docseq.Next(ctx, uc.repo, "KBS", date)
 	if err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to number the advance")
 	}
 	a := &domain.TempAdvance{
-		Number: fmt.Sprintf("%s%04d", numberPrefix, n+1), Date: date, DueDate: in.DueDate, RecipientName: name,
+		Number: kbsNo, Date: date, DueDate: in.DueDate, RecipientName: name,
 		EmployeeID: in.EmployeeID, Purpose: strings.TrimSpace(in.Purpose), Amount: round2(in.Amount),
 		CashAccountCode: cashCode, Status: "open", CreatedByEmail: actor.EmailFrom(ctx),
 	}

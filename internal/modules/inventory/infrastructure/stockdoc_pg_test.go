@@ -12,6 +12,7 @@ import (
 	"github.com/divinecoid/one-backend/internal/modules/inventory/domain"
 	productDomain "github.com/divinecoid/one-backend/internal/modules/product/domain"
 	productInfra "github.com/divinecoid/one-backend/internal/modules/product/infrastructure"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	"github.com/google/uuid"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -28,12 +29,12 @@ func TestStockDocumentsAgainstPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&domain.Warehouse{}, &domain.StockLevel{}, &domain.StockMovement{}, &domain.StockBatch{}, &domain.StockOpname{},
+	if err := db.AutoMigrate(&docseq.DocumentSequence{}, &domain.Warehouse{}, &domain.StockLevel{}, &domain.StockMovement{}, &domain.StockBatch{}, &domain.StockOpname{},
 		&domain.StockOpnameLine{}, &domain.StockDocument{}, &domain.StockDocumentLine{}, &productDomain.Product{},
 		&financeDomain.Account{}, &financeDomain.JournalEntry{}, &financeDomain.JournalLine{}); err != nil {
 		t.Fatal(err)
 	}
-	ctx := context.Background()
+	ctx := docseq.WithDB(context.Background(), db)
 	repo := NewInventoryRepository(db)
 	finRepo := financeInfra.NewFinanceRepository(db)
 	if err := financeApp.NewFinanceUseCase(finRepo).SeedInitialData(ctx); err != nil {

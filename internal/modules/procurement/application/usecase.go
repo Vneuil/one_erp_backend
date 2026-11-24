@@ -17,6 +17,7 @@ import (
 	productDomain "github.com/divinecoid/one-backend/internal/modules/product/domain"
 	salesDomain "github.com/divinecoid/one-backend/internal/modules/sales/domain"
 	supplierDomain "github.com/divinecoid/one-backend/internal/modules/supplier/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/sod"
 	"github.com/divinecoid/one-backend/internal/shared/types"
@@ -181,8 +182,12 @@ func (uc *procurementUseCase) CreatePurchaseRequest(ctx context.Context, dto Cre
 		}
 	}
 
+	reqNo, err := docseq.Next(ctx, uc.repo, "PR", "")
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to generate purchase request number")
+	}
 	pr := &domain.PurchaseRequest{
-		RequestNo:    fmt.Sprintf("PR-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000),
+		RequestNo:    reqNo,
 		RequestedBy:  dto.RequestedBy,
 		Department:   dto.Department,
 		NeededByDate: dto.NeededByDate,
@@ -647,7 +652,10 @@ func (uc *procurementUseCase) CreatePurchaseOrder(ctx context.Context, dto Creat
 		orderDate = time.Now().Format("2006-01-02")
 	}
 
-	orderNo := fmt.Sprintf("PO-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000)
+	orderNo, err := docseq.Next(ctx, uc.repo, "PO", orderDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to generate purchase order number")
+	}
 
 	currency := dto.Currency
 	baseAmount := total
@@ -1133,14 +1141,17 @@ func (uc *procurementUseCase) CreateGoodsReceipt(ctx context.Context, dto Create
 		receivedDate = time.Now().Format("2006-01-02")
 	}
 
-	receiptSeq := time.Now().Nanosecond() % 10000
+	seq, receiptNo, err := docseq.NextSeq(ctx, uc.repo, "LBM", receivedDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to generate goods receipt number")
+	}
 	for i := range lines {
 		if lines[i].LotNumber == "" {
-			lines[i].LotNumber = GenerateLotNumber(time.Now(), receiptSeq, i+1)
+			lines[i].LotNumber = GenerateLotNumber(docseq.ParseDate(receivedDate), int(seq), i+1)
 		}
 	}
 	gr := &domain.GoodsReceipt{
-		ReceiptNo:        fmt.Sprintf("GR-%s-%04d", time.Now().Format("200601"), receiptSeq),
+		ReceiptNo:        receiptNo,
 		DocumentCode:     "GD-007-LBM",
 		PurchaseOrderID:  dto.PurchaseOrderID,
 		ReceivedDate:     receivedDate,
@@ -1428,13 +1439,17 @@ func (uc *procurementUseCase) CreatePurchaseInvoice(ctx context.Context, dto Cre
 	if err != nil {
 		return nil, err
 	}
-	invoiceNumber := dto.InvoiceNumber
-	if invoiceNumber == "" {
-		invoiceNumber = fmt.Sprintf("PINV-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000)
-	}
 	invoiceDate := dto.InvoiceDate
 	if invoiceDate == "" {
 		invoiceDate = time.Now().Format("2006-01-02")
+	}
+	invoiceNumber := dto.InvoiceNumber
+	if invoiceNumber == "" {
+		var err error
+		invoiceNumber, err = docseq.Next(ctx, uc.repo, "PINV", invoiceDate)
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to generate purchase invoice number")
+		}
 	}
 
 	paymentTermID := dto.PaymentTermID
@@ -1629,8 +1644,12 @@ func (uc *procurementUseCase) CreateDownPayment(ctx context.Context, dto CreateD
 		paymentDate = time.Now().Format("2006-01-02")
 	}
 
+	dpNo, err := docseq.Next(ctx, uc.repo, "PDP", paymentDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to generate down payment number")
+	}
 	dp := &domain.PurchaseDownPayment{
-		DPNumber:        fmt.Sprintf("DP-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000),
+		DPNumber:        dpNo,
 		PurchaseOrderID: dto.PurchaseOrderID,
 		SupplierID:      dto.SupplierID,
 		SupplierName:    dto.SupplierName,
@@ -1716,8 +1735,12 @@ func (uc *procurementUseCase) CreateInvoiceReceipt(ctx context.Context, dto Crea
 		}
 	}
 
+	irNo, err := docseq.Next(ctx, uc.repo, "TTN", date)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to generate invoice receipt number")
+	}
 	ir := &domain.InvoiceReceipt{
-		ReceiptNo:    fmt.Sprintf("TTN-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000),
+		ReceiptNo:    irNo,
 		Date:         date,
 		SupplierID:   dto.SupplierID,
 		SupplierName: dto.SupplierName,

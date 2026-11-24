@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/divinecoid/one-backend/internal/modules/finance/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	"github.com/google/uuid"
 )
 
@@ -221,8 +222,12 @@ func (p *ledgerPoster) PostEntryOn(ctx context.Context, date, sourceDoc, memo st
 	if date == "" {
 		date = now.Format("2006-01-02")
 	}
+	entryNo, err := docseq.Next(ctx, p.repo, "AUTO", date)
+	if err != nil {
+		return err
+	}
 	je := &domain.JournalEntry{
-		EntryNumber: fmt.Sprintf("AUTO-%s-%06d", now.Format("200601"), now.Nanosecond()/1000%1000000),
+		EntryNumber: entryNo,
 		Date:        date,
 		Memo:        memo,
 		SourceDoc:   sourceDoc,
@@ -260,8 +265,12 @@ func (p *ledgerPoster) ReverseEntry(ctx context.Context, sourceDoc, reversalDoc,
 	for i, l := range orig.Lines {
 		lines[i] = domain.JournalLine{AccountID: l.AccountID, Debit: l.Credit, Credit: l.Debit, Description: "Batal " + l.Description}
 	}
+	entryNo, err := docseq.Next(ctx, p.repo, "AUTO", date)
+	if err != nil {
+		return false, err
+	}
 	je := &domain.JournalEntry{
-		EntryNumber: fmt.Sprintf("AUTO-%s-%06d", now.Format("200601"), now.Nanosecond()/1000%1000000),
+		EntryNumber: entryNo,
 		Date:        date,
 		Memo:        memo,
 		SourceDoc:   reversalDoc,

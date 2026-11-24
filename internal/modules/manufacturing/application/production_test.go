@@ -208,8 +208,7 @@ func TestBOMProcessesAndOrderNumberingSnapshotRouting(t *testing.T) {
 		t.Fatalf("processes: %+v", f.bom.Processes)
 	}
 	o1, o2 := f.newOrder(t, 10, ""), f.newOrder(t, 5, domain.MaterialIssued)
-	prefix := "PRD-" + time.Now().Format("200601") + "-"
-	if o1.OrderNumber != prefix+"0001" || o2.OrderNumber != prefix+"0002" || o1.MaterialMode != domain.MaterialBackflush || o2.MaterialMode != domain.MaterialIssued {
+	if o1.OrderNumber != "PRD-001-0326" || o2.OrderNumber != "PRD-002-0326" || o1.MaterialMode != domain.MaterialBackflush || o2.MaterialMode != domain.MaterialIssued {
 		t.Fatalf("orders: %s/%s modes %s/%s", o1.OrderNumber, o2.OrderNumber, o1.MaterialMode, o2.MaterialMode)
 	}
 	if len(o1.Steps) != 3 || o1.Steps[2].Name != "QC" || o1.Steps[1].StandardMinutes != 20 || o1.Steps[0].Status != domain.StepPending {

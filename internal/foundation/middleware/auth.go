@@ -7,6 +7,7 @@ import (
 	"github.com/divinecoid/one-backend/internal/foundation/license"
 	tenant "github.com/divinecoid/one-backend/internal/foundation/tenant"
 	"github.com/divinecoid/one-backend/internal/shared/actor"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	"github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/utils"
 	"github.com/gofiber/fiber/v2"
@@ -139,6 +140,7 @@ func TenantContext(manager *tenant.Manager) fiber.Handler {
 		}
 
 		c.Locals(ContextKeyTenantDB, db)
+		c.SetUserContext(docseq.WithDB(c.UserContext(), db))
 		return c.Next()
 	}
 }

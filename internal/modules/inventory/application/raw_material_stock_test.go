@@ -229,8 +229,8 @@ func TestRawMaterialStock_QCGateAndAntiDoubleCounting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateRawMaterialStockEntry failed: %v", err)
 	}
-	if created.EntryNo != "SBB-202611-0001" {
-		t.Errorf("want EntryNo SBB-202611-0001, got %s", created.EntryNo)
+	if created.EntryNo != "SBB-001-1126" {
+		t.Errorf("want EntryNo SBB-001-1126, got %s", created.EntryNo)
 	}
 	if created.Status != domain.RawStockStatusAvailable {
 		t.Errorf("want status available, got %s", created.Status)

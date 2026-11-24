@@ -10,6 +10,7 @@ import (
 	productDomain "github.com/divinecoid/one-backend/internal/modules/product/domain"
 	"github.com/divinecoid/one-backend/internal/modules/sales/domain"
 	"github.com/divinecoid/one-backend/internal/shared/actor"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/google/uuid"
@@ -391,11 +392,11 @@ func (uc *tradeInvoiceUseCase) Create(ctx context.Context, dto CreateTradeInvoic
 	computeTradeTotals(t)
 	t.DPAmount = round2(t.Total * t.DPPercent / 100)
 
-	count, err := uc.repo.CountByKind(ctx, kind)
+	var err error
+	t.Number, err = docseq.Next(ctx, uc.repo, kind, t.IssueDate)
 	if err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to number the invoice")
 	}
-	t.Number = fmt.Sprintf("%s-%s-%04d", kind, time.Now().Format("200601"), count+1)
 
 	if err := uc.repo.Create(ctx, t); err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to create invoice")

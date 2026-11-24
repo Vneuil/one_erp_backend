@@ -12,6 +12,7 @@ import (
 	inventoryDomain "github.com/divinecoid/one-backend/internal/modules/inventory/domain"
 	"github.com/divinecoid/one-backend/internal/modules/manufacturing/domain"
 	productDomain "github.com/divinecoid/one-backend/internal/modules/product/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/google/uuid"
@@ -325,8 +326,7 @@ func (uc *manufacturingUseCase) CreateOrder(ctx context.Context, dto CreateProdu
 			return nil, apperrors.NewBadRequest("plannedDate must be YYYY-MM-DD")
 		}
 	}
-	prefix := "PRD-" + time.Now().Format("200601") + "-"
-	n, err := uc.repo.CountOrdersByPrefix(ctx, prefix)
+	orderNo, err := docseq.Next(ctx, uc.repo, "PRD", dto.PlannedDate)
 	if err != nil {
 		return nil, apperrors.NewInternal(err, "Failed to number the production order")
 	}
@@ -349,7 +349,7 @@ func (uc *manufacturingUseCase) CreateOrder(ctx context.Context, dto CreateProdu
 		QuantityToProduce: dto.QuantityToProduce,
 		Status:            domain.OrderPlanned,
 		PlannedDate:       dto.PlannedDate,
-		OrderNumber:       fmt.Sprintf("%s%04d", prefix, n+1),
+		OrderNumber:       orderNo,
 		MaterialMode:      mode,
 		Steps:             steps,
 	}
@@ -894,7 +894,10 @@ func (uc *manufacturingUseCase) GetBackwardTraceability(ctx context.Context, fgB
 // ─────────────────────────────────────────────────────────────────────────────
 
 func (uc *manufacturingUseCase) CreateOvenLog(ctx context.Context, dto CreateOvenLogDTO) (*domain.OvenProductionLog, error) {
-	logNo := fmt.Sprintf("LHO-%s-%04d", time.Now().Format("200601"), time.Now().Unix()%10000)
+	logNo, err := docseq.Next(ctx, uc.repo, "LHO", dto.Date)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to generate oven log number")
+	}
 
 	var totalWet, totalDry float64
 	cycles := make([]domain.OvenCycleLine, 0, len(dto.Cycles))

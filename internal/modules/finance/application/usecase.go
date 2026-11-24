@@ -10,6 +10,7 @@ import (
 	"context"
 
 	"github.com/divinecoid/one-backend/internal/modules/finance/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/google/uuid"
@@ -296,13 +297,17 @@ func (uc *financeUseCase) CreateJournalEntry(ctx context.Context, dto CreateJour
 		return nil, apperrors.NewBadRequest(fmt.Sprintf("Total debit (%.2f) must equal total credit (%.2f)", totalDebit, totalCredit))
 	}
 
-	entryNumber := dto.EntryNumber
-	if entryNumber == "" {
-		entryNumber = fmt.Sprintf("JE-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000)
-	}
 	date := dto.Date
 	if date == "" {
 		date = time.Now().Format("2006-01-02")
+	}
+	entryNumber := dto.EntryNumber
+	if entryNumber == "" {
+		var err error
+		entryNumber, err = docseq.Next(ctx, uc.repo, "JE", date)
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to generate journal entry number")
+		}
 	}
 
 	je := &domain.JournalEntry{
@@ -437,7 +442,11 @@ func (uc *financeUseCase) CreatePayable(ctx context.Context, dto CreatePayableDT
 	}
 	invoiceNo := dto.InvoiceNo
 	if invoiceNo == "" {
-		invoiceNo = fmt.Sprintf("BILL-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000)
+		var err error
+		invoiceNo, err = docseq.Next(ctx, uc.repo, "BILL", dto.IssueDate)
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to generate payable invoice number")
+		}
 	}
 	p := &domain.Payable{
 		SupplierID:   dto.SupplierID,
@@ -519,7 +528,11 @@ func (uc *financeUseCase) CreateReceivable(ctx context.Context, dto CreateReceiv
 	}
 	invoiceNo := dto.InvoiceNo
 	if invoiceNo == "" {
-		invoiceNo = fmt.Sprintf("INV-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000)
+		var err error
+		invoiceNo, err = docseq.Next(ctx, uc.repo, "INV", dto.IssueDate)
+		if err != nil {
+			return nil, apperrors.NewInternal(err, "Failed to generate receivable invoice number")
+		}
 	}
 	r := &domain.Receivable{
 		CustomerID:   dto.CustomerID,

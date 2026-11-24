@@ -10,6 +10,7 @@ import (
 	financeApp "github.com/divinecoid/one-backend/internal/modules/finance/application"
 	inventoryApp "github.com/divinecoid/one-backend/internal/modules/inventory/application"
 	"github.com/divinecoid/one-backend/internal/modules/procurement/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/google/uuid"
 )
@@ -173,8 +174,12 @@ func (uc *procurementUseCase) CreatePurchaseReturn(ctx context.Context, dto Crea
 		}
 	}
 
+	retNo, err := docseq.Next(ctx, uc.repo, "PRET", returnDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to generate purchase return number")
+	}
 	ret := &domain.PurchaseReturn{
-		ReturnNo:            fmt.Sprintf("PRET-%s-%04d", time.Now().Format("200601"), time.Now().Nanosecond()%10000),
+		ReturnNo:            retNo,
 		GoodsReceiptID:      dto.GoodsReceiptID,
 		SupplierID:          po.SupplierID,
 		SupplierName:        po.SupplierName,

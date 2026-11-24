@@ -5,6 +5,7 @@ import (
 	"log/slog"
 
 	tenantMgr "github.com/divinecoid/one-backend/internal/foundation/tenant"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 
 	"github.com/divinecoid/one-backend/internal/modules/project/application"
 	"github.com/divinecoid/one-backend/internal/modules/project/delivery/http"
@@ -30,7 +31,7 @@ func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager
 			timeEntryRepo := infrastructure.NewTimeEntryRepository(tenantDB)
 			taskRepo := taskinfra.NewProjectTaskRepository(tenantDB)
 			uc := application.NewProjectUseCase(repo, timeEntryRepo, taskRepo)
-			return uc.SeedInitialData(context.Background())
+			return uc.SeedInitialData(docseq.WithDB(context.Background(), tenantDB))
 		},
 	})
 

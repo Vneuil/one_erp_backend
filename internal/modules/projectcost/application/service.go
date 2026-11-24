@@ -11,6 +11,7 @@ import (
 	projectDomain "github.com/divinecoid/one-backend/internal/modules/project/domain"
 	"github.com/divinecoid/one-backend/internal/modules/projectcost/domain"
 	"github.com/divinecoid/one-backend/internal/shared/actor"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/sod"
 	"github.com/google/uuid"
@@ -356,13 +357,8 @@ func validOptionalDate(s string) bool {
 	return err == nil
 }
 
-func (s *Service) nextNumber(ctx context.Context) (string, error) {
-	prefix := fmt.Sprintf("SPK-%d-", s.now().Year())
-	n, err := s.repo.CountWorkOrdersWithPrefix(ctx, prefix)
-	if err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%s%03d", prefix, n+1), nil
+func (s *Service) nextNumber(ctx context.Context, date string) (string, error) {
+	return docseq.Next(ctx, s.repo, "SPK", date)
 }
 
 func (s *Service) CreateWorkOrder(ctx context.Context, in WorkOrderInput) (*domain.WorkOrder, error) {
@@ -387,7 +383,7 @@ func (s *Service) CreateWorkOrder(ctx context.Context, in WorkOrderInput) (*doma
 	// The number is unique in the database; retry if two people create at once.
 	var err error
 	for attempt := 0; attempt < 4; attempt++ {
-		if w.Number, err = s.nextNumber(ctx); err != nil {
+		if w.Number, err = s.nextNumber(ctx, in.StartDate); err != nil {
 			return nil, apperrors.NewInternal(err, "Failed to number the work order")
 		}
 		w.ID = uuid.Nil

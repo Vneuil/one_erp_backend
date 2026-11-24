@@ -15,6 +15,7 @@ import (
 	"github.com/divinecoid/one-backend/internal/modules/manufacturing/domain"
 	productDomain "github.com/divinecoid/one-backend/internal/modules/product/domain"
 	productInfra "github.com/divinecoid/one-backend/internal/modules/product/infrastructure"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	"github.com/google/uuid"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -31,13 +32,13 @@ func TestProductionRoutingAgainstPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&domain.BillOfMaterial{}, &domain.BOMLine{}, &domain.BOMProcess{}, &domain.ProductionOrder{}, &domain.ProductionBatch{},
+	if err := db.AutoMigrate(&docseq.DocumentSequence{}, &domain.BillOfMaterial{}, &domain.BOMLine{}, &domain.BOMProcess{}, &domain.ProductionOrder{}, &domain.ProductionBatch{},
 		&domain.ProductionStep{}, &domain.ProductionStepLog{}, &invDomain.Warehouse{}, &invDomain.StockLevel{}, &invDomain.StockMovement{}, &invDomain.StockBatch{},
 		&invDomain.StockDocument{}, &invDomain.StockDocumentLine{}, &productDomain.Product{},
 		&financeDomain.Account{}, &financeDomain.JournalEntry{}, &financeDomain.JournalLine{}); err != nil {
 		t.Fatal(err)
 	}
-	ctx := context.Background()
+	ctx := docseq.WithDB(context.Background(), db)
 	finRepo := financeInfra.NewFinanceRepository(db)
 	if err := financeApp.NewFinanceUseCase(finRepo).SeedInitialData(ctx); err != nil {
 		t.Fatal(err)

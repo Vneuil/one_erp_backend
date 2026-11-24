@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/divinecoid/one-backend/internal/modules/support/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/google/uuid"
@@ -82,10 +83,14 @@ func (uc *ticketsUseCase) CreateTicket(ctx context.Context, dto CreateTicketDTO)
 		return nil, apperrors.NewBadRequest("Priority must be one of low, medium, high, urgent")
 	}
 
+	ticketNo, err := docseq.Next(ctx, uc.repo, "TCK", "")
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to generate ticket number")
+	}
 	now := time.Now()
 	t := &domain.Ticket{
 		CompanyID:    dto.CompanyID,
-		TicketNumber: generateTicketNumber(),
+		TicketNumber: ticketNo,
 		Subject:      dto.Subject,
 		Description:  dto.Description,
 		CustomerName: dto.CustomerName,

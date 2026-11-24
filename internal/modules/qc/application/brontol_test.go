@@ -2,7 +2,6 @@ package application
 
 import (
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/divinecoid/one-backend/internal/modules/qc/domain"
@@ -207,8 +206,8 @@ func TestBrontolReportWithReturnCreation(t *testing.T) {
 		t.Fatalf("unexpected error creating brontol report: %v", err)
 	}
 
-	if !strings.HasPrefix(report.ReportNo, "BRT-202611-") {
-		t.Errorf("expected reportNo prefix BRT-202611-, got %s", report.ReportNo)
+	if report.ReportNo != "BRT-001-1126" {
+		t.Errorf("expected reportNo BRT-001-1126, got %s", report.ReportNo)
 	}
 	if !report.IsReturn {
 		t.Errorf("expected IsReturn to be true")
@@ -216,8 +215,8 @@ func TestBrontolReportWithReturnCreation(t *testing.T) {
 	if report.ReturnReport == nil {
 		t.Fatalf("expected linked ReturnReport to be auto-generated")
 	}
-	if !strings.HasPrefix(report.ReturnReport.ReturnNo, "RET-BRT-202611-") {
-		t.Errorf("expected returnNo prefix RET-BRT-202611-, got %s", report.ReturnReport.ReturnNo)
+	if report.ReturnReport.ReturnNo != "RTR-001-1126" {
+		t.Errorf("expected returnNo RTR-001-1126, got %s", report.ReturnReport.ReturnNo)
 	}
 	if report.ReturnReport.ReturnQuantity != 25.5 {
 		t.Errorf("expected return quantity 25.5, got %f", report.ReturnReport.ReturnQuantity)

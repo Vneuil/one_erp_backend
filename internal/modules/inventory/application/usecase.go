@@ -8,6 +8,7 @@ import (
 	financeApp "github.com/divinecoid/one-backend/internal/modules/finance/application"
 	"github.com/divinecoid/one-backend/internal/modules/inventory/domain"
 	productDomain "github.com/divinecoid/one-backend/internal/modules/product/domain"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/divinecoid/one-backend/internal/shared/types"
 	"github.com/google/uuid"
@@ -422,7 +423,12 @@ func (uc *inventoryUseCase) CreateTransfer(ctx context.Context, dto CreateTransf
 		return nil, apperrors.NewBadRequest(fmt.Sprintf("Cannot transfer %d units; only %d available at source warehouse", dto.Quantity, available))
 	}
 
+	transferNo, err := docseq.Next(ctx, uc.repo, "TRF", "")
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to generate transfer number")
+	}
 	t := &domain.StockTransfer{
+		TransferNo:      transferNo,
 		ProductID:       dto.ProductID,
 		FromWarehouseID: dto.FromWarehouseID,
 		ToWarehouseID:   dto.ToWarehouseID,
@@ -490,10 +496,14 @@ func (uc *inventoryUseCase) CompleteTransfer(ctx context.Context, id uuid.UUID) 
 		if err := txRepo.UpsertStockLevel(ctx, fromLevel); err != nil {
 			return apperrors.NewInternal(err, "Failed to update source stock level")
 		}
+		ref := t.TransferNo
+		if ref == "" {
+			ref = t.ID.String()
+		}
 		outMovement := &domain.StockMovement{
 			ProductID: t.ProductID, WarehouseID: t.FromWarehouseID,
 			Type: domain.MovementTransferOut, Quantity: -t.Quantity, Balance: fromLevel.Quantity,
-			Reference: t.ID.String(), Reason: "Stock transfer", CreatedBy: t.RequestedBy,
+			Reference: ref, Reason: "Stock transfer", CreatedBy: t.RequestedBy,
 		}
 		if err := txRepo.CreateMovement(ctx, outMovement); err != nil {
 			return apperrors.NewInternal(err, "Failed to record transfer-out movement")
@@ -513,7 +523,7 @@ func (uc *inventoryUseCase) CompleteTransfer(ctx context.Context, id uuid.UUID) 
 		inMovement := &domain.StockMovement{
 			ProductID: t.ProductID, WarehouseID: t.ToWarehouseID,
 			Type: domain.MovementTransferIn, Quantity: t.Quantity, Balance: toLevel.Quantity,
-			Reference: t.ID.String(), Reason: "Stock transfer", CreatedBy: t.RequestedBy,
+			Reference: ref, Reason: "Stock transfer", CreatedBy: t.RequestedBy,
 		}
 		if err := txRepo.CreateMovement(ctx, inMovement); err != nil {
 			return apperrors.NewInternal(err, "Failed to record transfer-in movement")
@@ -596,7 +606,12 @@ func (uc *inventoryUseCase) CreateOpname(ctx context.Context, dto CreateOpnameDT
 		})
 	}
 
+	opnameNo, err := docseq.Next(ctx, uc.repo, "OPN", auditDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Failed to generate stock opname number")
+	}
 	o := &domain.StockOpname{
+		OpnameNo:    opnameNo,
 		WarehouseID: dto.WarehouseID,
 		AuditDate:   auditDate,
 		Status:      domain.OpnameDraft,
@@ -618,7 +633,7 @@ func (uc *inventoryUseCase) toOpnameResponse(ctx context.Context, o *domain.Stoc
 		}
 	}
 	return &OpnameResponseDTO{
-		ID: o.ID, WarehouseID: o.WarehouseID, WarehouseName: uc.warehouseName(ctx, o.WarehouseID),
+		ID: o.ID, OpnameNo: o.OpnameNo, WarehouseID: o.WarehouseID, WarehouseName: uc.warehouseName(ctx, o.WarehouseID),
 		AuditDate: o.AuditDate, Status: o.Status, Lines: lines, CreatedAt: o.CreatedAt,
 	}
 }
@@ -719,10 +734,14 @@ func (uc *inventoryUseCase) FinalizeOpname(ctx context.Context, id uuid.UUID) (*
 			if err := txRepo.UpsertStockLevel(ctx, level); err != nil {
 				return apperrors.NewInternal(err, "Failed to update stock level")
 			}
+			ref := o.OpnameNo
+			if ref == "" {
+				ref = o.ID.String()
+			}
 			movement := &domain.StockMovement{
 				ProductID: l.ProductID, WarehouseID: o.WarehouseID,
 				Type: domain.MovementAdjustment, Quantity: l.Variance(), Balance: level.Quantity,
-				Reference: o.ID.String(), Reason: "Stock opname reconciliation",
+				Reference: ref, Reason: "Stock opname reconciliation",
 			}
 			if err := txRepo.CreateMovement(ctx, movement); err != nil {
 				return apperrors.NewInternal(err, "Failed to record adjustment movement")

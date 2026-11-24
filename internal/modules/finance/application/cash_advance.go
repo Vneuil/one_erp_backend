@@ -9,6 +9,7 @@ import (
 
 	"github.com/divinecoid/one-backend/internal/modules/finance/domain"
 	"github.com/divinecoid/one-backend/internal/shared/actor"
+	"github.com/divinecoid/one-backend/internal/shared/docseq"
 	apperrors "github.com/divinecoid/one-backend/internal/shared/errors"
 	"github.com/google/uuid"
 )
@@ -125,14 +126,13 @@ func (uc *financeUseCase) CreateCashRequest(ctx context.Context, in CashRequestI
 		return nil, err
 	}
 
-	numberPrefix := fmt.Sprintf("CR-%s-", strings.ReplaceAll(date[:7], "-", ""))
-	n, err := uc.repo.CountCashRequests(ctx, numberPrefix)
+	crNumber, err := docseq.Next(ctx, uc.repo, "CR", date)
 	if err != nil {
 		return nil, apperrors.NewInternal(err, "Gagal menomori Cash Request")
 	}
 
 	ca := &domain.CashAdvance{
-		CRNumber:       fmt.Sprintf("%s%04d", numberPrefix, n+1),
+		CRNumber:       crNumber,
 		EmployeeName:   name,
 		Department:     strings.TrimSpace(in.Department),
 		Purpose:        purpose,
@@ -225,12 +225,11 @@ func (uc *financeUseCase) FillCashAdvanceForm(ctx context.Context, id uuid.UUID,
 
 	// Generate KBS number if not present yet
 	if ca.KBSNumber == "" {
-		numberPrefix := fmt.Sprintf("KBS-%s-", strings.ReplaceAll(date[:7], "-", ""))
-		n, err := uc.repo.CountCashAdvances(ctx, numberPrefix)
+		kbsNo, err := docseq.Next(ctx, uc.repo, "KBS", date)
 		if err != nil {
 			return nil, apperrors.NewInternal(err, "Gagal menomori Form Kas Bon")
 		}
-		ca.KBSNumber = fmt.Sprintf("%s%04d", numberPrefix, n+1)
+		ca.KBSNumber = kbsNo
 	}
 
 	var planLines []domain.CashAdvancePlanLine
@@ -494,12 +493,10 @@ func (uc *financeUseCase) ApproveSettlement(ctx context.Context, id uuid.UUID) (
 	if date == "" {
 		date = time.Now().Format("2006-01-02")
 	}
-	prefix := fmt.Sprintf("BKK-%s-", strings.ReplaceAll(date[:7], "-", ""))
-	n, err := uc.repo.CountCashVouchers(ctx, "payment", prefix)
+	bkkNumber, err := docseq.Next(ctx, uc.repo, "BKK", date)
 	if err != nil {
 		return nil, apperrors.NewInternal(err, "Gagal membuat nomor BKK")
 	}
-	bkkNumber := fmt.Sprintf("%s%04d", prefix, n+1)
 	ca.BKKNumber = bkkNumber
 
 	// Create Settlement Journal Lines:
