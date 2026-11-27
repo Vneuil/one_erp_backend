@@ -53,10 +53,10 @@ type QCUseCase interface {
 	UpdateArmadaCheck(ctx context.Context, id uuid.UUID, dto UpdateArmadaCheckDTO) (*ArmadaCheckResponseDTO, error)
 	DeleteArmadaCheck(ctx context.Context, id uuid.UUID) error
 
-	// Raw Material Incoming Check (PBD — QC-001)
+	// Raw Material Incoming Check (PBD — QC-002-PBD)
 	CreateIncomingCheck(ctx context.Context, dto CreateIncomingCheckDTO) (*IncomingCheckResponseDTO, error)
 	GetIncomingCheckByID(ctx context.Context, id uuid.UUID) (*IncomingCheckResponseDTO, error)
-	ListIncomingChecks(ctx context.Context, date string, lbmNo string) ([]IncomingCheckResponseDTO, error)
+	ListIncomingChecks(ctx context.Context, month string, date string, lbmNo string) ([]IncomingCheckResponseDTO, error)
 	UpdateIncomingCheck(ctx context.Context, id uuid.UUID, dto UpdateIncomingCheckDTO) (*IncomingCheckResponseDTO, error)
 	DeleteIncomingCheck(ctx context.Context, id uuid.UUID) error
 
@@ -81,6 +81,20 @@ type QCUseCase interface {
 	UpdateMeshBoltLog(ctx context.Context, id uuid.UUID, dto UpdateMeshBoltLogDTO) (*domain.MeshBoltMonitoringLog, error)
 	DeleteMeshBoltLog(ctx context.Context, id uuid.UUID) error
 
+	// Filter Mesh Monitoring (MNP - Gula Cair & MMV - VCO — Form QC-011-MNP / MMV)
+	CreateFilterMeshLog(ctx context.Context, dto CreateFilterMeshLogDTO) (*domain.FilterMeshMonitoringLog, error)
+	GetFilterMeshLogByID(ctx context.Context, id uuid.UUID) (*domain.FilterMeshMonitoringLog, error)
+	ListFilterMeshLogs(ctx context.Context, month string, category string, location string) ([]domain.FilterMeshMonitoringLog, error)
+	UpdateFilterMeshLog(ctx context.Context, id uuid.UUID, dto UpdateFilterMeshLogDTO) (*domain.FilterMeshMonitoringLog, error)
+	DeleteFilterMeshLog(ctx context.Context, id uuid.UUID) error
+
+	// Brontol Blade Monitoring (MPB — Form QC-011-MPB.01)
+	CreateBrontolBladeLog(ctx context.Context, dto CreateBrontolBladeLogDTO) (*domain.BrontolBladeMonitoringLog, error)
+	GetBrontolBladeLogByID(ctx context.Context, id uuid.UUID) (*domain.BrontolBladeMonitoringLog, error)
+	ListBrontolBladeLogs(ctx context.Context, month string, productCode string) ([]domain.BrontolBladeMonitoringLog, error)
+	UpdateBrontolBladeLog(ctx context.Context, id uuid.UUID, dto UpdateBrontolBladeLogDTO) (*domain.BrontolBladeMonitoringLog, error)
+	DeleteBrontolBladeLog(ctx context.Context, id uuid.UUID) error
+
 	// Oven Monitoring (MNO — Form QC-012-MNO.05)
 	CreateOvenLog(ctx context.Context, dto CreateOvenLogDTO) (*domain.OvenMonitoringLog, error)
 	GetOvenLogByID(ctx context.Context, id uuid.UUID) (*domain.OvenMonitoringLog, error)
@@ -102,7 +116,7 @@ type QCUseCase interface {
 	UpdateScissorLog(ctx context.Context, id uuid.UUID, dto UpdateScissorLogDTO) (*domain.ScissorMonitoringLog, error)
 	DeleteScissorLog(ctx context.Context, id uuid.UUID) error
 
-	// Metal Detector Cleaning (CPP — Form CPP)
+	// Metal Detector Cleaning (CPP — Form PRO-007-CPP)
 	CreateMetalCleaningLog(ctx context.Context, dto CreateMetalCleaningLogDTO) (*domain.MetalDetectorCleaningLog, error)
 	GetMetalCleaningLogByID(ctx context.Context, id uuid.UUID) (*domain.MetalDetectorCleaningLog, error)
 	ListMetalCleaningLogs(ctx context.Context, month string, machineNo string, location string) ([]domain.MetalDetectorCleaningLog, error)
@@ -123,7 +137,7 @@ type QCUseCase interface {
 	UpdateFinishedGoodsLog(ctx context.Context, id uuid.UUID, dto UpdateFinishedGoodsDTO) (*domain.FinishedGoodsInspectionLog, error)
 	DeleteFinishedGoodsLog(ctx context.Context, id uuid.UUID) error
 
-	// Packaging Label Check (PLK — Form QC-018-PLK)
+	// Packaging Label Check (PLK — Form QC-016-PLK)
 	CreatePackagingLabelCheck(ctx context.Context, dto CreatePackagingLabelCheckDTO) (*domain.PackagingLabelCheckLog, error)
 	GetPackagingLabelCheckByID(ctx context.Context, id uuid.UUID) (*domain.PackagingLabelCheckLog, error)
 	ListPackagingLabelChecks(ctx context.Context, month string, batchNo string, decision string) ([]domain.PackagingLabelCheckLog, error)
@@ -1138,8 +1152,26 @@ func (uc *qcUseCase) DeleteArmadaCheck(ctx context.Context, id uuid.UUID) error 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Raw Material Incoming Check (PBD — QC-001)
+// Raw Material Incoming Check (PBD — QC-002-PBD Rev. 05)
 // ─────────────────────────────────────────────────────────────────────────────
+
+func boolOrDefault(v *bool, def bool) bool {
+	if v == nil {
+		return def
+	}
+	return *v
+}
+
+func colorScoreLabel(score int) string {
+	switch score {
+	case 1:
+		return "1 - Light Brown"
+	case 3:
+		return "3 - Dark Brown"
+	default:
+		return "2 - Normal"
+	}
+}
 
 func computePBDStatus(acceptedWeight, rejectedWeight float64, moisture *float64, foreignClean bool) (status string, recommendedAction string) {
 	if !foreignClean || (rejectedWeight > 0 && acceptedWeight == 0) {
@@ -1157,10 +1189,126 @@ func computePBDStatus(acceptedWeight, rejectedWeight float64, moisture *float64,
 	return "passed", "Lolos Standar - Dapat Langsung ke Ayak Matang / Produksi (Kadar Air <= 2.0%)"
 }
 
+func evaluateIncomingCheckOutcome(
+	check *domain.RawMaterialIncomingCheck,
+	explicitDecision string,
+	explicitPassRate *float64,
+	explicitRecAction string,
+	explicitSugarCond string,
+	explicitPackCond string,
+) {
+	status, autoAction := computePBDStatus(check.AcceptedWeight, check.RejectedWeight, check.MoistureContent, check.ForeignMatterClean)
+
+	passRate := check.PassRatePercent
+	if explicitPassRate != nil {
+		passRate = math.Max(0, math.Min(100, *explicitPassRate))
+	} else if check.NetWeight > 0 && (check.AcceptedWeight > 0 || check.RejectedWeight > 0) {
+		passRate = math.Round((check.AcceptedWeight/check.NetWeight)*10000) / 100
+		if passRate > 100 {
+			passRate = 100
+		}
+	} else if status == "rejected" {
+		passRate = 0
+	} else if passRate <= 0 && explicitDecision != "DITOLAK" {
+		passRate = 100
+	}
+	check.PassRatePercent = passRate
+
+	decision := "LOLOS"
+	if strings.EqualFold(strings.TrimSpace(explicitDecision), "DITOLAK") ||
+		(explicitPassRate != nil && *explicitPassRate <= 0) ||
+		!check.CheckTaste || !check.CheckAroma || status == "rejected" {
+		status = "rejected"
+		decision = "DITOLAK"
+		if !strings.HasPrefix(autoAction, "Ditolak") {
+			autoAction = "Ditolak / Retur ke Supplier (Tidak Memenuhi Spesifikasi QC-002-PBD)"
+		}
+	} else if (!check.CheckPackaging || !check.CheckShape || !check.CheckSolubility || !check.CheckPackageLabel || (passRate > 0 && passRate < 100)) && status == "passed" {
+		status = "conditional"
+		autoAction = "Diterima Bersyarat (Catatan Pemeriksaan Fisik/Kemasan QC-002-PBD)"
+	}
+
+	check.OverallStatus = status
+	check.InspectionDecision = decision
+
+	if strings.TrimSpace(explicitRecAction) != "" {
+		check.RecommendedAction = explicitRecAction
+	} else if check.RecommendedAction == "" || explicitDecision != "" || explicitPassRate != nil {
+		check.RecommendedAction = autoAction
+	}
+
+	if strings.TrimSpace(explicitSugarCond) != "" {
+		check.SugarCondition = explicitSugarCond
+	} else if check.SugarCondition == "" {
+		if status == "rejected" {
+			check.SugarCondition = "Tidak Sesuai Spesifikasi"
+		} else if check.MoistureContent != nil && *check.MoistureContent > 2.0 {
+			check.SugarCondition = "Lembab (Kadar Air > 2.0%)"
+		} else {
+			check.SugarCondition = "Baik, Sesuai Spesifikasi"
+		}
+	}
+
+	if strings.TrimSpace(explicitPackCond) != "" {
+		check.PackagingCondition = explicitPackCond
+	} else if check.PackagingCondition == "" {
+		if check.CheckPackaging && check.CheckPackageLabel {
+			check.PackagingCondition = "Kemasan & Label Baik"
+		} else {
+			check.PackagingCondition = "Kemasan / Label Perlu Perhatian"
+		}
+	}
+
+	if check.ColorAppearance == "" {
+		check.ColorAppearance = colorScoreLabel(check.ColorScore)
+	}
+}
+
 func mapIncomingCheckToDTO(c *domain.RawMaterialIncomingCheck) IncomingCheckResponseDTO {
+	docCode := c.DocumentCode
+	if docCode == "" {
+		docCode = "QC-002-PBD"
+	}
+	revCode := c.RevisionCode
+	if revCode == "" {
+		revCode = "05"
+	}
+	fairtrade := c.FairtradeStatus
+	if fairtrade == "" {
+		fairtrade = "NON FAIRTRADE"
+	}
+	certs := c.Certifications
+	if certs == "" {
+		certs = "NATURAL"
+	}
+	itemType := c.ItemType
+	if itemType == "" {
+		itemType = "Bahan Baku"
+	}
+	itemCode := c.ItemCode
+	if itemCode == "" {
+		itemCode = c.BatchNo
+	}
+	colorScore := c.ColorScore
+	if colorScore < 1 || colorScore > 3 {
+		colorScore = 2
+	}
+	decision := c.InspectionDecision
+	if decision == "" {
+		if c.OverallStatus == "rejected" {
+			decision = "DITOLAK"
+		} else {
+			decision = "LOLOS"
+		}
+	}
+
 	return IncomingCheckResponseDTO{
 		ID:                 c.ID,
 		DocumentNo:         c.DocumentNo,
+		DocumentCode:       docCode,
+		RevisionCode:       revCode,
+		FairtradeStatus:    fairtrade,
+		Certifications:     certs,
 		GoodsReceiptID:     c.GoodsReceiptID,
 		LBMNo:              c.LBMNo,
 		CheckDate:          c.CheckDate,
@@ -1170,6 +1318,8 @@ func mapIncomingCheckToDTO(c *domain.RawMaterialIncomingCheck) IncomingCheckResp
 		DeliveryNoteNo:     c.DeliveryNoteNo,
 		PONo:               c.PONo,
 		ProductName:        c.ProductName,
+		ItemCode:           itemCode,
+		ItemType:           itemType,
 		BatchNo:            c.BatchNo,
 		TotalBags:          c.TotalBags,
 		SampleBags:         c.SampleBags,
@@ -1177,13 +1327,23 @@ func mapIncomingCheckToDTO(c *domain.RawMaterialIncomingCheck) IncomingCheckResp
 		NetWeight:          c.NetWeight,
 		AcceptedWeight:     c.AcceptedWeight,
 		RejectedWeight:     c.RejectedWeight,
+		CheckPackaging:     c.CheckPackaging,
+		CheckShape:         c.CheckShape,
+		CheckTaste:         c.CheckTaste,
+		CheckAroma:         c.CheckAroma,
+		ColorScore:         colorScore,
+		MoistureContent:    c.MoistureContent,
+		BrixValue:          c.BrixValue,
+		CheckSolubility:    c.CheckSolubility,
+		PhValue:            c.PhValue,
+		CheckPackageLabel:  c.CheckPackageLabel,
+		PassRatePercent:    c.PassRatePercent,
+		InspectionDecision: decision,
 		SugarCondition:     c.SugarCondition,
 		ColorAppearance:    c.ColorAppearance,
 		AromaFlavor:        c.AromaFlavor,
 		ForeignMatterClean: c.ForeignMatterClean,
 		PackagingCondition: c.PackagingCondition,
-		MoistureContent:    c.MoistureContent,
-		BrixValue:          c.BrixValue,
 		MeshSize:           c.MeshSize,
 		RecommendedAction:  c.RecommendedAction,
 		OverallStatus:      c.OverallStatus,
@@ -1199,7 +1359,7 @@ func mapIncomingCheckToDTO(c *domain.RawMaterialIncomingCheck) IncomingCheckResp
 
 func (uc *qcUseCase) CreateIncomingCheck(ctx context.Context, dto CreateIncomingCheckDTO) (*IncomingCheckResponseDTO, error) {
 	if strings.TrimSpace(dto.SupplierName) == "" || strings.TrimSpace(dto.ProductName) == "" || strings.TrimSpace(dto.CheckDate) == "" {
-		return nil, apperrors.NewBadRequest("Tanggal, supplier, dan nama produk bahan datang wajib diisi")
+		return nil, apperrors.NewBadRequest("Tanggal, supplier, dan nama barang datang wajib diisi")
 	}
 
 	month := dto.CheckMonth
@@ -1207,10 +1367,28 @@ func (uc *qcUseCase) CreateIncomingCheck(ctx context.Context, dto CreateIncoming
 		month = dto.CheckDate[:7]
 	}
 
-	status, autoAction := computePBDStatus(dto.AcceptedWeight, dto.RejectedWeight, dto.MoistureContent, dto.ForeignMatterClean)
-	recAction := dto.RecommendedAction
-	if recAction == "" {
-		recAction = autoAction
+	fairtrade := strings.TrimSpace(dto.FairtradeStatus)
+	if fairtrade == "" {
+		fairtrade = "NON FAIRTRADE"
+	}
+	certs := strings.TrimSpace(dto.Certifications)
+	if certs == "" {
+		certs = "NATURAL"
+	}
+	itemType := strings.TrimSpace(dto.ItemType)
+	if itemType == "" {
+		itemType = "Bahan Baku"
+	}
+	itemCode := strings.TrimSpace(dto.ItemCode)
+	batchNo := strings.TrimSpace(dto.BatchNo)
+	if itemCode == "" && batchNo != "" {
+		itemCode = batchNo
+	} else if batchNo == "" && itemCode != "" {
+		batchNo = itemCode
+	}
+	colorScore := dto.ColorScore
+	if colorScore < 1 || colorScore > 3 {
+		colorScore = 2
 	}
 
 	now := time.Now()
@@ -1229,6 +1407,10 @@ func (uc *qcUseCase) CreateIncomingCheck(ctx context.Context, dto CreateIncoming
 	}
 	check := &domain.RawMaterialIncomingCheck{
 		DocumentNo:         docNo,
+		DocumentCode:       "QC-002-PBD",
+		RevisionCode:       "05",
+		FairtradeStatus:    fairtrade,
+		Certifications:     certs,
 		GoodsReceiptID:     dto.GoodsReceiptID,
 		LBMNo:              dto.LBMNo,
 		CheckDate:          dto.CheckDate,
@@ -1238,29 +1420,44 @@ func (uc *qcUseCase) CreateIncomingCheck(ctx context.Context, dto CreateIncoming
 		DeliveryNoteNo:     dto.DeliveryNoteNo,
 		PONo:               dto.PONo,
 		ProductName:        dto.ProductName,
-		BatchNo:            dto.BatchNo,
+		ItemCode:           itemCode,
+		ItemType:           itemType,
+		BatchNo:            batchNo,
 		TotalBags:          dto.TotalBags,
 		SampleBags:         dto.SampleBags,
 		GrossWeight:        dto.GrossWeight,
 		NetWeight:          dto.NetWeight,
 		AcceptedWeight:     dto.AcceptedWeight,
 		RejectedWeight:     dto.RejectedWeight,
-		SugarCondition:     dto.SugarCondition,
+		CheckPackaging:     boolOrDefault(dto.CheckPackaging, true),
+		CheckShape:         boolOrDefault(dto.CheckShape, true),
+		CheckTaste:         boolOrDefault(dto.CheckTaste, true),
+		CheckAroma:         boolOrDefault(dto.CheckAroma, true),
+		ColorScore:         colorScore,
+		MoistureContent:    dto.MoistureContent,
+		BrixValue:          dto.BrixValue,
+		CheckSolubility:    boolOrDefault(dto.CheckSolubility, true),
+		PhValue:            dto.PhValue,
+		CheckPackageLabel:  boolOrDefault(dto.CheckPackageLabel, true),
 		ColorAppearance:    dto.ColorAppearance,
 		AromaFlavor:        dto.AromaFlavor,
 		ForeignMatterClean: dto.ForeignMatterClean,
-		PackagingCondition: dto.PackagingCondition,
-		MoistureContent:    dto.MoistureContent,
-		BrixValue:          dto.BrixValue,
 		MeshSize:           dto.MeshSize,
-		RecommendedAction:  recAction,
-		OverallStatus:      status,
 		QCName:             dto.QCName,
 		QCDate:             qcDate,
 		QAName:             dto.QAName,
 		QADate:             qaDate,
 		Notes:              dto.Notes,
 	}
+
+	evaluateIncomingCheckOutcome(
+		check,
+		dto.InspectionDecision,
+		dto.PassRatePercent,
+		dto.RecommendedAction,
+		dto.SugarCondition,
+		dto.PackagingCondition,
+	)
 
 	if err := uc.repo.CreateIncomingCheck(ctx, check); err != nil {
 		return nil, apperrors.NewInternal(err)
@@ -1280,6 +1477,7 @@ func (uc *qcUseCase) CreateIncomingCheck(ctx context.Context, dto CreateIncoming
 			SourceInspectionID: &check.ID,
 			SourceInspectionNo: check.LBMNo,
 			ProductName:        check.ProductName,
+			ProductCode:        check.ItemCode,
 			BatchNo:            check.BatchNo,
 			MaterialType:       "BM",
 			SupplierID:         check.SupplierID,
@@ -1303,14 +1501,14 @@ func (uc *qcUseCase) CreateIncomingCheck(ctx context.Context, dto CreateIncoming
 func (uc *qcUseCase) GetIncomingCheckByID(ctx context.Context, id uuid.UUID) (*IncomingCheckResponseDTO, error) {
 	check, err := uc.repo.GetIncomingCheckByID(ctx, id)
 	if err != nil {
-		return nil, apperrors.NewNotFound("Catatan pemeriksaan bahan datang tidak ditemukan")
+		return nil, apperrors.NewNotFound("Catatan pemeriksaan barang datang tidak ditemukan")
 	}
 	res := mapIncomingCheckToDTO(check)
 	return &res, nil
 }
 
-func (uc *qcUseCase) ListIncomingChecks(ctx context.Context, date string, lbmNo string) ([]IncomingCheckResponseDTO, error) {
-	checks, err := uc.repo.ListIncomingChecks(ctx, date, lbmNo)
+func (uc *qcUseCase) ListIncomingChecks(ctx context.Context, month string, date string, lbmNo string) ([]IncomingCheckResponseDTO, error) {
+	checks, err := uc.repo.ListIncomingChecks(ctx, month, date, lbmNo)
 	if err != nil {
 		return nil, apperrors.NewInternal(err)
 	}
@@ -1324,9 +1522,21 @@ func (uc *qcUseCase) ListIncomingChecks(ctx context.Context, date string, lbmNo 
 func (uc *qcUseCase) UpdateIncomingCheck(ctx context.Context, id uuid.UUID, dto UpdateIncomingCheckDTO) (*IncomingCheckResponseDTO, error) {
 	check, err := uc.repo.GetIncomingCheckByID(ctx, id)
 	if err != nil {
-		return nil, apperrors.NewNotFound("Catatan pemeriksaan bahan datang tidak ditemukan")
+		return nil, apperrors.NewNotFound("Catatan pemeriksaan barang datang tidak ditemukan")
 	}
 
+	if check.DocumentCode == "" {
+		check.DocumentCode = "QC-002-PBD"
+	}
+	if check.RevisionCode == "" {
+		check.RevisionCode = "05"
+	}
+	if dto.FairtradeStatus != "" {
+		check.FairtradeStatus = dto.FairtradeStatus
+	}
+	if dto.Certifications != "" {
+		check.Certifications = dto.Certifications
+	}
 	if dto.GoodsReceiptID != nil {
 		check.GoodsReceiptID = dto.GoodsReceiptID
 	}
@@ -1357,8 +1567,17 @@ func (uc *qcUseCase) UpdateIncomingCheck(ctx context.Context, id uuid.UUID, dto 
 	if dto.ProductName != "" {
 		check.ProductName = dto.ProductName
 	}
+	if dto.ItemCode != "" {
+		check.ItemCode = dto.ItemCode
+	}
+	if dto.ItemType != "" {
+		check.ItemType = dto.ItemType
+	}
 	if dto.BatchNo != "" {
 		check.BatchNo = dto.BatchNo
+	}
+	if check.ItemCode == "" && check.BatchNo != "" {
+		check.ItemCode = check.BatchNo
 	}
 	if dto.TotalBags > 0 {
 		check.TotalBags = dto.TotalBags
@@ -1374,8 +1593,33 @@ func (uc *qcUseCase) UpdateIncomingCheck(ctx context.Context, id uuid.UUID, dto 
 	}
 	check.AcceptedWeight = dto.AcceptedWeight
 	check.RejectedWeight = dto.RejectedWeight
-	if dto.SugarCondition != "" {
-		check.SugarCondition = dto.SugarCondition
+
+	if dto.CheckPackaging != nil {
+		check.CheckPackaging = *dto.CheckPackaging
+	}
+	if dto.CheckShape != nil {
+		check.CheckShape = *dto.CheckShape
+	}
+	if dto.CheckTaste != nil {
+		check.CheckTaste = *dto.CheckTaste
+	}
+	if dto.CheckAroma != nil {
+		check.CheckAroma = *dto.CheckAroma
+	}
+	if dto.ColorScore >= 1 && dto.ColorScore <= 3 {
+		check.ColorScore = dto.ColorScore
+		if dto.ColorAppearance == "" {
+			check.ColorAppearance = colorScoreLabel(dto.ColorScore)
+		}
+	}
+	if dto.CheckSolubility != nil {
+		check.CheckSolubility = *dto.CheckSolubility
+	}
+	if dto.PhValue != nil {
+		check.PhValue = dto.PhValue
+	}
+	if dto.CheckPackageLabel != nil {
+		check.CheckPackageLabel = *dto.CheckPackageLabel
 	}
 	if dto.ColorAppearance != "" {
 		check.ColorAppearance = dto.ColorAppearance
@@ -1384,9 +1628,6 @@ func (uc *qcUseCase) UpdateIncomingCheck(ctx context.Context, id uuid.UUID, dto 
 		check.AromaFlavor = dto.AromaFlavor
 	}
 	check.ForeignMatterClean = dto.ForeignMatterClean
-	if dto.PackagingCondition != "" {
-		check.PackagingCondition = dto.PackagingCondition
-	}
 	if dto.MoistureContent != nil {
 		check.MoistureContent = dto.MoistureContent
 	}
@@ -1397,13 +1638,14 @@ func (uc *qcUseCase) UpdateIncomingCheck(ctx context.Context, id uuid.UUID, dto 
 		check.MeshSize = dto.MeshSize
 	}
 
-	status, autoAction := computePBDStatus(check.AcceptedWeight, check.RejectedWeight, check.MoistureContent, check.ForeignMatterClean)
-	check.OverallStatus = status
-	if dto.RecommendedAction != "" {
-		check.RecommendedAction = dto.RecommendedAction
-	} else if check.RecommendedAction == "" {
-		check.RecommendedAction = autoAction
-	}
+	evaluateIncomingCheckOutcome(
+		check,
+		dto.InspectionDecision,
+		dto.PassRatePercent,
+		dto.RecommendedAction,
+		dto.SugarCondition,
+		dto.PackagingCondition,
+	)
 
 	now := time.Now()
 	if dto.QCName != "" {

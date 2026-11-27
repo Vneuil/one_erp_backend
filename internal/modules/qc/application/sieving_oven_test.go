@@ -17,6 +17,8 @@ type mockSievingOvenRepo struct {
 	sievingLogs    map[uuid.UUID]*domain.SievingMonitoringLog
 	magnetLogs     map[uuid.UUID]*domain.MagnetTrapLog
 	meshBoltLogs   map[uuid.UUID]*domain.MeshBoltMonitoringLog
+	filterMeshLogs map[uuid.UUID]*domain.FilterMeshMonitoringLog
+	bladeLogs      map[uuid.UUID]*domain.BrontolBladeMonitoringLog
 	ovenLogs       map[uuid.UUID]*domain.OvenMonitoringLog
 	prefixCounters map[string]int64
 }
@@ -26,6 +28,8 @@ func newMockSievingOvenRepo() *mockSievingOvenRepo {
 		sievingLogs:    make(map[uuid.UUID]*domain.SievingMonitoringLog),
 		magnetLogs:     make(map[uuid.UUID]*domain.MagnetTrapLog),
 		meshBoltLogs:   make(map[uuid.UUID]*domain.MeshBoltMonitoringLog),
+		filterMeshLogs: make(map[uuid.UUID]*domain.FilterMeshMonitoringLog),
+		bladeLogs:      make(map[uuid.UUID]*domain.BrontolBladeMonitoringLog),
 		ovenLogs:       make(map[uuid.UUID]*domain.OvenMonitoringLog),
 		prefixCounters: make(map[string]int64),
 	}
@@ -155,6 +159,71 @@ func (m *mockSievingOvenRepo) UpdateOvenLog(ctx context.Context, log *domain.Ove
 
 func (m *mockSievingOvenRepo) DeleteOvenLog(ctx context.Context, id uuid.UUID) error {
 	delete(m.ovenLogs, id)
+	return nil
+}
+
+func (m *mockSievingOvenRepo) CreateFilterMeshLog(ctx context.Context, log *domain.FilterMeshMonitoringLog) error {
+	log.ID = uuid.New()
+	m.filterMeshLogs[log.ID] = log
+	return nil
+}
+
+func (m *mockSievingOvenRepo) GetFilterMeshLogByID(ctx context.Context, id uuid.UUID) (*domain.FilterMeshMonitoringLog, error) {
+	if item, ok := m.filterMeshLogs[id]; ok {
+		return item, nil
+	}
+	return nil, errNotFound
+}
+
+func (m *mockSievingOvenRepo) ListFilterMeshLogs(ctx context.Context, month string, category string, location string) ([]domain.FilterMeshMonitoringLog, error) {
+	var res []domain.FilterMeshMonitoringLog
+	for _, v := range m.filterMeshLogs {
+		if category != "" && v.Category != category {
+			continue
+		}
+		res = append(res, *v)
+	}
+	return res, nil
+}
+
+func (m *mockSievingOvenRepo) UpdateFilterMeshLog(ctx context.Context, log *domain.FilterMeshMonitoringLog) error {
+	m.filterMeshLogs[log.ID] = log
+	return nil
+}
+
+func (m *mockSievingOvenRepo) DeleteFilterMeshLog(ctx context.Context, id uuid.UUID) error {
+	delete(m.filterMeshLogs, id)
+	return nil
+}
+
+func (m *mockSievingOvenRepo) CreateBrontolBladeLog(ctx context.Context, log *domain.BrontolBladeMonitoringLog) error {
+	log.ID = uuid.New()
+	m.bladeLogs[log.ID] = log
+	return nil
+}
+
+func (m *mockSievingOvenRepo) GetBrontolBladeLogByID(ctx context.Context, id uuid.UUID) (*domain.BrontolBladeMonitoringLog, error) {
+	if item, ok := m.bladeLogs[id]; ok {
+		return item, nil
+	}
+	return nil, errNotFound
+}
+
+func (m *mockSievingOvenRepo) ListBrontolBladeLogs(ctx context.Context, month string, productCode string) ([]domain.BrontolBladeMonitoringLog, error) {
+	var res []domain.BrontolBladeMonitoringLog
+	for _, v := range m.bladeLogs {
+		res = append(res, *v)
+	}
+	return res, nil
+}
+
+func (m *mockSievingOvenRepo) UpdateBrontolBladeLog(ctx context.Context, log *domain.BrontolBladeMonitoringLog) error {
+	m.bladeLogs[log.ID] = log
+	return nil
+}
+
+func (m *mockSievingOvenRepo) DeleteBrontolBladeLog(ctx context.Context, id uuid.UUID) error {
+	delete(m.bladeLogs, id)
 	return nil
 }
 
@@ -353,5 +422,136 @@ func TestOvenMNO_MoistureContentTarget(t *testing.T) {
 	}
 	if log2.OverallStatus != "re_oven" {
 		t.Errorf("expected overallStatus re_oven, got %s", log2.OverallStatus)
+	}
+}
+
+func TestFilterMeshMNP_LiquidSugar(t *testing.T) {
+	repo := newMockSievingOvenRepo()
+	uc := NewQCUseCase(repo)
+	ctx := context.Background()
+
+	log, err := uc.CreateFilterMeshLog(ctx, CreateFilterMeshLogDTO{
+		CheckDate:      "2026-12-01",
+		Category:       "gula_cair",
+		ProductName:    "Gula Kelapa Cair",
+		ProductCode:    "GC-001",
+		MeshSize:       "Mesh 80",
+		PICResponsible: "Sajiman",
+		InitialPICName: "Sajiman",
+		FinalPICName:   "Sajiman",
+	})
+	if err != nil {
+		t.Fatalf("error creating filter mesh log: %v", err)
+	}
+	if log.DocumentCode != "QC-011-MNP" {
+		t.Errorf("expected DocumentCode QC-011-MNP, got %s", log.DocumentCode)
+	}
+	if log.OverallStatus != "passed" {
+		t.Errorf("expected passed, got %s", log.OverallStatus)
+	}
+}
+
+func TestFilterMeshMMV_VCO(t *testing.T) {
+	repo := newMockSievingOvenRepo()
+	uc := NewQCUseCase(repo)
+	ctx := context.Background()
+
+	log, err := uc.CreateFilterMeshLog(ctx, CreateFilterMeshLogDTO{
+		CheckDate:      "2026-12-01",
+		Category:       "vco",
+		ProductName:    "Virgin Coconut Oil",
+		ProductCode:    "VCO-01",
+		MeshSize:       "Mesh 100",
+		PICResponsible: "Abel",
+		InitialPICName: "Abel",
+		FinalPICName:   "Abel",
+	})
+	if err != nil {
+		t.Fatalf("error creating filter mesh log: %v", err)
+	}
+	if log.DocumentCode != "QC-011-MMV" {
+		t.Errorf("expected DocumentCode QC-011-MMV, got %s", log.DocumentCode)
+	}
+	if log.Location != "Ruang VCO" {
+		t.Errorf("expected Location Ruang VCO, got %s", log.Location)
+	}
+}
+
+func TestBrontolBladeMPB(t *testing.T) {
+	repo := newMockSievingOvenRepo()
+	uc := NewQCUseCase(repo)
+	ctx := context.Background()
+
+	// Normal check
+	log1, err := uc.CreateBrontolBladeLog(ctx, CreateBrontolBladeLogDTO{
+		CheckDate:        "2026-12-01",
+		ProductName:      "Gula Semut Kelapa",
+		PICResponsible:   "Sajiman",
+		InitialPICName:   "Sajiman",
+		FinalPICName:     "Sajiman",
+		InitialCondition: "Baik",
+		FinalCondition:   "Baik",
+	})
+	if err != nil {
+		t.Fatalf("error creating blade log: %v", err)
+	}
+	if log1.DocumentCode != "QC-011-MPB" {
+		t.Errorf("expected QC-011-MPB, got %s", log1.DocumentCode)
+	}
+	if log1.OverallStatus != "passed" {
+		t.Errorf("expected passed, got %s", log1.OverallStatus)
+	}
+
+	// Hazard alert check (pisau gompal/retak)
+	log2, err := uc.CreateBrontolBladeLog(ctx, CreateBrontolBladeLogDTO{
+		CheckDate:        "2026-12-01",
+		ProductName:      "Gula Semut Kelapa",
+		PICResponsible:   "Sajiman",
+		InitialPICName:   "Sajiman",
+		FinalPICName:     "Sajiman",
+		InitialCondition: "Gompal",
+		FinalCondition:   "Gompal",
+	})
+	if err != nil {
+		t.Fatalf("error creating blade log 2: %v", err)
+	}
+	if log2.OverallStatus != "hazard_alert" {
+		t.Errorf("expected hazard_alert for blade gompal, got %s", log2.OverallStatus)
+	}
+}
+
+func TestMeshBolt_MNB_and_MBB(t *testing.T) {
+	repo := newMockSievingOvenRepo()
+	uc := NewQCUseCase(repo)
+	ctx := context.Background()
+
+	// MNB (Tangki Gula Cair)
+	mnbLog, err := uc.CreateMeshBoltLog(ctx, CreateMeshBoltLogDTO{
+		CheckDate:      "2026-12-01",
+		Room:           "Tangki Gula Cair",
+		PICResponsible: "Sajiman",
+		InitialPICName: "Sajiman",
+		FinalPICName:   "Sajiman",
+	})
+	if err != nil {
+		t.Fatalf("error creating MNB log: %v", err)
+	}
+	if mnbLog.FormType != "MNB" || mnbLog.DocumentCode != "QC-011-MNB" {
+		t.Errorf("expected MNB / QC-011-MNB, got %s / %s", mnbLog.FormType, mnbLog.DocumentCode)
+	}
+
+	// MBB (Mesin Brontol)
+	mbbLog, err := uc.CreateMeshBoltLog(ctx, CreateMeshBoltLogDTO{
+		CheckDate:      "2026-12-01",
+		Room:           "Mesin Brontol",
+		PICResponsible: "Sajiman",
+		InitialPICName: "Sajiman",
+		FinalPICName:   "Sajiman",
+	})
+	if err != nil {
+		t.Fatalf("error creating MBB log: %v", err)
+	}
+	if mbbLog.FormType != "MBB" || mbbLog.DocumentCode != "QC-011-MBB" {
+		t.Errorf("expected MBB / QC-011-MBB, got %s / %s", mbbLog.FormType, mbbLog.DocumentCode)
 	}
 }

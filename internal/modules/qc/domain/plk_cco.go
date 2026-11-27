@@ -5,10 +5,12 @@ import (
 	"github.com/google/uuid"
 )
 
-// PackagingLabelCheckLog represents PLK (Form Pemeriksaan Label Kemasan QC — QC-018-PLK)
+// PackagingLabelCheckLog represents PLK (Form Pemeriksaan Label Kemasan QC — QC-016-PLK. 01 Revisi 01)
 type PackagingLabelCheckLog struct {
 	types.BaseEntity
 	DocumentNo            string                    `gorm:"type:varchar(50);uniqueIndex;not null" json:"documentNo"`
+	DocumentCode          string                    `gorm:"type:varchar(30);default:'QC-016-PLK'" json:"documentCode"`
+	RevisionCode          string                    `gorm:"type:varchar(20);default:'01'" json:"revisionCode"`
 	CheckDate             string                    `gorm:"type:varchar(10);not null;index" json:"checkDate"`
 	CheckMonth            string                    `gorm:"type:varchar(7);not null;index" json:"checkMonth"`
 	HandoverReportID      *uuid.UUID                `gorm:"type:uuid;index" json:"handoverReportId,omitempty"`
@@ -27,28 +29,45 @@ type PackagingLabelCheckLog struct {
 
 func (PackagingLabelCheckLog) TableName() string { return "qc_packaging_label_checks" }
 
-// PackagingLabelCheckItem represents one product item line inspected for labels
+// PackagingLabelCheckItem represents one product item line inspected for labels (QC-016-PLK Rev. 01)
 type PackagingLabelCheckItem struct {
 	types.BaseEntity
-	LogID              uuid.UUID `gorm:"type:uuid;not null;index" json:"logId"`
-	ItemNo             int       `gorm:"not null" json:"itemNo"`
-	ItemName           string    `gorm:"type:varchar(255);not null" json:"itemName"`
-	ItemCode           string    `gorm:"type:varchar(100);not null" json:"itemCode"`
-	BatchNo            string    `gorm:"type:varchar(100);not null;index" json:"batchNo"`
-	BuyerName          string    `gorm:"type:varchar(255)" json:"buyerName,omitempty"`
-	PackagingType      string    `gorm:"type:varchar(100)" json:"packagingType,omitempty"`
-	StickerNo          string    `gorm:"type:varchar(100)" json:"stickerNo,omitempty"`
-	IsBatchMatch       bool      `gorm:"not null;default:true" json:"isBatchMatch"`
-	IsExpiryMatch      bool      `gorm:"not null;default:true" json:"isExpiryMatch"`
-	IsCertLogoMatch    bool      `gorm:"not null;default:true" json:"isCertLogoMatch"`
-	IsPrintQualityGood bool      `gorm:"not null;default:true" json:"isPrintQualityGood"`
-	IsPositionAligned  bool      `gorm:"not null;default:true" json:"isPositionAligned"`
-	InspectedQty       int       `gorm:"not null;default:0" json:"inspectedQty"`
-	PassedQty          int       `gorm:"not null;default:0" json:"passedQty"`
-	RejectedQty        int       `gorm:"not null;default:0" json:"rejectedQty"`
-	ItemDecision       string    `gorm:"type:varchar(20);not null;default:'lolos'" json:"itemDecision"` // lolos, ditolak
-	CorrectiveAction   string    `gorm:"type:varchar(255)" json:"correctiveAction,omitempty"`
-	Notes              string    `gorm:"type:varchar(255)" json:"notes,omitempty"`
+	LogID                 uuid.UUID `gorm:"type:uuid;not null;index" json:"logId"`
+	ItemNo                int       `gorm:"not null" json:"itemNo"`
+	ItemCheckDate         string    `gorm:"type:varchar(20)" json:"itemCheckDate,omitempty"`       // Kolom Tanggal per baris
+	ItemName              string    `gorm:"type:varchar(255);not null" json:"itemName"`            // Nama Produk
+	ItemCode              string    `gorm:"type:varchar(100)" json:"itemCode,omitempty"`           // Kode Barang (opsional)
+	BatchNo               string    `gorm:"type:varchar(100);not null;index" json:"batchNo"`       // Batch Number
+	BuyerName             string    `gorm:"type:varchar(255)" json:"buyerName,omitempty"`          // Customer
+	ProductionDate        string    `gorm:"type:varchar(20)" json:"productionDate,omitempty"`      // Production Date
+	ExpiredDate           string    `gorm:"type:varchar(20)" json:"expiredDate,omitempty"`         // Expired Date / Best Before
+	OriginCountry         string    `gorm:"type:varchar(100)" json:"originCountry,omitempty"`      // Negara Asal
+	WeightLabel           string    `gorm:"type:varchar(50)" json:"weightLabel,omitempty"`         // Berat pada label
+	PackagingType         string    `gorm:"type:varchar(100)" json:"packagingType,omitempty"`      // Kemasan
+	StickerNo             string    `gorm:"type:varchar(100)" json:"stickerNo,omitempty"`          // No Sticker
+	AllergenInfo          string    `gorm:"type:varchar(150)" json:"allergenInfo,omitempty"`       // Allergen Information
+	// 9 parameter Kesesuaian Label & Kemasan* + Line Check (Rev. 01)
+	IsProductNameMatch    bool      `gorm:"not null;default:true" json:"isProductNameMatch"`
+	IsBatchMatch          bool      `gorm:"not null;default:true" json:"isBatchMatch"`
+	IsProductionDateMatch bool      `gorm:"not null;default:true" json:"isProductionDateMatch"`
+	IsExpiryMatch         bool      `gorm:"not null;default:true" json:"isExpiryMatch"`          // Best Before Date
+	IsOriginCountryMatch  bool      `gorm:"not null;default:true" json:"isOriginCountryMatch"`
+	IsWeightMatch         bool      `gorm:"not null;default:true" json:"isWeightMatch"`
+	IsPackagingMatch      bool      `gorm:"not null;default:true" json:"isPackagingMatch"`
+	IsStickerNoMatch      bool      `gorm:"not null;default:true" json:"isStickerNoMatch"`
+	IsAllergenInfoMatch   bool      `gorm:"not null;default:true" json:"isAllergenInfoMatch"`
+	IsLineCheckPassed     bool      `gorm:"not null;default:true" json:"isLineCheckPassed"`      // Line Check (Rev 01)
+	// Legacy checklist & qty fields (preserved for backward compatibility)
+	IsCertLogoMatch       bool      `gorm:"not null;default:true" json:"isCertLogoMatch"`
+	IsPrintQualityGood    bool      `gorm:"not null;default:true" json:"isPrintQualityGood"`
+	IsPositionAligned     bool      `gorm:"not null;default:true" json:"isPositionAligned"`
+	InspectedQty          int       `gorm:"not null;default:0" json:"inspectedQty"`
+	PassedQty             int       `gorm:"not null;default:0" json:"passedQty"`
+	RejectedQty           int       `gorm:"not null;default:0" json:"rejectedQty"`
+	ItemDecision          string    `gorm:"type:varchar(20);not null;default:'lolos'" json:"itemDecision"` // lolos, ditolak
+	CorrectiveAction      string    `gorm:"type:varchar(255)" json:"correctiveAction,omitempty"`
+	QCPICName             string    `gorm:"type:varchar(150)" json:"qcPicName,omitempty"`                // Paraf QC per baris
+	Notes                 string    `gorm:"type:varchar(255)" json:"notes,omitempty"`                    // Keterangan
 }
 
 func (PackagingLabelCheckItem) TableName() string { return "qc_packaging_label_check_items" }

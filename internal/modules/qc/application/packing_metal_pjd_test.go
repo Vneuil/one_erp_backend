@@ -283,6 +283,55 @@ func TestMetalDetectorVerification_AlarmFailure(t *testing.T) {
 	}
 }
 
+func TestMetalCleaningCPPRev01_FindingAndHours(t *testing.T) {
+	repo := newMockPackingMetalPJDRepo()
+	uc := NewQCUseCase(repo)
+	ctx := context.Background()
+
+	log, err := uc.CreateMetalCleaningLog(ctx, CreateMetalCleaningLogDTO{
+		CheckDate:         "2026-03-02",
+		Location:          "R. Gula Cair",
+		EquipmentName:     "xray",
+		ProductName:       "Gula Cair",
+		BatchNo:           "GC-001",
+		CustomerName:      "PT ABC",
+		Quantity:          "20",
+		StartTime:         "08:00",
+		EndTime:           "10:30",
+		CleaningStartTime: "10:30",
+		CleaningEndTime:   "10:45",
+		Finding:           "Serpihan logam pada produk",
+		AnalysisResult:    "Berasal dari ayakan",
+		CorrectiveAction:  "Ganti mesh ayakan",
+		OperatorName:      "Andi",
+		QCInspectorName:   "QA Rina",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if log.DocumentCode != "PRO-007-CPP" || log.RevisionCode != "01" {
+		t.Errorf("expected PRO-007-CPP rev 01, got %s rev %s", log.DocumentCode, log.RevisionCode)
+	}
+	if log.EquipmentName != "X-Ray" {
+		t.Errorf("expected equipment X-Ray, got %s", log.EquipmentName)
+	}
+	if log.TotalHours != 2.5 {
+		t.Errorf("expected total hours 2.5, got %v", log.TotalHours)
+	}
+	if log.OverallStatus != "finding" {
+		t.Errorf("expected status finding, got %s", log.OverallStatus)
+	}
+
+	empty := "-"
+	updated, err := uc.UpdateMetalCleaningLog(ctx, log.ID, UpdateMetalCleaningLogDTO{Finding: &empty})
+	if err != nil {
+		t.Fatalf("unexpected update error: %v", err)
+	}
+	if updated.OverallStatus != "passed" {
+		t.Errorf("expected status passed after clearing finding, got %s", updated.OverallStatus)
+	}
+}
+
 func TestFinishedGoodsInspection_MoistureAndDecision(t *testing.T) {
 	repo := newMockPackingMetalPJDRepo()
 	uc := NewQCUseCase(repo)

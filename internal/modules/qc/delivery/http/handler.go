@@ -593,7 +593,7 @@ func (h *Handler) DeleteArmadaCheck(c *fiber.Ctx) error {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Raw Material Incoming Check (PBD — QC-001) Handlers
+// Raw Material Incoming Check (PBD — QC-002-PBD) Handlers
 // ─────────────────────────────────────────────────────────────────────────────
 
 func (h *Handler) ListIncomingChecks(c *fiber.Ctx) error {
@@ -601,13 +601,14 @@ func (h *Handler) ListIncomingChecks(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
+	month := c.Query("month")
 	date := c.Query("date")
 	lbmNo := c.Query("lbmNo")
-	checks, err := uc.ListIncomingChecks(c.Context(), date, lbmNo)
+	checks, err := uc.ListIncomingChecks(c.Context(), month, date, lbmNo)
 	if err != nil {
 		return err
 	}
-	return response.OK(c, "Data pemeriksaan bahan datang berhasil dimuat", checks)
+	return response.OK(c, "Data pemeriksaan kualitas barang datang berhasil dimuat", checks)
 }
 
 func (h *Handler) GetIncomingCheck(c *fiber.Ctx) error {
@@ -1042,6 +1043,177 @@ func (h *Handler) DeleteOvenLog(c *fiber.Ctx) error {
 		return err
 	}
 	return response.OK(c, "Monitoring proses oven berhasil dihapus", fiber.Map{"id": id})
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Filter Mesh Monitoring (MNP - Gula Cair & MMV - VCO) Handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+func (h *Handler) ListFilterMeshLogs(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	month := c.Query("month")
+	category := c.Query("category")
+	location := c.Query("location")
+	list, err := uc.ListFilterMeshLogs(c.Context(), month, category, location)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Daftar monitoring proses penyaringan berhasil diambil", list)
+}
+
+func (h *Handler) GetFilterMeshLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	item, err := uc.GetFilterMeshLogByID(c.Context(), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Data monitoring proses penyaringan berhasil diambil", item)
+}
+
+func (h *Handler) CreateFilterMeshLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var dto application.CreateFilterMeshLogDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload monitoring proses penyaringan tidak valid")
+	}
+	item, err := uc.CreateFilterMeshLog(c.Context(), dto)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Monitoring proses penyaringan berhasil disimpan", item)
+}
+
+func (h *Handler) UpdateFilterMeshLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var dto application.UpdateFilterMeshLogDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload update monitoring proses penyaringan tidak valid")
+	}
+	item, err := uc.UpdateFilterMeshLog(c.Context(), id, dto)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Monitoring proses penyaringan berhasil diperbarui", item)
+}
+
+func (h *Handler) DeleteFilterMeshLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	if err := uc.DeleteFilterMeshLog(c.Context(), id); err != nil {
+		return err
+	}
+	return response.OK(c, "Monitoring proses penyaringan berhasil dihapus", fiber.Map{"id": id})
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Brontol Blade Monitoring (MPB — Form QC-011-MPB.01) Handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+func (h *Handler) ListBrontolBladeLogs(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	month := c.Query("month")
+	productCode := c.Query("productCode")
+	list, err := uc.ListBrontolBladeLogs(c.Context(), month, productCode)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Daftar monitoring bilah pisau berhasil diambil", list)
+}
+
+func (h *Handler) GetBrontolBladeLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	item, err := uc.GetBrontolBladeLogByID(c.Context(), id)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Data monitoring bilah pisau berhasil diambil", item)
+}
+
+func (h *Handler) CreateBrontolBladeLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	var dto application.CreateBrontolBladeLogDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload monitoring bilah pisau tidak valid")
+	}
+	item, err := uc.CreateBrontolBladeLog(c.Context(), dto)
+	if err != nil {
+		return err
+	}
+	return response.Created(c, "Monitoring bilah pisau berhasil disimpan", item)
+}
+
+func (h *Handler) UpdateBrontolBladeLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	var dto application.UpdateBrontolBladeLogDTO
+	if err := c.BodyParser(&dto); err != nil {
+		return apperrors.NewBadRequest("Payload update monitoring bilah pisau tidak valid")
+	}
+	item, err := uc.UpdateBrontolBladeLog(c.Context(), id, dto)
+	if err != nil {
+		return err
+	}
+	return response.OK(c, "Monitoring bilah pisau berhasil diperbarui", item)
+}
+
+func (h *Handler) DeleteBrontolBladeLog(c *fiber.Ctx) error {
+	uc, err := h.resolve(c)
+	if err != nil {
+		return err
+	}
+	id, err := parseID(c, "id")
+	if err != nil {
+		return err
+	}
+	if err := uc.DeleteBrontolBladeLog(c.Context(), id); err != nil {
+		return err
+	}
+	return response.OK(c, "Monitoring bilah pisau berhasil dihapus", fiber.Map{"id": id})
 }
 
 

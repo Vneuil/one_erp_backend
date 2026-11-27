@@ -487,15 +487,71 @@ func (uc *qcUseCase) DeleteMagnetTrapLog(ctx context.Context, id uuid.UUID) erro
 // ─────────────────────────────────────────────────────────────────────────────
 
 func (uc *qcUseCase) CreateMeshBoltLog(ctx context.Context, dto CreateMeshBoltLogDTO) (*domain.MeshBoltMonitoringLog, error) {
-	if strings.TrimSpace(dto.MachineNo) == "" {
-		return nil, apperrors.NewBadRequest("Nomor mesin wajib diisi")
-	}
 	if strings.TrimSpace(dto.CheckDate) == "" {
 		return nil, apperrors.NewBadRequest("Tanggal pemeriksaan wajib diisi")
 	}
-	if strings.TrimSpace(dto.MeshSize) == "" {
-		return nil, apperrors.NewBadRequest("Ukuran mesh wajib diisi")
+
+	room := dto.Room
+	if room == "" {
+		room = "Ayak Mentah"
 	}
+
+	formType := dto.FormType
+	if formType == "" {
+		lowerRoom := strings.ToLower(room)
+		if strings.Contains(lowerRoom, "gula cair") || strings.Contains(lowerRoom, "tangki") {
+			formType = "MNB"
+		} else if strings.Contains(lowerRoom, "brontol") {
+			formType = "MBB"
+		} else {
+			formType = "MNM"
+		}
+	}
+
+	docCode := dto.DocumentCode
+	if docCode == "" {
+		if formType == "MNB" {
+			docCode = "QC-011-MNB"
+		} else if formType == "MBB" {
+			docCode = "QC-011-MBB"
+		} else {
+			docCode = "QC-011-MNM"
+		}
+	}
+
+	stageCategory := dto.StageCategory
+	if stageCategory == "" {
+		if formType == "MNB" {
+			stageCategory = "gula_cair"
+		} else if formType == "MBB" {
+			stageCategory = "brontol"
+		} else if strings.Contains(strings.ToLower(room), "matang") {
+			stageCategory = "matang"
+		} else {
+			stageCategory = "mentah"
+		}
+	}
+
+	machineNo := strings.TrimSpace(dto.MachineNo)
+	if machineNo == "" {
+		if formType == "MNB" {
+			machineNo = "Tangki Gula Cair"
+		} else if formType == "MBB" {
+			machineNo = "Mesin Brontol 01"
+		} else {
+			return nil, apperrors.NewBadRequest("Nomor mesin wajib diisi")
+		}
+	}
+
+	meshSize := strings.TrimSpace(dto.MeshSize)
+	if meshSize == "" {
+		if formType == "MNB" || formType == "MBB" {
+			meshSize = "-"
+		} else {
+			return nil, apperrors.NewBadRequest("Ukuran mesh wajib diisi")
+		}
+	}
+
 	if strings.TrimSpace(dto.PICResponsible) == "" || strings.TrimSpace(dto.InitialPICName) == "" {
 		return nil, apperrors.NewBadRequest("Penanggung jawab dan nama PIC wajib diisi")
 	}
@@ -504,14 +560,10 @@ func (uc *qcUseCase) CreateMeshBoltLog(ctx context.Context, dto CreateMeshBoltLo
 	if month == "" && len(dto.CheckDate) >= 7 {
 		month = dto.CheckDate[:7]
 	}
-	room := dto.Room
-	if room == "" {
-		room = "Ayak Mentah"
-	}
 
-	docNo, err := docseq.Next(ctx, uc.repo, "MNM", dto.CheckDate)
+	docNo, err := docseq.Next(ctx, uc.repo, formType, dto.CheckDate)
 	if err != nil {
-		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen MNM")
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen "+formType)
 	}
 
 	initCount := dto.InitialBoltCount
@@ -560,11 +612,14 @@ func (uc *qcUseCase) CreateMeshBoltLog(ctx context.Context, dto CreateMeshBoltLo
 
 	item := &domain.MeshBoltMonitoringLog{
 		DocumentNo:        docNo,
+		DocumentCode:      docCode,
+		FormType:          formType,
+		StageCategory:     stageCategory,
 		CheckMonth:        month,
 		CheckDate:         dto.CheckDate,
 		Room:              room,
-		MachineNo:         dto.MachineNo,
-		MeshSize:          dto.MeshSize,
+		MachineNo:         machineNo,
+		MeshSize:          meshSize,
 		PICResponsible:    dto.PICResponsible,
 		ProductionOrderID: dto.ProductionOrderID,
 		ProductionStepID:  dto.ProductionStepID,
@@ -648,6 +703,15 @@ func (uc *qcUseCase) UpdateMeshBoltLog(ctx context.Context, id uuid.UUID, dto Up
 	}
 	if dto.CheckDate != "" {
 		item.CheckDate = dto.CheckDate
+	}
+	if dto.DocumentCode != "" {
+		item.DocumentCode = dto.DocumentCode
+	}
+	if dto.FormType != "" {
+		item.FormType = dto.FormType
+	}
+	if dto.StageCategory != "" {
+		item.StageCategory = dto.StageCategory
 	}
 	if dto.Room != "" {
 		item.Room = dto.Room
@@ -965,4 +1029,405 @@ func (uc *qcUseCase) UpdateOvenLog(ctx context.Context, id uuid.UUID, dto Update
 
 func (uc *qcUseCase) DeleteOvenLog(ctx context.Context, id uuid.UUID) error {
 	return uc.repo.DeleteOvenLog(ctx, id)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Filter Mesh Monitoring (MNP - Gula Cair & MMV - VCO — Form QC-011-MNP / MMV)
+// ─────────────────────────────────────────────────────────────────────────────
+
+func (uc *qcUseCase) CreateFilterMeshLog(ctx context.Context, dto CreateFilterMeshLogDTO) (*domain.FilterMeshMonitoringLog, error) {
+	if strings.TrimSpace(dto.CheckDate) == "" {
+		return nil, apperrors.NewBadRequest("Tanggal pemeriksaan wajib diisi")
+	}
+	if strings.TrimSpace(dto.ProductName) == "" {
+		return nil, apperrors.NewBadRequest("Nama produk wajib diisi")
+	}
+	if strings.TrimSpace(dto.MeshSize) == "" {
+		return nil, apperrors.NewBadRequest("Ukuran mesh wajib diisi")
+	}
+	if strings.TrimSpace(dto.PICResponsible) == "" || strings.TrimSpace(dto.InitialPICName) == "" {
+		return nil, apperrors.NewBadRequest("Penanggung jawab dan nama PIC wajib diisi")
+	}
+
+	month := dto.CheckMonth
+	if month == "" && len(dto.CheckDate) >= 7 {
+		month = dto.CheckDate[:7]
+	}
+
+	category := dto.Category
+	if category == "" {
+		category = "gula_cair"
+	}
+
+	location := dto.Location
+	if location == "" {
+		if category == "vco" {
+			location = "Ruang VCO"
+		} else {
+			location = "Ruang Gula Cair"
+		}
+	}
+
+	docCode := dto.DocumentCode
+	if docCode == "" {
+		if category == "vco" {
+			docCode = "QC-011-MMV"
+		} else {
+			docCode = "QC-011-MNP"
+		}
+	}
+
+	seqPrefix := "MNP"
+	if category == "vco" {
+		seqPrefix = "MMV"
+	}
+
+	docNo, err := docseq.Next(ctx, uc.repo, seqPrefix, dto.CheckDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen "+seqPrefix)
+	}
+
+	initCond := dto.InitialCondition
+	if initCond == "" {
+		initCond = "Baik"
+	}
+	finalCond := dto.FinalCondition
+	if finalCond == "" {
+		finalCond = "Baik"
+	}
+
+	status := dto.OverallStatus
+	if status == "" {
+		if initCond != "Baik" || finalCond != "Baik" || dto.InitialFindings != "" || dto.FinalFindings != "" {
+			status = "action_required"
+		} else {
+			status = "passed"
+		}
+	}
+
+	item := &domain.FilterMeshMonitoringLog{
+		DocumentNo:       docNo,
+		DocumentCode:     docCode,
+		Category:         category,
+		Location:         location,
+		CheckMonth:       month,
+		CheckDate:        dto.CheckDate,
+		DayOfWeek:        dto.DayOfWeek,
+		ProductName:      dto.ProductName,
+		ProductCode:      dto.ProductCode,
+		MeshSize:         dto.MeshSize,
+		PICResponsible:   dto.PICResponsible,
+		InitialCondition: initCond,
+		InitialFindings:  dto.InitialFindings,
+		InitialAction:    dto.InitialAction,
+		InitialPICName:   dto.InitialPICName,
+		InitialQCName:    dto.InitialQCName,
+		FinalCondition:   finalCond,
+		FinalFindings:    dto.FinalFindings,
+		FinalAction:      dto.FinalAction,
+		FinalPICName:     dto.FinalPICName,
+		FinalQCName:      dto.FinalQCName,
+		OverallStatus:    status,
+		Notes:            dto.Notes,
+	}
+
+	if err := uc.repo.CreateFilterMeshLog(ctx, item); err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal mencatat monitoring proses penyaringan")
+	}
+
+	return item, nil
+}
+
+func (uc *qcUseCase) GetFilterMeshLogByID(ctx context.Context, id uuid.UUID) (*domain.FilterMeshMonitoringLog, error) {
+	item, err := uc.repo.GetFilterMeshLogByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewNotFound("Data monitoring proses penyaringan tidak ditemukan")
+	}
+	return item, nil
+}
+
+func (uc *qcUseCase) ListFilterMeshLogs(ctx context.Context, month string, category string, location string) ([]domain.FilterMeshMonitoringLog, error) {
+	list, err := uc.repo.ListFilterMeshLogs(ctx, month, category, location)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal mengambil daftar monitoring proses penyaringan")
+	}
+	return list, nil
+}
+
+func (uc *qcUseCase) UpdateFilterMeshLog(ctx context.Context, id uuid.UUID, dto UpdateFilterMeshLogDTO) (*domain.FilterMeshMonitoringLog, error) {
+	item, err := uc.repo.GetFilterMeshLogByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewNotFound("Data monitoring proses penyaringan tidak ditemukan")
+	}
+
+	if dto.CheckMonth != "" {
+		item.CheckMonth = dto.CheckMonth
+	}
+	if dto.CheckDate != "" {
+		item.CheckDate = dto.CheckDate
+	}
+	if dto.DayOfWeek != "" {
+		item.DayOfWeek = dto.DayOfWeek
+	}
+	if dto.Category != "" {
+		item.Category = dto.Category
+	}
+	if dto.Location != "" {
+		item.Location = dto.Location
+	}
+	if dto.ProductName != "" {
+		item.ProductName = dto.ProductName
+	}
+	if dto.ProductCode != "" {
+		item.ProductCode = dto.ProductCode
+	}
+	if dto.MeshSize != "" {
+		item.MeshSize = dto.MeshSize
+	}
+	if dto.PICResponsible != "" {
+		item.PICResponsible = dto.PICResponsible
+	}
+	if dto.InitialCondition != "" {
+		item.InitialCondition = dto.InitialCondition
+	}
+	if dto.InitialFindings != "" {
+		item.InitialFindings = dto.InitialFindings
+	}
+	if dto.InitialAction != "" {
+		item.InitialAction = dto.InitialAction
+	}
+	if dto.InitialPICName != "" {
+		item.InitialPICName = dto.InitialPICName
+	}
+	if dto.InitialQCName != "" {
+		item.InitialQCName = dto.InitialQCName
+	}
+	if dto.FinalCondition != "" {
+		item.FinalCondition = dto.FinalCondition
+	}
+	if dto.FinalFindings != "" {
+		item.FinalFindings = dto.FinalFindings
+	}
+	if dto.FinalAction != "" {
+		item.FinalAction = dto.FinalAction
+	}
+	if dto.FinalPICName != "" {
+		item.FinalPICName = dto.FinalPICName
+	}
+	if dto.FinalQCName != "" {
+		item.FinalQCName = dto.FinalQCName
+	}
+	if dto.OverallStatus != "" {
+		item.OverallStatus = dto.OverallStatus
+	}
+	if dto.Notes != "" {
+		item.Notes = dto.Notes
+	}
+
+	if err := uc.repo.UpdateFilterMeshLog(ctx, item); err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal memperbarui catatan monitoring proses penyaringan")
+	}
+	return item, nil
+}
+
+func (uc *qcUseCase) DeleteFilterMeshLog(ctx context.Context, id uuid.UUID) error {
+	return uc.repo.DeleteFilterMeshLog(ctx, id)
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Brontol Blade Monitoring (MPB — Form QC-011-MPB.01)
+// ─────────────────────────────────────────────────────────────────────────────
+
+func (uc *qcUseCase) CreateBrontolBladeLog(ctx context.Context, dto CreateBrontolBladeLogDTO) (*domain.BrontolBladeMonitoringLog, error) {
+	if strings.TrimSpace(dto.CheckDate) == "" {
+		return nil, apperrors.NewBadRequest("Tanggal pemeriksaan wajib diisi")
+	}
+	if strings.TrimSpace(dto.ProductName) == "" {
+		return nil, apperrors.NewBadRequest("Nama produk wajib diisi")
+	}
+	if strings.TrimSpace(dto.PICResponsible) == "" || strings.TrimSpace(dto.InitialPICName) == "" {
+		return nil, apperrors.NewBadRequest("Penanggung jawab dan nama PIC wajib diisi")
+	}
+
+	month := dto.CheckMonth
+	if month == "" && len(dto.CheckDate) >= 7 {
+		month = dto.CheckDate[:7]
+	}
+
+	location := dto.Location
+	if location == "" {
+		location = "Ruang ayak matang"
+	}
+
+	docCode := dto.DocumentCode
+	if docCode == "" {
+		docCode = "QC-011-MPB"
+	}
+
+	docNo, err := docseq.Next(ctx, uc.repo, "MPB", dto.CheckDate)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen MPB")
+	}
+
+	initCond := dto.InitialCondition
+	if initCond == "" {
+		initCond = "Baik"
+	}
+	finalCond := dto.FinalCondition
+	if finalCond == "" {
+		finalCond = "Baik"
+	}
+
+	status := dto.OverallStatus
+	if status == "" {
+		if initCond == "Gompal" || initCond == "Retak" || finalCond == "Gompal" || finalCond == "Retak" {
+			status = "hazard_alert"
+		} else if initCond != "Baik" || finalCond != "Baik" || dto.InitialFindings != "" || dto.FinalFindings != "" {
+			status = "action_required"
+		} else {
+			status = "passed"
+		}
+	}
+
+	item := &domain.BrontolBladeMonitoringLog{
+		DocumentNo:       docNo,
+		DocumentCode:     docCode,
+		CheckMonth:       month,
+		CheckDate:        dto.CheckDate,
+		DayOfWeek:        dto.DayOfWeek,
+		Location:         location,
+		PICResponsible:   dto.PICResponsible,
+		ProductName:      dto.ProductName,
+		ProductCode:      dto.ProductCode,
+		InitialCondition: initCond,
+		InitialFindings:  dto.InitialFindings,
+		InitialAction:    dto.InitialAction,
+		InitialPICName:   dto.InitialPICName,
+		InitialQCName:    dto.InitialQCName,
+		FinalCondition:   finalCond,
+		FinalFindings:    dto.FinalFindings,
+		FinalAction:      dto.FinalAction,
+		FinalPICName:     dto.FinalPICName,
+		FinalQCName:      dto.FinalQCName,
+		OverallStatus:    status,
+		Notes:            dto.Notes,
+	}
+
+	if err := uc.repo.CreateBrontolBladeLog(ctx, item); err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal mencatat monitoring bilah pisau mesin brontol")
+	}
+
+	if item.OverallStatus == "hazard_alert" {
+		defect := "Bahaya Bilah Pisau Brontol Rusak/Gompal: " + item.InitialCondition
+		if item.FinalCondition != "Baik" {
+			defect += " / Akhir: " + item.FinalCondition
+		}
+		if item.FinalFindings != "" {
+			defect += "; " + item.FinalFindings
+		}
+		_, _ = uc.AutoCreateBrontolOnQCFailure(ctx, AutoBrontolTrigger{
+			SourceStage:        domain.StageBrontol,
+			SourceInspectionID: &item.ID,
+			SourceInspectionNo: item.DocumentNo,
+			ProductName:        item.ProductName,
+			MaterialType:       "BM",
+			DefectReason:       defect,
+			ActionDisposition:  domain.ActionHold,
+			OperatorName:       item.FinalPICName,
+			QCInspectorName:    item.FinalQCName,
+			Notes:              item.Notes,
+		})
+	}
+
+	return item, nil
+}
+
+func (uc *qcUseCase) GetBrontolBladeLogByID(ctx context.Context, id uuid.UUID) (*domain.BrontolBladeMonitoringLog, error) {
+	item, err := uc.repo.GetBrontolBladeLogByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewNotFound("Data monitoring bilah pisau tidak ditemukan")
+	}
+	return item, nil
+}
+
+func (uc *qcUseCase) ListBrontolBladeLogs(ctx context.Context, month string, productCode string) ([]domain.BrontolBladeMonitoringLog, error) {
+	list, err := uc.repo.ListBrontolBladeLogs(ctx, month, productCode)
+	if err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal mengambil daftar monitoring bilah pisau")
+	}
+	return list, nil
+}
+
+func (uc *qcUseCase) UpdateBrontolBladeLog(ctx context.Context, id uuid.UUID, dto UpdateBrontolBladeLogDTO) (*domain.BrontolBladeMonitoringLog, error) {
+	item, err := uc.repo.GetBrontolBladeLogByID(ctx, id)
+	if err != nil {
+		return nil, apperrors.NewNotFound("Data monitoring bilah pisau tidak ditemukan")
+	}
+
+	if dto.CheckMonth != "" {
+		item.CheckMonth = dto.CheckMonth
+	}
+	if dto.CheckDate != "" {
+		item.CheckDate = dto.CheckDate
+	}
+	if dto.DayOfWeek != "" {
+		item.DayOfWeek = dto.DayOfWeek
+	}
+	if dto.Location != "" {
+		item.Location = dto.Location
+	}
+	if dto.PICResponsible != "" {
+		item.PICResponsible = dto.PICResponsible
+	}
+	if dto.ProductName != "" {
+		item.ProductName = dto.ProductName
+	}
+	if dto.ProductCode != "" {
+		item.ProductCode = dto.ProductCode
+	}
+	if dto.InitialCondition != "" {
+		item.InitialCondition = dto.InitialCondition
+	}
+	if dto.InitialFindings != "" {
+		item.InitialFindings = dto.InitialFindings
+	}
+	if dto.InitialAction != "" {
+		item.InitialAction = dto.InitialAction
+	}
+	if dto.InitialPICName != "" {
+		item.InitialPICName = dto.InitialPICName
+	}
+	if dto.InitialQCName != "" {
+		item.InitialQCName = dto.InitialQCName
+	}
+	if dto.FinalCondition != "" {
+		item.FinalCondition = dto.FinalCondition
+	}
+	if dto.FinalFindings != "" {
+		item.FinalFindings = dto.FinalFindings
+	}
+	if dto.FinalAction != "" {
+		item.FinalAction = dto.FinalAction
+	}
+	if dto.FinalPICName != "" {
+		item.FinalPICName = dto.FinalPICName
+	}
+	if dto.FinalQCName != "" {
+		item.FinalQCName = dto.FinalQCName
+	}
+	if dto.OverallStatus != "" {
+		item.OverallStatus = dto.OverallStatus
+	}
+	if dto.Notes != "" {
+		item.Notes = dto.Notes
+	}
+
+	if err := uc.repo.UpdateBrontolBladeLog(ctx, item); err != nil {
+		return nil, apperrors.NewInternal(err, "Gagal memperbarui catatan monitoring bilah pisau")
+	}
+	return item, nil
+}
+
+func (uc *qcUseCase) DeleteBrontolBladeLog(ctx context.Context, id uuid.UUID) error {
+	return uc.repo.DeleteBrontolBladeLog(ctx, id)
 }

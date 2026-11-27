@@ -229,10 +229,14 @@ func (SupplierArmadaCheck) TableName() string {
 	return "qc_supplier_armada_checks"
 }
 
-// RawMaterialIncomingCheck records incoming raw material quality inspection (QC-001-PBD / Pemeriksaan Bahan Datang)
+// RawMaterialIncomingCheck records incoming raw material / goods quality inspection (Form QC-002-PBD Rev. 05 / Pemeriksaan Kualitas Barang Datang)
 type RawMaterialIncomingCheck struct {
 	types.BaseEntity
 	DocumentNo         string     `gorm:"type:varchar(50);index" json:"documentNo"`
+	DocumentCode       string     `gorm:"type:varchar(30);default:'QC-002-PBD'" json:"documentCode"`
+	RevisionCode       string     `gorm:"type:varchar(20);default:'05'" json:"revisionCode"`
+	FairtradeStatus    string     `gorm:"type:varchar(30);default:'NON FAIRTRADE'" json:"fairtradeStatus"` // FAIRTRADE, NON FAIRTRADE
+	Certifications     string     `gorm:"type:varchar(150);default:'NATURAL'" json:"certifications"`       // NATURAL, ORGANIC EU, ORGANIC USDA, ORGANIC JAS
 	GoodsReceiptID     *uuid.UUID `gorm:"type:uuid;index" json:"goodsReceiptId,omitempty"`
 	LBMNo              string     `gorm:"type:varchar(50);index" json:"lbmNo,omitempty"`
 	CheckDate          string     `gorm:"type:varchar(10);not null;index" json:"checkDate"` // YYYY-MM-DD
@@ -242,26 +246,39 @@ type RawMaterialIncomingCheck struct {
 	DeliveryNoteNo     string     `gorm:"type:varchar(100)" json:"deliveryNoteNo,omitempty"`
 	PONo               string     `gorm:"type:varchar(50)" json:"poNo,omitempty"`
 	ProductName        string     `gorm:"type:varchar(255);not null" json:"productName"`
+	ItemCode           string     `gorm:"type:varchar(100);index" json:"itemCode,omitempty"`               // Kode Barang
+	ItemType           string     `gorm:"type:varchar(100);default:'Bahan Baku'" json:"itemType,omitempty"` // Jenis Barang
 	BatchNo            string     `gorm:"type:varchar(100);index" json:"batchNo,omitempty"`
-	// Kuantitas kedatangan
+	// Kuantitas & Sampling (Military Standard AQL 0,1 & 2,5)
 	TotalBags          int        `gorm:"not null;default:0" json:"totalBags"`
-	SampleBags         int        `gorm:"not null;default:0" json:"sampleBags"`
+	SampleBags         int        `gorm:"not null;default:0" json:"sampleBags"` // Jumlah Sampling
 	GrossWeight        float64    `gorm:"type:decimal(12,2);not null;default:0" json:"grossWeight"`
 	NetWeight          float64    `gorm:"type:decimal(12,2);not null;default:0" json:"netWeight"`
 	AcceptedWeight     float64    `gorm:"type:decimal(12,2);not null;default:0" json:"acceptedWeight"`
 	RejectedWeight     float64    `gorm:"type:decimal(12,2);not null;default:0" json:"rejectedWeight"`
-	// Pemeriksaan Fisik & Organoleptik
-	SugarCondition     string     `gorm:"type:varchar(100);not null" json:"sugarCondition"`   // Kering, Lembab, Basah, Menggumpal
-	ColorAppearance    string     `gorm:"type:varchar(100)" json:"colorAppearance,omitempty"` // Coklat Cerah, Coklat Gelap, Keemasan
-	AromaFlavor        string     `gorm:"type:varchar(100)" json:"aromaFlavor,omitempty"`     // Khas Gula Kelapa, Normal, Asam, Sangit
-	ForeignMatterClean bool       `gorm:"not null;default:true" json:"foreignMatterClean"`   // true = bebas kotoran/serangga/batu
-	PackagingCondition string     `gorm:"type:varchar(100)" json:"packagingCondition,omitempty"` // Utuh, Sobek, Basah, Kotor
-	// Parameter Uji Laboratorium / Alat
-	MoistureContent    *float64   `gorm:"type:decimal(6,2)" json:"moistureContent,omitempty"` // Kadar air % (Target <= 2.0%)
-	BrixValue          *float64   `gorm:"type:decimal(6,2)" json:"brixValue,omitempty"`       // Derajat Brix °Bx (untuk nira/cair)
-	MeshSize           string     `gorm:"type:varchar(50)" json:"meshSize,omitempty"`         // Granulometri: Mesh 16, Mesh 18, Halus, Kasar
-	// Rekomendasi Alur Produksi
-	RecommendedAction  string     `gorm:"type:varchar(150)" json:"recommendedAction,omitempty"` // e.g. Bypass Oven (<=2%), Wajib Oven (>2%), Reject
+	// Pengecekan 10 Parameter Resmi (QC-002-PBD)
+	CheckPackaging     bool       `gorm:"not null;default:true" json:"checkPackaging"`    // Kemasan
+	CheckShape         bool       `gorm:"not null;default:true" json:"checkShape"`        // Bentuk
+	CheckTaste         bool       `gorm:"not null;default:true" json:"checkTaste"`        // Rasa
+	CheckAroma         bool       `gorm:"not null;default:true" json:"checkAroma"`        // Aroma
+	ColorScore         int        `gorm:"not null;default:2" json:"colorScore"`           // Warna* (1: light brown, 2: normal, 3: dark brown)
+	MoistureContent    *float64   `gorm:"type:decimal(6,2)" json:"moistureContent,omitempty"` // Kadar air (%)
+	BrixValue          *float64   `gorm:"type:decimal(6,2)" json:"brixValue,omitempty"`       // Brix
+	CheckSolubility    bool       `gorm:"not null;default:true" json:"checkSolubility"`   // Kelarutan
+	PhValue            *float64   `gorm:"type:decimal(5,2)" json:"phValue,omitempty"`         // pH
+	CheckPackageLabel  bool       `gorm:"not null;default:true" json:"checkPackageLabel"` // Label Kemasan
+	// Tingkat Lolos & Keputusan (LOLOS / DITOLAK)
+	PassRatePercent    float64    `gorm:"type:decimal(6,2);not null;default:100" json:"passRatePercent"` // Tingkat lolos (%)
+	InspectionDecision string     `gorm:"type:varchar(20);not null;default:'LOLOS'" json:"inspectionDecision"` // LOLOS, DITOLAK
+	// Pemeriksaan Fisik & Organoleptik (Kompatibilitas SBB & Brontol)
+	SugarCondition     string     `gorm:"type:varchar(100);not null" json:"sugarCondition"`
+	ColorAppearance    string     `gorm:"type:varchar(100)" json:"colorAppearance,omitempty"`
+	AromaFlavor        string     `gorm:"type:varchar(100)" json:"aromaFlavor,omitempty"`
+	ForeignMatterClean bool       `gorm:"not null;default:true" json:"foreignMatterClean"`
+	PackagingCondition string     `gorm:"type:varchar(100)" json:"packagingCondition,omitempty"`
+	MeshSize           string     `gorm:"type:varchar(50)" json:"meshSize,omitempty"`
+	// Rekomendasi & Status Gate SBB
+	RecommendedAction  string     `gorm:"type:varchar(150)" json:"recommendedAction,omitempty"`
 	OverallStatus      string     `gorm:"type:varchar(20);not null;default:'passed'" json:"overallStatus"` // passed, conditional, rejected
 	// Verifikasi & Petugas
 	QCName             string     `gorm:"type:varchar(150)" json:"qcName,omitempty"`
@@ -363,17 +380,20 @@ func (MagnetTrapLog) TableName() string {
 	return "qc_magnet_trap_logs"
 }
 
-// MeshBoltMonitoringLog records bolt & nut integrity on sieving mesh to prevent physical hazard (Form QC-010-MNM.01)
+// MeshBoltMonitoringLog records bolt & nut integrity on sieving mesh and processing equipment to prevent physical hazard (Form QC-011-MNM/MNB/MBB)
 type MeshBoltMonitoringLog struct {
 	types.BaseEntity
 	CompanyID          *uuid.UUID `gorm:"type:uuid;index" json:"companyId,omitempty"`
 	TenantID           *uuid.UUID `gorm:"type:uuid;index" json:"tenantId,omitempty"`
 	DocumentNo         string     `gorm:"type:varchar(50);uniqueIndex;not null" json:"documentNo"`
+	DocumentCode       string     `gorm:"type:varchar(30);default:'QC-011-MNM'" json:"documentCode"`
+	FormType           string     `gorm:"type:varchar(20);default:'MNM';index" json:"formType"` // MNM, MNB, MBB
+	StageCategory      string     `gorm:"type:varchar(30);default:'mentah';index" json:"stageCategory"` // mentah, matang, gula_cair, brontol
 	CheckMonth         string     `gorm:"type:varchar(7);not null;index" json:"checkMonth"`
 	CheckDate          string     `gorm:"type:varchar(10);not null;index" json:"checkDate"`
 	Room               string     `gorm:"type:varchar(50);not null;default:'Ayak Mentah'" json:"room"`
-	MachineNo          string     `gorm:"type:varchar(50);not null;index" json:"machineNo"`
-	MeshSize           string     `gorm:"type:varchar(50);not null" json:"meshSize"`
+	MachineNo          string     `gorm:"type:varchar(50);index" json:"machineNo,omitempty"`
+	MeshSize           string     `gorm:"type:varchar(50)" json:"meshSize,omitempty"`
 	PICResponsible     string     `gorm:"type:varchar(150);not null" json:"picResponsible"`
 	ProductionOrderID  *uuid.UUID `gorm:"type:uuid;index" json:"productionOrderId,omitempty"`
 	ProductionStepID   *uuid.UUID `gorm:"type:uuid;index" json:"productionStepId,omitempty"`
@@ -407,6 +427,82 @@ type MeshBoltMonitoringLog struct {
 
 func (MeshBoltMonitoringLog) TableName() string {
 	return "qc_mesh_bolt_monitoring_logs"
+}
+
+// FilterMeshMonitoringLog records filter screen / mesh checks for liquid sugar & VCO lines (Form QC-011-MNP & QC-011-MMV)
+type FilterMeshMonitoringLog struct {
+	types.BaseEntity
+	CompanyID         *uuid.UUID `gorm:"type:uuid;index" json:"companyId,omitempty"`
+	TenantID          *uuid.UUID `gorm:"type:uuid;index" json:"tenantId,omitempty"`
+	DocumentNo        string     `gorm:"type:varchar(50);uniqueIndex;not null" json:"documentNo"`
+	DocumentCode      string     `gorm:"type:varchar(30);not null;default:'QC-011-MNP'" json:"documentCode"` // QC-011-MNP, QC-011-MMV
+	Category          string     `gorm:"type:varchar(50);not null;default:'gula_cair'" json:"category"` // gula_cair, vco
+	Location          string     `gorm:"type:varchar(100);not null;default:'Ruang Gula Cair'" json:"location"` // Ruang Gula Cair, Ruang VCO
+	CheckMonth        string     `gorm:"type:varchar(7);not null;index" json:"checkMonth"` // YYYY-MM
+	CheckDate         string     `gorm:"type:varchar(10);not null;index" json:"checkDate"` // YYYY-MM-DD
+	DayOfWeek         string     `gorm:"type:varchar(20)" json:"dayOfWeek,omitempty"`
+	ProductName       string     `gorm:"type:varchar(255);not null" json:"productName"`
+	ProductCode       string     `gorm:"type:varchar(100)" json:"productCode,omitempty"`
+	MeshSize          string     `gorm:"type:varchar(50);not null" json:"meshSize"`
+	PICResponsible    string     `gorm:"type:varchar(150);not null" json:"picResponsible"`
+
+	// Pengecekan AWAL
+	InitialCondition  string `gorm:"type:varchar(100);not null;default:'Baik'" json:"initialCondition"`
+	InitialFindings   string `gorm:"type:text" json:"initialFindings,omitempty"`
+	InitialAction     string `gorm:"type:text" json:"initialAction,omitempty"`
+	InitialPICName    string `gorm:"type:varchar(150);not null" json:"initialPicName"`
+	InitialQCName     string `gorm:"type:varchar(150)" json:"initialQcName,omitempty"`
+
+	// Pengecekan AKHIR
+	FinalCondition    string `gorm:"type:varchar(100);not null;default:'Baik'" json:"finalCondition"`
+	FinalFindings     string `gorm:"type:text" json:"finalFindings,omitempty"`
+	FinalAction       string `gorm:"type:text" json:"finalAction,omitempty"`
+	FinalPICName      string `gorm:"type:varchar(150);not null" json:"finalPicName"`
+	FinalQCName       string `gorm:"type:varchar(150)" json:"finalQcName,omitempty"`
+
+	OverallStatus     string `gorm:"type:varchar(20);not null;default:'passed'" json:"overallStatus"` // passed, action_required
+	Notes             string `gorm:"type:text" json:"notes,omitempty"`
+}
+
+func (FilterMeshMonitoringLog) TableName() string {
+	return "qc_filter_mesh_monitoring_logs"
+}
+
+// BrontolBladeMonitoringLog records knife/blade integrity checks on Brontol machines (Form QC-011-MPB.01)
+type BrontolBladeMonitoringLog struct {
+	types.BaseEntity
+	CompanyID         *uuid.UUID `gorm:"type:uuid;index" json:"companyId,omitempty"`
+	TenantID          *uuid.UUID `gorm:"type:uuid;index" json:"tenantId,omitempty"`
+	DocumentNo        string     `gorm:"type:varchar(50);uniqueIndex;not null" json:"documentNo"`
+	DocumentCode      string     `gorm:"type:varchar(30);default:'QC-011-MPB'" json:"documentCode"`
+	CheckMonth        string     `gorm:"type:varchar(7);not null;index" json:"checkMonth"` // YYYY-MM
+	CheckDate         string     `gorm:"type:varchar(10);not null;index" json:"checkDate"` // YYYY-MM-DD
+	DayOfWeek         string     `gorm:"type:varchar(20)" json:"dayOfWeek,omitempty"`
+	Location          string     `gorm:"type:varchar(100);not null;default:'Ruang ayak matang'" json:"location"`
+	PICResponsible    string     `gorm:"type:varchar(150);not null;default:'Sajiman'" json:"picResponsible"`
+	ProductName       string     `gorm:"type:varchar(255);not null" json:"productName"`
+	ProductCode       string     `gorm:"type:varchar(100)" json:"productCode,omitempty"`
+
+	// Pengecekan AWAL
+	InitialCondition  string `gorm:"type:varchar(100);not null;default:'Baik'" json:"initialCondition"` // Baik, Gompal, Tumpul, Retak
+	InitialFindings   string `gorm:"type:text" json:"initialFindings,omitempty"`
+	InitialAction     string `gorm:"type:text" json:"initialAction,omitempty"`
+	InitialPICName    string `gorm:"type:varchar(150);not null" json:"initialPicName"`
+	InitialQCName     string `gorm:"type:varchar(150)" json:"initialQcName,omitempty"`
+
+	// Pengecekan AKHIR
+	FinalCondition    string `gorm:"type:varchar(100);not null;default:'Baik'" json:"finalCondition"` // Baik, Gompal, Tumpul, Retak
+	FinalFindings     string `gorm:"type:text" json:"finalFindings,omitempty"`
+	FinalAction       string `gorm:"type:text" json:"finalAction,omitempty"`
+	FinalPICName      string `gorm:"type:varchar(150);not null" json:"finalPicName"`
+	FinalQCName       string `gorm:"type:varchar(150)" json:"finalQcName,omitempty"`
+
+	OverallStatus     string `gorm:"type:varchar(20);not null;default:'passed'" json:"overallStatus"` // passed, hazard_alert
+	Notes             string `gorm:"type:text" json:"notes,omitempty"`
+}
+
+func (BrontolBladeMonitoringLog) TableName() string {
+	return "qc_brontol_blade_monitoring_logs"
 }
 
 // OvenMonitoringLog records temperature & moisture during oven drying cycle (Form QC-012-MNO.05)
@@ -535,7 +631,9 @@ func (ScissorMonitoringLog) TableName() string {
 	return "qc_scissor_monitoring_logs"
 }
 
-// MetalDetectorCleaningLog records cleaning & usage logbook for metal detector (Form CPP)
+// MetalDetectorCleaningLog records usage & cleaning logbook for metal detector / X-Ray (Form PRO-007-CPP Revisi 01).
+// StartTime/EndTime = jam Pemakaian (Mulai/Selesai); CleaningStartTime/CleaningEndTime = jam Pembersihan;
+// OperatorName = PIC; QCInspectorName = "Diketahui Oleh: QA".
 type MetalDetectorCleaningLog struct {
 	types.BaseEntity
 	CompanyID         *uuid.UUID `gorm:"type:uuid;index" json:"companyId,omitempty"`
@@ -560,6 +658,22 @@ type MetalDetectorCleaningLog struct {
 	QCInspectorName   string     `gorm:"type:varchar(150)" json:"qcInspectorName,omitempty"`
 	OverallStatus     string     `gorm:"type:varchar(20);not null;default:'passed'" json:"overallStatus"` // passed, needs_cleaning, maintenance
 	Notes             string     `gorm:"type:text" json:"notes,omitempty"`
+
+	// ── Form PRO-007-CPP Revisi 01 (Catatan Pemakaian dan Pembersihan Alat) ──
+	// Sheet varian: "MD" (Metal Detector – R. Packing), "MD GC" (Metal Detector – R. Gula Cair), "X-Ray" (X-Ray – R. Packing).
+	DocumentCode      string `gorm:"type:varchar(30);default:'PRO-007-CPP'" json:"documentCode"`
+	RevisionCode      string `gorm:"type:varchar(10);default:'01'" json:"revisionCode"`
+	EquipmentName     string `gorm:"type:varchar(50);default:'Metal Detector'" json:"equipmentName"` // Nama Alat: Metal Detector, X-Ray
+	ProductName       string `gorm:"type:varchar(200)" json:"productName,omitempty"`                 // Nama Produk
+	BatchNo           string `gorm:"type:varchar(100)" json:"batchNo,omitempty"`                     // No. Batch
+	CustomerName      string `gorm:"type:varchar(200)" json:"customerName,omitempty"`                // Customer
+	Quantity          string `gorm:"type:varchar(50)" json:"quantity,omitempty"`                     // Jumlah
+	Finding           string `gorm:"type:text" json:"finding,omitempty"`                             // Pemakaian - Temuan
+	AnalysisResult    string `gorm:"type:text" json:"analysisResult,omitempty"`                      // Pemakaian - Hasil Analisa
+	CorrectiveAction  string `gorm:"type:text" json:"correctiveAction,omitempty"`                    // Pemakaian - Tindakan Perbaikan
+	CleaningStartTime string `gorm:"type:varchar(10)" json:"cleaningStartTime,omitempty"`            // Pembersihan - Jam Mulai (WIB)
+	CleaningEndTime   string `gorm:"type:varchar(10)" json:"cleaningEndTime,omitempty"`              // Pembersihan - Jam Selesai (WIB)
+	QAVerifiedDate    string `gorm:"type:varchar(10)" json:"qaVerifiedDate,omitempty"`               // Diketahui Oleh QA - Tgl.
 }
 
 func (MetalDetectorCleaningLog) TableName() string {

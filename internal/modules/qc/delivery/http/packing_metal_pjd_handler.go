@@ -178,7 +178,7 @@ func (h *Handler) DeleteScissorLog(c *fiber.Ctx) error {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CPP: Metal Detector Cleaning Log Handlers (Form CPP)
+// CPP: Metal Detector / X-Ray Usage & Cleaning Log Handlers (Form PRO-007-CPP)
 // ─────────────────────────────────────────────────────────────────────────────
 
 func (h *Handler) ListMetalCleaningLogs(c *fiber.Ctx) error {

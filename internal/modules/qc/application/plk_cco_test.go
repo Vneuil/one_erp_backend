@@ -214,3 +214,90 @@ func TestPLKAndCCOFlow(t *testing.T) {
 		t.Errorf("expected OverallDecision ditolak due to roof leak, got %s", ccoLeak.OverallDecision)
 	}
 }
+
+func TestPLKRev01LineCheckAndParameters(t *testing.T) {
+	repo := newMockPlkCcoRepo()
+	uc := &qcUseCase{repo: repo}
+	ctx := context.Background()
+
+	bTrue := true
+	bFalse := false
+
+	// 1. All 10 checks pass (9 label/packaging + Line Check) -> lolos
+	plk, err := uc.CreatePackagingLabelCheck(ctx, CreatePackagingLabelCheckDTO{
+		CheckDate:       "2026-11-26",
+		FairtradeStatus: "FAIRTRADE",
+		QCInspectorName: "Adin (QC)",
+		Items: []CreatePackagingLabelCheckItemDTO{
+			{
+				ItemCheckDate:         "2026-11-26",
+				BuyerName:             "Eco Organic BV",
+				ItemName:              "Organic Coconut Sugar 25kg",
+				BatchNo:               "26O48PW01",
+				ProductionDate:        "2026-11-20",
+				ExpiredDate:           "2028-11-20",
+				OriginCountry:         "Indonesia",
+				WeightLabel:           "25 kg",
+				PackagingType:         "Kraft Bag 25kg",
+				StickerNo:             "26O48PW001-040",
+				AllergenInfo:          "Free from Allergen",
+				IsProductNameMatch:    &bTrue,
+				IsBatchMatch:          true,
+				IsProductionDateMatch: &bTrue,
+				IsExpiryMatch:         true,
+				IsOriginCountryMatch:  &bTrue,
+				IsWeightMatch:         &bTrue,
+				IsPackagingMatch:      &bTrue,
+				IsStickerNoMatch:      &bTrue,
+				IsAllergenInfoMatch:   &bTrue,
+				IsLineCheckPassed:     &bTrue,
+				QCPICName:             "Adin",
+				Notes:                 "Sesuai standar label ekspor",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePackagingLabelCheck failed: %v", err)
+	}
+	if plk.DocumentCode != "QC-016-PLK" || plk.RevisionCode != "01" {
+		t.Errorf("expected QC-016-PLK / 01, got %s / %s", plk.DocumentCode, plk.RevisionCode)
+	}
+	if plk.BatchNo != "26O48PW01" {
+		t.Errorf("expected header BatchNo 26O48PW01, got %s", plk.BatchNo)
+	}
+	if plk.OverallDecision != "lolos" || len(plk.Items) != 1 || !plk.Items[0].IsLineCheckPassed {
+		t.Errorf("expected lolos with IsLineCheckPassed=true, got %+v", plk)
+	}
+
+	// 2. Line Check fails -> auto ditolak
+	plkFail, err := uc.CreatePackagingLabelCheck(ctx, CreatePackagingLabelCheckDTO{
+		CheckDate:       "2026-11-26",
+		QCInspectorName: "Adin (QC)",
+		Items: []CreatePackagingLabelCheckItemDTO{
+			{
+				BuyerName:             "Buyer X",
+				ItemName:              "Gula Semut Natural",
+				BatchNo:               "26N48PW02",
+				ProductionDate:        "2026-11-21",
+				ExpiredDate:           "2028-11-21",
+				IsProductNameMatch:    &bTrue,
+				IsBatchMatch:          true,
+				IsProductionDateMatch: &bTrue,
+				IsExpiryMatch:         true,
+				IsOriginCountryMatch:  &bTrue,
+				IsWeightMatch:         &bTrue,
+				IsPackagingMatch:      &bTrue,
+				IsStickerNoMatch:      &bTrue,
+				IsAllergenInfoMatch:   &bTrue,
+				IsLineCheckPassed:     &bFalse,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreatePackagingLabelCheck failed on line check reject: %v", err)
+	}
+	if plkFail.Items[0].ItemDecision != "ditolak" || plkFail.OverallDecision != "ditolak" {
+		t.Errorf("expected ditolak when IsLineCheckPassed=false, got item=%s overall=%s",
+			plkFail.Items[0].ItemDecision, plkFail.OverallDecision)
+	}
+}

@@ -9,15 +9,17 @@ import (
 
 // Production Flow Stages where QC can fail
 const (
-	StageIncomingRawMaterial = "incoming_raw_material" // QC-001-PBD (Pemeriksaan Bahan Datang)
+	StageIncomingRawMaterial = "incoming_raw_material" // QC-002-PBD (Pemeriksaan Kualitas Barang Datang)
 	StageIncomingPackaging   = "incoming_packaging"   // QC-003-PBK (Pemeriksaan Bahan Kemas)
 	StageSieving             = "sieving"              // QC-009-MNA (Monitoring Proses Ayak)
 	StageMagnetTrap          = "magnet_trap"          // QC-038-CMT (Catatan Pemakaian Magnet Trap)
 	StageMeshBolt            = "mesh_bolt"            // QC-010-MNM (Monitoring Baut & Mur Ayakan)
 	StageOven                = "oven"                 // QC-012-MNO (Monitoring Oven)
-	StageMetalDetector       = "metal_detector"       // QC-017-VMD & CPP (Metal Detector CCP)
+	StageMetalDetector       = "metal_detector"       // QC-017-VMD & PRO-007-CPP (Metal Detector CCP)
 	StageFinishedGoods       = "finished_goods"       // QC-004-PJD (Pemeriksaan Produk Jadi)
-	StagePackagingLabel      = "label_packaging"      // QC-018-PLK (Pemeriksaan Label Kemasan)
+	StagePackagingLabel      = "label_packaging"      // QC-016-PLK (Pemeriksaan Label Kemasan)
+	StageBrontol             = "brontol"              // Mesin Brontol (MBB & MPB)
+	StageLiquidSugar         = "liquid_sugar"          // Gula Cair (MNP & MNB)
 	StageProductionStep      = "production_step"      // Step QC Order Produksi
 	StageManual              = "manual"               // Pencatatan Manual di Lantai Produksi
 )

@@ -295,7 +295,7 @@ func (r *qcRepository) DeleteArmadaCheck(ctx context.Context, id uuid.UUID) erro
 	return r.db.WithContext(ctx).Delete(&domain.SupplierArmadaCheck{}, "id = ?", id).Error
 }
 
-// ─── Raw Material Incoming Check (PBD — QC-001) ──────────────────────────────
+// ─── Raw Material Incoming Check (PBD — QC-002-PBD) ──────────────────────────
 
 func (r *qcRepository) CreateIncomingCheck(ctx context.Context, check *domain.RawMaterialIncomingCheck) error {
 	return r.db.WithContext(ctx).Create(check).Error
@@ -309,9 +309,12 @@ func (r *qcRepository) GetIncomingCheckByID(ctx context.Context, id uuid.UUID) (
 	return &check, nil
 }
 
-func (r *qcRepository) ListIncomingChecks(ctx context.Context, date string, lbmNo string) ([]domain.RawMaterialIncomingCheck, error) {
+func (r *qcRepository) ListIncomingChecks(ctx context.Context, month string, date string, lbmNo string) ([]domain.RawMaterialIncomingCheck, error) {
 	var checks []domain.RawMaterialIncomingCheck
 	q := r.db.WithContext(ctx).Model(&domain.RawMaterialIncomingCheck{})
+	if month != "" {
+		q = q.Where("check_month = ?", month)
+	}
 	if date != "" {
 		q = q.Where("check_date = ?", date)
 	}
@@ -447,6 +450,79 @@ func (r *qcRepository) DeleteMeshBoltLog(ctx context.Context, id uuid.UUID) erro
 	return r.db.WithContext(ctx).Delete(&domain.MeshBoltMonitoringLog{}, "id = ?", id).Error
 }
 
+// ─── Filter Mesh Monitoring (MNP / MMV — Form QC-011-MNP / MMV) ───────────────
+
+func (r *qcRepository) CreateFilterMeshLog(ctx context.Context, log *domain.FilterMeshMonitoringLog) error {
+	return r.db.WithContext(ctx).Create(log).Error
+}
+
+func (r *qcRepository) GetFilterMeshLogByID(ctx context.Context, id uuid.UUID) (*domain.FilterMeshMonitoringLog, error) {
+	var item domain.FilterMeshMonitoringLog
+	if err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *qcRepository) ListFilterMeshLogs(ctx context.Context, month string, category string, location string) ([]domain.FilterMeshMonitoringLog, error) {
+	var logs []domain.FilterMeshMonitoringLog
+	q := r.db.WithContext(ctx).Model(&domain.FilterMeshMonitoringLog{})
+	if month != "" {
+		q = q.Where("check_month = ?", month)
+	}
+	if category != "" {
+		q = q.Where("category = ?", category)
+	}
+	if location != "" {
+		q = q.Where("location = ?", location)
+	}
+	err := q.Order("check_date DESC, created_at DESC").Find(&logs).Error
+	return logs, err
+}
+
+func (r *qcRepository) UpdateFilterMeshLog(ctx context.Context, log *domain.FilterMeshMonitoringLog) error {
+	return r.db.WithContext(ctx).Save(log).Error
+}
+
+func (r *qcRepository) DeleteFilterMeshLog(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.FilterMeshMonitoringLog{}, "id = ?", id).Error
+}
+
+// ─── Brontol Blade Monitoring (MPB — Form QC-011-MPB.01) ──────────────────────
+
+func (r *qcRepository) CreateBrontolBladeLog(ctx context.Context, log *domain.BrontolBladeMonitoringLog) error {
+	return r.db.WithContext(ctx).Create(log).Error
+}
+
+func (r *qcRepository) GetBrontolBladeLogByID(ctx context.Context, id uuid.UUID) (*domain.BrontolBladeMonitoringLog, error) {
+	var item domain.BrontolBladeMonitoringLog
+	if err := r.db.WithContext(ctx).First(&item, "id = ?", id).Error; err != nil {
+		return nil, err
+	}
+	return &item, nil
+}
+
+func (r *qcRepository) ListBrontolBladeLogs(ctx context.Context, month string, productCode string) ([]domain.BrontolBladeMonitoringLog, error) {
+	var logs []domain.BrontolBladeMonitoringLog
+	q := r.db.WithContext(ctx).Model(&domain.BrontolBladeMonitoringLog{})
+	if month != "" {
+		q = q.Where("check_month = ?", month)
+	}
+	if productCode != "" {
+		q = q.Where("product_code = ?", productCode)
+	}
+	err := q.Order("check_date DESC, created_at DESC").Find(&logs).Error
+	return logs, err
+}
+
+func (r *qcRepository) UpdateBrontolBladeLog(ctx context.Context, log *domain.BrontolBladeMonitoringLog) error {
+	return r.db.WithContext(ctx).Save(log).Error
+}
+
+func (r *qcRepository) DeleteBrontolBladeLog(ctx context.Context, id uuid.UUID) error {
+	return r.db.WithContext(ctx).Delete(&domain.BrontolBladeMonitoringLog{}, "id = ?", id).Error
+}
+
 // ─── Oven Monitoring (MNO — Form QC-012-MNO.05) ──────────────────────────────
 
 func (r *qcRepository) CreateOvenLog(ctx context.Context, log *domain.OvenMonitoringLog) error {
@@ -555,7 +631,7 @@ func (r *qcRepository) DeleteScissorLog(ctx context.Context, id uuid.UUID) error
 	return r.db.WithContext(ctx).Delete(&domain.ScissorMonitoringLog{}, "id = ?", id).Error
 }
 
-// ─── Metal Detector Cleaning (CPP — Form CPP) ────────────────────────────────
+// ─── Metal Detector Cleaning (CPP — Form PRO-007-CPP) ────────────────────────────────
 
 func (r *qcRepository) CreateMetalCleaningLog(ctx context.Context, log *domain.MetalDetectorCleaningLog) error {
 	return r.db.WithContext(ctx).Create(log).Error
@@ -672,7 +748,7 @@ func (r *qcRepository) DeleteFinishedGoodsLog(ctx context.Context, id uuid.UUID)
 	return r.db.WithContext(ctx).Delete(&domain.FinishedGoodsInspectionLog{}, "id = ?", id).Error
 }
 
-// ─── Packaging Label Check (PLK — Form QC-018-PLK) ───────────────────────────
+// ─── Packaging Label Check (PLK — Form QC-016-PLK) ───────────────────────────
 
 func (r *qcRepository) CreatePackagingLabelCheck(ctx context.Context, log *domain.PackagingLabelCheckLog) error {
 	return r.db.WithContext(ctx).Create(log).Error

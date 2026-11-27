@@ -14,28 +14,43 @@ import (
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PLK: Packaging Label Check (Form QC-018-PLK)
+// PLK: Packaging Label Check (Form QC-016-PLK. 01 Revisi 01)
 // ─────────────────────────────────────────────────────────────────────────────
 
 type CreatePackagingLabelCheckItemDTO struct {
-	ItemNo             int    `json:"itemNo"`
-	ItemName           string `json:"itemName"`
-	ItemCode           string `json:"itemCode"`
-	BatchNo            string `json:"batchNo"`
-	BuyerName          string `json:"buyerName,omitempty"`
-	PackagingType      string `json:"packagingType,omitempty"`
-	StickerNo          string `json:"stickerNo,omitempty"`
-	IsBatchMatch       bool   `json:"isBatchMatch"`
-	IsExpiryMatch      bool   `json:"isExpiryMatch"`
-	IsCertLogoMatch    bool   `json:"isCertLogoMatch"`
-	IsPrintQualityGood bool   `json:"isPrintQualityGood"`
-	IsPositionAligned  bool   `json:"isPositionAligned"`
-	InspectedQty       int    `json:"inspectedQty"`
-	PassedQty          int    `json:"passedQty"`
-	RejectedQty        int    `json:"rejectedQty"`
-	ItemDecision       string `json:"itemDecision"` // lolos, ditolak
-	CorrectiveAction   string `json:"correctiveAction,omitempty"`
-	Notes              string `json:"notes,omitempty"`
+	ItemNo                int    `json:"itemNo"`
+	ItemCheckDate         string `json:"itemCheckDate,omitempty"`
+	ItemName              string `json:"itemName"`
+	ItemCode              string `json:"itemCode,omitempty"`
+	BatchNo               string `json:"batchNo"`
+	BuyerName             string `json:"buyerName,omitempty"`
+	ProductionDate        string `json:"productionDate,omitempty"`
+	ExpiredDate           string `json:"expiredDate,omitempty"`
+	OriginCountry         string `json:"originCountry,omitempty"`
+	WeightLabel           string `json:"weightLabel,omitempty"`
+	PackagingType         string `json:"packagingType,omitempty"`
+	StickerNo             string `json:"stickerNo,omitempty"`
+	AllergenInfo          string `json:"allergenInfo,omitempty"`
+	IsProductNameMatch    *bool  `json:"isProductNameMatch,omitempty"`
+	IsBatchMatch          bool   `json:"isBatchMatch"`
+	IsProductionDateMatch *bool  `json:"isProductionDateMatch,omitempty"`
+	IsExpiryMatch         bool   `json:"isExpiryMatch"`
+	IsOriginCountryMatch  *bool  `json:"isOriginCountryMatch,omitempty"`
+	IsWeightMatch         *bool  `json:"isWeightMatch,omitempty"`
+	IsPackagingMatch      *bool  `json:"isPackagingMatch,omitempty"`
+	IsStickerNoMatch      *bool  `json:"isStickerNoMatch,omitempty"`
+	IsAllergenInfoMatch   *bool  `json:"isAllergenInfoMatch,omitempty"`
+	IsLineCheckPassed     *bool  `json:"isLineCheckPassed,omitempty"`
+	IsCertLogoMatch       bool   `json:"isCertLogoMatch"`
+	IsPrintQualityGood    bool   `json:"isPrintQualityGood"`
+	IsPositionAligned     bool   `json:"isPositionAligned"`
+	InspectedQty          int    `json:"inspectedQty"`
+	PassedQty             int    `json:"passedQty"`
+	RejectedQty           int    `json:"rejectedQty"`
+	ItemDecision          string `json:"itemDecision"` // lolos, ditolak
+	CorrectiveAction      string `json:"correctiveAction,omitempty"`
+	QCPICName             string `json:"qcPicName,omitempty"`
+	Notes                 string `json:"notes,omitempty"`
 }
 
 type CreatePackagingLabelCheckDTO struct {
@@ -70,6 +85,115 @@ type UpdatePackagingLabelCheckDTO struct {
 	Items                []CreatePackagingLabelCheckItemDTO `json:"items,omitempty"`
 }
 
+func normalizePLKDecision(raw string) string {
+	switch strings.ToLower(strings.TrimSpace(raw)) {
+	case "tidak", "ditolak", "rejected", "fail", "failed":
+		return "ditolak"
+	case "lolos", "passed", "pass":
+		return "lolos"
+	default:
+		return ""
+	}
+}
+
+func buildPLKItems(logID uuid.UUID, defaultCheckDate, defaultQCPIC string, dtoItems []CreatePackagingLabelCheckItemDTO) ([]domain.PackagingLabelCheckItem, bool) {
+	items := make([]domain.PackagingLabelCheckItem, 0, len(dtoItems))
+	hasRejected := false
+
+	for i, it := range dtoItems {
+		itemNo := it.ItemNo
+		if itemNo <= 0 {
+			itemNo = i + 1
+		}
+		itemCheckDate := strings.TrimSpace(it.ItemCheckDate)
+		if itemCheckDate == "" {
+			itemCheckDate = defaultCheckDate
+		}
+		itemCode := strings.TrimSpace(it.ItemCode)
+		if itemCode == "" {
+			itemCode = it.BatchNo
+		}
+		qcPicName := strings.TrimSpace(it.QCPICName)
+		if qcPicName == "" {
+			qcPicName = defaultQCPIC
+		}
+
+		prodNameOk := boolOrDefault(it.IsProductNameMatch, true)
+		prodDateOk := boolOrDefault(it.IsProductionDateMatch, true)
+		originOk := boolOrDefault(it.IsOriginCountryMatch, true)
+		weightOk := boolOrDefault(it.IsWeightMatch, true)
+		packOk := boolOrDefault(it.IsPackagingMatch, true)
+		stickerOk := boolOrDefault(it.IsStickerNoMatch, true)
+		allergenOk := boolOrDefault(it.IsAllergenInfoMatch, true)
+		lineCheckOk := boolOrDefault(it.IsLineCheckPassed, true)
+
+		allChecksOk := prodNameOk &&
+			it.IsBatchMatch &&
+			prodDateOk &&
+			it.IsExpiryMatch &&
+			originOk &&
+			weightOk &&
+			packOk &&
+			stickerOk &&
+			allergenOk &&
+			lineCheckOk
+
+		itemDecision := normalizePLKDecision(it.ItemDecision)
+		if itemDecision == "" {
+			if !allChecksOk || it.RejectedQty > 0 {
+				itemDecision = "ditolak"
+			} else {
+				itemDecision = "lolos"
+			}
+		} else if !allChecksOk && itemDecision == "lolos" && it.RejectedQty > 0 {
+			itemDecision = "ditolak"
+		}
+		if itemDecision == "ditolak" {
+			hasRejected = true
+		}
+
+		items = append(items, domain.PackagingLabelCheckItem{
+			BaseEntity:            types.BaseEntity{ID: uuid.New()},
+			LogID:                 logID,
+			ItemNo:                itemNo,
+			ItemCheckDate:         itemCheckDate,
+			ItemName:              it.ItemName,
+			ItemCode:              itemCode,
+			BatchNo:               it.BatchNo,
+			BuyerName:             it.BuyerName,
+			ProductionDate:        it.ProductionDate,
+			ExpiredDate:           it.ExpiredDate,
+			OriginCountry:         it.OriginCountry,
+			WeightLabel:           it.WeightLabel,
+			PackagingType:         it.PackagingType,
+			StickerNo:             it.StickerNo,
+			AllergenInfo:          it.AllergenInfo,
+			IsProductNameMatch:    prodNameOk,
+			IsBatchMatch:          it.IsBatchMatch,
+			IsProductionDateMatch: prodDateOk,
+			IsExpiryMatch:         it.IsExpiryMatch,
+			IsOriginCountryMatch:  originOk,
+			IsWeightMatch:         weightOk,
+			IsPackagingMatch:      packOk,
+			IsStickerNoMatch:      stickerOk,
+			IsAllergenInfoMatch:   allergenOk,
+			IsLineCheckPassed:     lineCheckOk,
+			IsCertLogoMatch:       it.IsCertLogoMatch,
+			IsPrintQualityGood:    it.IsPrintQualityGood,
+			IsPositionAligned:     it.IsPositionAligned,
+			InspectedQty:          it.InspectedQty,
+			PassedQty:             it.PassedQty,
+			RejectedQty:           it.RejectedQty,
+			ItemDecision:          itemDecision,
+			CorrectiveAction:      it.CorrectiveAction,
+			QCPICName:             qcPicName,
+			Notes:                 it.Notes,
+		})
+	}
+
+	return items, hasRejected
+}
+
 func (uc *qcUseCase) CreatePackagingLabelCheck(ctx context.Context, dto CreatePackagingLabelCheckDTO) (*domain.PackagingLabelCheckLog, error) {
 	if strings.TrimSpace(dto.CheckDate) == "" {
 		return nil, apperrors.NewBadRequest("Tanggal pemeriksaan wajib diisi")
@@ -98,51 +222,14 @@ func (uc *qcUseCase) CreatePackagingLabelCheck(ctx context.Context, dto CreatePa
 	}
 
 	logID := uuid.New()
-	var items []domain.PackagingLabelCheckItem
-	hasRejected := false
+	items, hasRejected := buildPLKItems(logID, dto.CheckDate, dto.QCInspectorName, dto.Items)
 
-	for i, it := range dto.Items {
-		itemNo := it.ItemNo
-		if itemNo <= 0 {
-			itemNo = i + 1
-		}
-		itemDecision := it.ItemDecision
-		if itemDecision == "" {
-			if it.RejectedQty > 0 || !it.IsBatchMatch || !it.IsExpiryMatch || !it.IsCertLogoMatch || !it.IsPrintQualityGood {
-				itemDecision = "ditolak"
-			} else {
-				itemDecision = "lolos"
-			}
-		}
-		if itemDecision == "ditolak" {
-			hasRejected = true
-		}
-
-		items = append(items, domain.PackagingLabelCheckItem{
-			BaseEntity:         types.BaseEntity{ID: uuid.New()},
-			LogID:              logID,
-			ItemNo:             itemNo,
-			ItemName:           it.ItemName,
-			ItemCode:           it.ItemCode,
-			BatchNo:            it.BatchNo,
-			BuyerName:          it.BuyerName,
-			PackagingType:      it.PackagingType,
-			StickerNo:          it.StickerNo,
-			IsBatchMatch:       it.IsBatchMatch,
-			IsExpiryMatch:      it.IsExpiryMatch,
-			IsCertLogoMatch:    it.IsCertLogoMatch,
-			IsPrintQualityGood: it.IsPrintQualityGood,
-			IsPositionAligned:  it.IsPositionAligned,
-			InspectedQty:       it.InspectedQty,
-			PassedQty:          it.PassedQty,
-			RejectedQty:        it.RejectedQty,
-			ItemDecision:       itemDecision,
-			CorrectiveAction:   it.CorrectiveAction,
-			Notes:              it.Notes,
-		})
+	batchNo := strings.TrimSpace(dto.BatchNo)
+	if batchNo == "" && len(items) > 0 {
+		batchNo = items[0].BatchNo
 	}
 
-	overall := dto.OverallDecision
+	overall := normalizePLKDecision(dto.OverallDecision)
 	if overall == "" {
 		if hasRejected {
 			overall = "ditolak"
@@ -154,11 +241,13 @@ func (uc *qcUseCase) CreatePackagingLabelCheck(ctx context.Context, dto CreatePa
 	log := &domain.PackagingLabelCheckLog{
 		BaseEntity:           types.BaseEntity{ID: logID, CreatedAt: time.Now(), UpdatedAt: time.Now()},
 		DocumentNo:           docNo,
+		DocumentCode:         "QC-016-PLK",
+		RevisionCode:         "01",
 		CheckDate:            dto.CheckDate,
 		CheckMonth:           month,
 		HandoverReportID:     dto.HandoverReportID,
 		HandoverReportNo:     dto.HandoverReportNo,
-		BatchNo:              dto.BatchNo,
+		BatchNo:              batchNo,
 		FairtradeStatus:      fairtrade,
 		Certification:        cert,
 		QCInspectorName:      dto.QCInspectorName,
@@ -186,7 +275,7 @@ func (uc *qcUseCase) CreatePackagingLabelCheck(ctx context.Context, dto CreatePa
 		if totalRejQty <= 0 {
 			totalRejQty = 1.0
 		}
-		defect := "Pemeriksaan label kemasan (PLK) ditolak"
+		defect := "Pemeriksaan label kemasan (QC-016-PLK) ditolak"
 		if log.Notes != "" {
 			defect += ": " + log.Notes
 		}
@@ -223,6 +312,12 @@ func (uc *qcUseCase) UpdatePackagingLabelCheck(ctx context.Context, id uuid.UUID
 		return nil, err
 	}
 
+	if existing.DocumentCode == "" {
+		existing.DocumentCode = "QC-016-PLK"
+	}
+	if existing.RevisionCode == "" {
+		existing.RevisionCode = "01"
+	}
 	if dto.CheckDate != "" {
 		existing.CheckDate = dto.CheckDate
 		if dto.CheckMonth != "" {
@@ -252,44 +347,26 @@ func (uc *qcUseCase) UpdatePackagingLabelCheck(ctx context.Context, id uuid.UUID
 	if dto.QCSupervisorSignDate != nil {
 		existing.QCSupervisorSignDate = dto.QCSupervisorSignDate
 	}
-	if dto.OverallDecision != "" {
-		existing.OverallDecision = dto.OverallDecision
-	}
 	if dto.Notes != "" {
 		existing.Notes = dto.Notes
 	}
 
+	hasRejected := false
 	if len(dto.Items) > 0 {
-		var items []domain.PackagingLabelCheckItem
-		for i, it := range dto.Items {
-			itemNo := it.ItemNo
-			if itemNo <= 0 {
-				itemNo = i + 1
-			}
-			items = append(items, domain.PackagingLabelCheckItem{
-				BaseEntity:         types.BaseEntity{ID: uuid.New()},
-				LogID:              existing.ID,
-				ItemNo:             itemNo,
-				ItemName:           it.ItemName,
-				ItemCode:           it.ItemCode,
-				BatchNo:            it.BatchNo,
-				BuyerName:          it.BuyerName,
-				PackagingType:      it.PackagingType,
-				StickerNo:          it.StickerNo,
-				IsBatchMatch:       it.IsBatchMatch,
-				IsExpiryMatch:      it.IsExpiryMatch,
-				IsCertLogoMatch:    it.IsCertLogoMatch,
-				IsPrintQualityGood: it.IsPrintQualityGood,
-				IsPositionAligned:  it.IsPositionAligned,
-				InspectedQty:       it.InspectedQty,
-				PassedQty:          it.PassedQty,
-				RejectedQty:        it.RejectedQty,
-				ItemDecision:       it.ItemDecision,
-				CorrectiveAction:   it.CorrectiveAction,
-				Notes:              it.Notes,
-			})
+		existing.Items, hasRejected = buildPLKItems(existing.ID, existing.CheckDate, existing.QCInspectorName, dto.Items)
+		if existing.BatchNo == "" && len(existing.Items) > 0 {
+			existing.BatchNo = existing.Items[0].BatchNo
 		}
-		existing.Items = items
+	}
+
+	if norm := normalizePLKDecision(dto.OverallDecision); norm != "" {
+		existing.OverallDecision = norm
+	} else if len(dto.Items) > 0 {
+		if hasRejected {
+			existing.OverallDecision = "ditolak"
+		} else {
+			existing.OverallDecision = "lolos"
+		}
 	}
 	existing.UpdatedAt = time.Now()
 

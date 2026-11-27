@@ -33,6 +33,8 @@ func NewModule(router fiber.Router, jwtSecret string, manager *tenantMgr.Manager
 				&domain.SievingMonitoringLog{},
 				&domain.MagnetTrapLog{},
 				&domain.MeshBoltMonitoringLog{},
+				&domain.FilterMeshMonitoringLog{},
+				&domain.BrontolBladeMonitoringLog{},
 				&domain.OvenMonitoringLog{},
 				&domain.NeedleMonitoringLog{},
 				&domain.ScissorMonitoringLog{},

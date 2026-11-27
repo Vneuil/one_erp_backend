@@ -353,7 +353,7 @@ func (uc *qcUseCase) DeleteScissorLog(ctx context.Context, id uuid.UUID) error {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CPP: Metal Detector Cleaning Log (Form CPP)
+// CPP: Catatan Pemakaian dan Pembersihan Alat — Metal Detector / X-Ray (Form PRO-007-CPP Revisi 01)
 // ─────────────────────────────────────────────────────────────────────────────
 
 func (uc *qcUseCase) CreateMetalCleaningLog(ctx context.Context, dto CreateMetalCleaningLogDTO) (*domain.MetalDetectorCleaningLog, error) {
@@ -402,11 +402,11 @@ func (uc *qcUseCase) CreateMetalCleaningLog(ctx context.Context, dto CreateMetal
 		cond = "Normal"
 	}
 
-	overallStatus := "passed"
-	if strings.EqualFold(sensorClean, "Perlu Dibersihkan") || strings.EqualFold(beltClean, "Perlu Dibersihkan") {
-		overallStatus = "needs_cleaning"
-	} else if strings.EqualFold(cond, "Cacat") || strings.EqualFold(cond, "Kabel Terbuka") {
-		overallStatus = "maintenance"
+	overallStatus := deriveCPPStatus(sensorClean, beltClean, cond, dto.Finding)
+
+	totalHours := dto.TotalHours
+	if totalHours <= 0 {
+		totalHours = computeCPPHours(dto.StartTime, dto.EndTime)
 	}
 
 	docNo, err := docseq.Next(ctx, uc.repo, "CPP", dto.CheckDate)
@@ -427,11 +427,25 @@ func (uc *qcUseCase) CreateMetalCleaningLog(ctx context.Context, dto CreateMetal
 		PhysicalCondition:    cond,
 		StartTime:            dto.StartTime,
 		EndTime:              dto.EndTime,
-		TotalHours:           dto.TotalHours,
+		TotalHours:           totalHours,
 		OperatorName:         strings.TrimSpace(dto.OperatorName),
 		QCInspectorName:      strings.TrimSpace(dto.QCInspectorName),
 		OverallStatus:        overallStatus,
 		Notes:                dto.Notes,
+
+		DocumentCode:      cppDocumentCode,
+		RevisionCode:      cppRevisionCode,
+		EquipmentName:     normalizeCPPEquipment(dto.EquipmentName),
+		ProductName:       strings.TrimSpace(dto.ProductName),
+		BatchNo:           strings.TrimSpace(dto.BatchNo),
+		CustomerName:      strings.TrimSpace(dto.CustomerName),
+		Quantity:          strings.TrimSpace(dto.Quantity),
+		Finding:           strings.TrimSpace(dto.Finding),
+		AnalysisResult:    strings.TrimSpace(dto.AnalysisResult),
+		CorrectiveAction:  strings.TrimSpace(dto.CorrectiveAction),
+		CleaningStartTime: strings.TrimSpace(dto.CleaningStartTime),
+		CleaningEndTime:   strings.TrimSpace(dto.CleaningEndTime),
+		QAVerifiedDate:    strings.TrimSpace(dto.QAVerifiedDate),
 	}
 
 	if err := uc.repo.CreateMetalCleaningLog(ctx, log); err != nil {
@@ -508,8 +522,39 @@ func (uc *qcUseCase) UpdateMetalCleaningLog(ctx context.Context, id uuid.UUID, d
 		log.Notes = dto.Notes
 	}
 
+	// Form PRO-007-CPP Revisi 01 fields
+	setStr := func(dst *string, src *string) {
+		if src != nil {
+			*dst = strings.TrimSpace(*src)
+		}
+	}
+	if dto.EquipmentName != nil {
+		log.EquipmentName = normalizeCPPEquipment(*dto.EquipmentName)
+	}
+	setStr(&log.ProductName, dto.ProductName)
+	setStr(&log.BatchNo, dto.BatchNo)
+	setStr(&log.CustomerName, dto.CustomerName)
+	setStr(&log.Quantity, dto.Quantity)
+	setStr(&log.Finding, dto.Finding)
+	setStr(&log.AnalysisResult, dto.AnalysisResult)
+	setStr(&log.CorrectiveAction, dto.CorrectiveAction)
+	setStr(&log.CleaningStartTime, dto.CleaningStartTime)
+	setStr(&log.CleaningEndTime, dto.CleaningEndTime)
+	setStr(&log.QAVerifiedDate, dto.QAVerifiedDate)
+	if log.DocumentCode == "" {
+		log.DocumentCode = cppDocumentCode
+	}
+	if log.RevisionCode == "" {
+		log.RevisionCode = cppRevisionCode
+	}
+	if dto.TotalHours == nil && (dto.StartTime != "" || dto.EndTime != "") {
+		log.TotalHours = computeCPPHours(log.StartTime, log.EndTime)
+	}
+
 	if dto.OverallStatus != "" {
 		log.OverallStatus = dto.OverallStatus
+	} else {
+		log.OverallStatus = deriveCPPStatus(log.SensorCleanliness, log.BeltCleanliness, log.PhysicalCondition, log.Finding)
 	}
 
 	if err := uc.repo.UpdateMetalCleaningLog(ctx, log); err != nil {

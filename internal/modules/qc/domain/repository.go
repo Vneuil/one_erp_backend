@@ -65,10 +65,10 @@ type QCRepository interface {
 	UpdateArmadaCheck(ctx context.Context, check *SupplierArmadaCheck) error
 	DeleteArmadaCheck(ctx context.Context, id uuid.UUID) error
 
-	// Raw Material Incoming Check (PBD — QC-001)
+	// Raw Material Incoming Check (PBD — QC-002-PBD)
 	CreateIncomingCheck(ctx context.Context, check *RawMaterialIncomingCheck) error
 	GetIncomingCheckByID(ctx context.Context, id uuid.UUID) (*RawMaterialIncomingCheck, error)
-	ListIncomingChecks(ctx context.Context, date string, lbmNo string) ([]RawMaterialIncomingCheck, error)
+	ListIncomingChecks(ctx context.Context, month string, date string, lbmNo string) ([]RawMaterialIncomingCheck, error)
 	UpdateIncomingCheck(ctx context.Context, check *RawMaterialIncomingCheck) error
 	DeleteIncomingCheck(ctx context.Context, id uuid.UUID) error
 
@@ -86,12 +86,26 @@ type QCRepository interface {
 	UpdateMagnetTrapLog(ctx context.Context, log *MagnetTrapLog) error
 	DeleteMagnetTrapLog(ctx context.Context, id uuid.UUID) error
 
-	// Mesh Bolt Monitoring (MNM — Form QC-010-MNM.01)
+	// Mesh Bolt Monitoring (MNM / MNB / MBB — Form QC-011)
 	CreateMeshBoltLog(ctx context.Context, log *MeshBoltMonitoringLog) error
 	GetMeshBoltLogByID(ctx context.Context, id uuid.UUID) (*MeshBoltMonitoringLog, error)
 	ListMeshBoltLogs(ctx context.Context, month string, room string, machineNo string) ([]MeshBoltMonitoringLog, error)
 	UpdateMeshBoltLog(ctx context.Context, log *MeshBoltMonitoringLog) error
 	DeleteMeshBoltLog(ctx context.Context, id uuid.UUID) error
+
+	// Filter Mesh Monitoring (MNP - Gula Cair & MMV - VCO — Form QC-011-MNP / MMV)
+	CreateFilterMeshLog(ctx context.Context, log *FilterMeshMonitoringLog) error
+	GetFilterMeshLogByID(ctx context.Context, id uuid.UUID) (*FilterMeshMonitoringLog, error)
+	ListFilterMeshLogs(ctx context.Context, month string, category string, location string) ([]FilterMeshMonitoringLog, error)
+	UpdateFilterMeshLog(ctx context.Context, log *FilterMeshMonitoringLog) error
+	DeleteFilterMeshLog(ctx context.Context, id uuid.UUID) error
+
+	// Brontol Blade Monitoring (MPB — Form QC-011-MPB.01)
+	CreateBrontolBladeLog(ctx context.Context, log *BrontolBladeMonitoringLog) error
+	GetBrontolBladeLogByID(ctx context.Context, id uuid.UUID) (*BrontolBladeMonitoringLog, error)
+	ListBrontolBladeLogs(ctx context.Context, month string, productCode string) ([]BrontolBladeMonitoringLog, error)
+	UpdateBrontolBladeLog(ctx context.Context, log *BrontolBladeMonitoringLog) error
+	DeleteBrontolBladeLog(ctx context.Context, id uuid.UUID) error
 
 	// Oven Monitoring (MNO — Form QC-012-MNO.05)
 	CreateOvenLog(ctx context.Context, log *OvenMonitoringLog) error
@@ -114,7 +128,7 @@ type QCRepository interface {
 	UpdateScissorLog(ctx context.Context, log *ScissorMonitoringLog) error
 	DeleteScissorLog(ctx context.Context, id uuid.UUID) error
 
-	// Metal Detector Cleaning (CPP — Form CPP)
+	// Metal Detector Cleaning (CPP — Form PRO-007-CPP)
 	CreateMetalCleaningLog(ctx context.Context, log *MetalDetectorCleaningLog) error
 	GetMetalCleaningLogByID(ctx context.Context, id uuid.UUID) (*MetalDetectorCleaningLog, error)
 	ListMetalCleaningLogs(ctx context.Context, month string, machineNo string, location string) ([]MetalDetectorCleaningLog, error)
@@ -135,7 +149,7 @@ type QCRepository interface {
 	UpdateFinishedGoodsLog(ctx context.Context, log *FinishedGoodsInspectionLog) error
 	DeleteFinishedGoodsLog(ctx context.Context, id uuid.UUID) error
 
-	// Packaging Label Check (PLK — Form QC-018-PLK)
+	// Packaging Label Check (PLK — Form QC-016-PLK)
 	CreatePackagingLabelCheck(ctx context.Context, log *PackagingLabelCheckLog) error
 	GetPackagingLabelCheckByID(ctx context.Context, id uuid.UUID) (*PackagingLabelCheckLog, error)
 	ListPackagingLabelChecks(ctx context.Context, month string, batchNo string, decision string) ([]PackagingLabelCheckLog, error)

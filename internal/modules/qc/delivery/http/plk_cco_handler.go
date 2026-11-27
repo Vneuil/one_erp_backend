@@ -8,7 +8,7 @@ import (
 )
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PLK: Packaging Label Check Handlers (Form QC-018-PLK)
+// PLK: Packaging Label Check Handlers (Form QC-016-PLK)
 // ─────────────────────────────────────────────────────────────────────────────
 
 func (h *Handler) ListPackagingLabelChecks(c *fiber.Ctx) error {

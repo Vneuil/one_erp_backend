@@ -154,7 +154,7 @@ func (r *inboundReader) ReadLBMContext(ctx context.Context, goodsReceiptID uuid.
 		}
 	}
 
-	// Read latest PBD (QC-001) linked to this goodsReceiptId or lbmNo
+	// Read latest PBD (QC-002-PBD) linked to this goodsReceiptId or lbmNo
 	var pbdRow struct {
 		ID                 uuid.UUID `gorm:"column:id"`
 		CheckDate          string    `gorm:"column:check_date"`
