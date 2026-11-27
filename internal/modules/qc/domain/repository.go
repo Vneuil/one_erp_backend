@@ -89,7 +89,7 @@ type QCRepository interface {
 	// Mesh Bolt Monitoring (MNM / MNB / MBB — Form QC-011)
 	CreateMeshBoltLog(ctx context.Context, log *MeshBoltMonitoringLog) error
 	GetMeshBoltLogByID(ctx context.Context, id uuid.UUID) (*MeshBoltMonitoringLog, error)
-	ListMeshBoltLogs(ctx context.Context, month string, room string, machineNo string) ([]MeshBoltMonitoringLog, error)
+	ListMeshBoltLogs(ctx context.Context, month string, room string, machineNo string, formType string, stageCategory string) ([]MeshBoltMonitoringLog, error)
 	UpdateMeshBoltLog(ctx context.Context, log *MeshBoltMonitoringLog) error
 	DeleteMeshBoltLog(ctx context.Context, id uuid.UUID) error
 
@@ -179,6 +179,37 @@ type QCRepository interface {
 	DeleteRejectReturnReport(ctx context.Context, id uuid.UUID) error
 
 	GetBrontolStats(ctx context.Context) (totalCount int64, totalQuantityKg float64, returnCount int64, returnQtyKg float64, reworkCount int64, err error)
+
+	// Liquid Sugar Flow (MSS, PVK, MNC, PJC, VHC)
+	CreateSterilizationTempLog(ctx context.Context, log *SterilizationTempLog) error
+	GetSterilizationTempLogByID(ctx context.Context, id uuid.UUID) (*SterilizationTempLog, error)
+	ListSterilizationTempLogs(ctx context.Context, month string, stage string, batchNo string) ([]SterilizationTempLog, error)
+	UpdateSterilizationTempLog(ctx context.Context, log *SterilizationTempLog) error
+	DeleteSterilizationTempLog(ctx context.Context, id uuid.UUID) error
+
+	CreateLiquidPackagingVisualCheck(ctx context.Context, log *LiquidPackagingVisualCheck) error
+	GetLiquidPackagingVisualCheckByID(ctx context.Context, id uuid.UUID) (*LiquidPackagingVisualCheck, error)
+	ListLiquidPackagingVisualChecks(ctx context.Context, month string, batchNo string) ([]LiquidPackagingVisualCheck, error)
+	UpdateLiquidPackagingVisualCheck(ctx context.Context, log *LiquidPackagingVisualCheck) error
+	DeleteLiquidPackagingVisualCheck(ctx context.Context, id uuid.UUID) error
+
+	CreateLiquidSugarProcessingLog(ctx context.Context, log *LiquidSugarProcessingLog) error
+	GetLiquidSugarProcessingLogByID(ctx context.Context, id uuid.UUID) (*LiquidSugarProcessingLog, error)
+	ListLiquidSugarProcessingLogs(ctx context.Context, month string, batchNo string, productCode string) ([]LiquidSugarProcessingLog, error)
+	UpdateLiquidSugarProcessingLog(ctx context.Context, log *LiquidSugarProcessingLog) error
+	DeleteLiquidSugarProcessingLog(ctx context.Context, id uuid.UUID) error
+
+	CreateLiquidSugarFinishedGoodsLog(ctx context.Context, log *LiquidSugarFinishedGoodsLog) error
+	GetLiquidSugarFinishedGoodsLogByID(ctx context.Context, id uuid.UUID) (*LiquidSugarFinishedGoodsLog, error)
+	ListLiquidSugarFinishedGoodsLogs(ctx context.Context, month string, batchNo string, decision string) ([]LiquidSugarFinishedGoodsLog, error)
+	UpdateLiquidSugarFinishedGoodsLog(ctx context.Context, log *LiquidSugarFinishedGoodsLog) error
+	DeleteLiquidSugarFinishedGoodsLog(ctx context.Context, id uuid.UUID) error
+
+	CreateLiquidSugarWashVerification(ctx context.Context, log *LiquidSugarWashVerification) error
+	GetLiquidSugarWashVerificationByID(ctx context.Context, id uuid.UUID) (*LiquidSugarWashVerification, error)
+	ListLiquidSugarWashVerifications(ctx context.Context, month string, batchNo string) ([]LiquidSugarWashVerification, error)
+	UpdateLiquidSugarWashVerification(ctx context.Context, log *LiquidSugarWashVerification) error
+	DeleteLiquidSugarWashVerification(ctx context.Context, id uuid.UUID) error
 
 	// Document numbering helper
 	CountLogsByPrefix(ctx context.Context, tableName string, prefix string) (int64, error)

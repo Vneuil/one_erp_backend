@@ -443,6 +443,7 @@ type FilterMeshMonitoringLog struct {
 	DayOfWeek         string     `gorm:"type:varchar(20)" json:"dayOfWeek,omitempty"`
 	ProductName       string     `gorm:"type:varchar(255);not null" json:"productName"`
 	ProductCode       string     `gorm:"type:varchar(100)" json:"productCode,omitempty"`
+	BatchNo           string     `gorm:"type:varchar(100);index" json:"batchNo,omitempty"`
 	MeshSize          string     `gorm:"type:varchar(50);not null" json:"meshSize"`
 	PICResponsible    string     `gorm:"type:varchar(150);not null" json:"picResponsible"`
 
@@ -691,6 +692,7 @@ type MetalDetectorVerificationLog struct {
 	CheckDate         string     `gorm:"type:varchar(10);not null;index" json:"checkDate"` // YYYY-MM-DD
 	ProductType       string     `gorm:"type:varchar(50);not null;default:'gula_semut'" json:"productType"` // gula_semut, gula_cair
 	Location          string     `gorm:"type:varchar(100);not null;default:'Ruang Packing'" json:"location"`
+	BatchNo           string     `gorm:"type:varchar(100);index" json:"batchNo,omitempty"`
 	PackageCategory   string     `gorm:"type:varchar(30);not null;default:'<= 12.5 kg'" json:"packageCategory"` // <= 12.5 kg, > 12.5 kg
 	MonitoringRound   int        `gorm:"not null;default:1" json:"monitoringRound"` // 1, 2, 3...
 	CheckTime         string     `gorm:"type:varchar(10);not null" json:"checkTime"` // HH:mm

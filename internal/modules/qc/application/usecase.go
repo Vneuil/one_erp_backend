@@ -77,7 +77,7 @@ type QCUseCase interface {
 	// Mesh Bolt Monitoring (MNM — Form QC-010-MNM.01)
 	CreateMeshBoltLog(ctx context.Context, dto CreateMeshBoltLogDTO) (*domain.MeshBoltMonitoringLog, error)
 	GetMeshBoltLogByID(ctx context.Context, id uuid.UUID) (*domain.MeshBoltMonitoringLog, error)
-	ListMeshBoltLogs(ctx context.Context, month string, room string, machineNo string) ([]domain.MeshBoltMonitoringLog, error)
+	ListMeshBoltLogs(ctx context.Context, month string, room string, machineNo string, formType string, stageCategory string) ([]domain.MeshBoltMonitoringLog, error)
 	UpdateMeshBoltLog(ctx context.Context, id uuid.UUID, dto UpdateMeshBoltLogDTO) (*domain.MeshBoltMonitoringLog, error)
 	DeleteMeshBoltLog(ctx context.Context, id uuid.UUID) error
 
@@ -167,6 +167,39 @@ type QCUseCase interface {
 	GetBrontolStats(ctx context.Context) (*BrontolStatsResponseDTO, error)
 	GetBrontolStockCard(ctx context.Context, month string, productCode string) ([]BrontolStockCardItemDTO, error)
 	AutoCreateBrontolOnQCFailure(ctx context.Context, trigger AutoBrontolTrigger) (*domain.BrontolReport, error)
+
+	// Liquid Sugar Flow (MSS, PVK, MNC, PJC, VHC)
+	GetLiquidSugarFlowStatus(ctx context.Context, month string, batchNo string) (*LiquidSugarFlowStatusDTO, error)
+
+	CreateSterilizationTempLog(ctx context.Context, dto CreateSterilizationTempLogDTO) (*domain.SterilizationTempLog, error)
+	GetSterilizationTempLogByID(ctx context.Context, id uuid.UUID) (*domain.SterilizationTempLog, error)
+	ListSterilizationTempLogs(ctx context.Context, month string, stage string, batchNo string) ([]domain.SterilizationTempLog, error)
+	UpdateSterilizationTempLog(ctx context.Context, id uuid.UUID, dto UpdateSterilizationTempLogDTO) (*domain.SterilizationTempLog, error)
+	DeleteSterilizationTempLog(ctx context.Context, id uuid.UUID) error
+
+	CreateLiquidPackagingVisualCheck(ctx context.Context, dto CreateLiquidPackagingVisualCheckDTO) (*domain.LiquidPackagingVisualCheck, error)
+	GetLiquidPackagingVisualCheckByID(ctx context.Context, id uuid.UUID) (*domain.LiquidPackagingVisualCheck, error)
+	ListLiquidPackagingVisualChecks(ctx context.Context, month string, batchNo string) ([]domain.LiquidPackagingVisualCheck, error)
+	UpdateLiquidPackagingVisualCheck(ctx context.Context, id uuid.UUID, dto UpdateLiquidPackagingVisualCheckDTO) (*domain.LiquidPackagingVisualCheck, error)
+	DeleteLiquidPackagingVisualCheck(ctx context.Context, id uuid.UUID) error
+
+	CreateLiquidSugarProcessingLog(ctx context.Context, dto CreateLiquidSugarProcessingLogDTO) (*domain.LiquidSugarProcessingLog, error)
+	GetLiquidSugarProcessingLogByID(ctx context.Context, id uuid.UUID) (*domain.LiquidSugarProcessingLog, error)
+	ListLiquidSugarProcessingLogs(ctx context.Context, month string, batchNo string, productCode string) ([]domain.LiquidSugarProcessingLog, error)
+	UpdateLiquidSugarProcessingLog(ctx context.Context, id uuid.UUID, dto UpdateLiquidSugarProcessingLogDTO) (*domain.LiquidSugarProcessingLog, error)
+	DeleteLiquidSugarProcessingLog(ctx context.Context, id uuid.UUID) error
+
+	CreateLiquidSugarFinishedGoodsLog(ctx context.Context, dto CreateLiquidSugarFinishedGoodsLogDTO) (*domain.LiquidSugarFinishedGoodsLog, error)
+	GetLiquidSugarFinishedGoodsLogByID(ctx context.Context, id uuid.UUID) (*domain.LiquidSugarFinishedGoodsLog, error)
+	ListLiquidSugarFinishedGoodsLogs(ctx context.Context, month string, batchNo string, decision string) ([]domain.LiquidSugarFinishedGoodsLog, error)
+	UpdateLiquidSugarFinishedGoodsLog(ctx context.Context, id uuid.UUID, dto UpdateLiquidSugarFinishedGoodsLogDTO) (*domain.LiquidSugarFinishedGoodsLog, error)
+	DeleteLiquidSugarFinishedGoodsLog(ctx context.Context, id uuid.UUID) error
+
+	CreateLiquidSugarWashVerification(ctx context.Context, dto CreateLiquidSugarWashVerificationDTO) (*domain.LiquidSugarWashVerification, error)
+	GetLiquidSugarWashVerificationByID(ctx context.Context, id uuid.UUID) (*domain.LiquidSugarWashVerification, error)
+	ListLiquidSugarWashVerifications(ctx context.Context, month string, batchNo string) ([]domain.LiquidSugarWashVerification, error)
+	UpdateLiquidSugarWashVerification(ctx context.Context, id uuid.UUID, dto UpdateLiquidSugarWashVerificationDTO) (*domain.LiquidSugarWashVerification, error)
+	DeleteLiquidSugarWashVerification(ctx context.Context, id uuid.UUID) error
 }
 
 type qcUseCase struct {

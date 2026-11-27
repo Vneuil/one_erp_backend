@@ -694,6 +694,7 @@ type CreateFilterMeshLogDTO struct {
 	DayOfWeek         string `json:"dayOfWeek,omitempty"`
 	ProductName       string `json:"productName" validate:"required"`
 	ProductCode       string `json:"productCode,omitempty"`
+	BatchNo           string `json:"batchNo,omitempty"`
 	MeshSize          string `json:"meshSize" validate:"required"`
 	PICResponsible    string `json:"picResponsible" validate:"required"`
 
@@ -722,6 +723,7 @@ type UpdateFilterMeshLogDTO struct {
 	DayOfWeek         string `json:"dayOfWeek,omitempty"`
 	ProductName       string `json:"productName,omitempty"`
 	ProductCode       string `json:"productCode,omitempty"`
+	BatchNo           string `json:"batchNo,omitempty"`
 	MeshSize          string `json:"meshSize,omitempty"`
 	PICResponsible    string `json:"picResponsible,omitempty"`
 
@@ -1034,6 +1036,7 @@ type CreateMetalVerificationLogDTO struct {
 	CheckDate            string `json:"checkDate" validate:"required"`
 	ProductType          string `json:"productType,omitempty"`
 	Location             string `json:"location,omitempty"`
+	BatchNo              string `json:"batchNo,omitempty"`
 	PackageCategory      string `json:"packageCategory,omitempty"`
 	MonitoringRound      int    `json:"monitoringRound"`
 	CheckTime            string `json:"checkTime" validate:"required"`
@@ -1061,6 +1064,7 @@ type UpdateMetalVerificationLogDTO struct {
 	CheckDate            string `json:"checkDate,omitempty"`
 	ProductType          string `json:"productType,omitempty"`
 	Location             string `json:"location,omitempty"`
+	BatchNo              string `json:"batchNo,omitempty"`
 	PackageCategory      string `json:"packageCategory,omitempty"`
 	MonitoringRound      *int   `json:"monitoringRound,omitempty"`
 	CheckTime            string `json:"checkTime,omitempty"`

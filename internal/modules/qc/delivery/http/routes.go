@@ -175,8 +175,10 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	filterMesh.Put("/:id", h.UpdateFilterMeshLog)
 	filterMesh.Delete("/:id", h.DeleteFilterMeshLog)
 
-	// Liquid Sugar Dedicated Controls (MNP & MNB)
+	// Liquid Sugar Dedicated Controls (Flow Gula Cair: MSS, PVK, MNP, MNB, MNC, PJC, VHC)
 	liquidSugar := qc.Group("/liquid-sugar")
+	liquidSugar.Get("/flow-status", h.GetLiquidSugarFlowStatus)
+
 	liquidSugar.Get("/mnp", h.ListFilterMeshLogs)
 	liquidSugar.Post("/mnp", h.CreateFilterMeshLog)
 	liquidSugar.Get("/mnp/:id", h.GetFilterMeshLog)
@@ -188,6 +190,36 @@ func (h *Handler) RegisterRoutes(router fiber.Router, jwtSecret string, manager 
 	liquidSugar.Get("/mnb/:id", h.GetMeshBoltLog)
 	liquidSugar.Put("/mnb/:id", h.UpdateMeshBoltLog)
 	liquidSugar.Delete("/mnb/:id", h.DeleteMeshBoltLog)
+
+	liquidSugar.Get("/mss", h.ListSterilizationTempLogs)
+	liquidSugar.Post("/mss", h.CreateSterilizationTempLog)
+	liquidSugar.Get("/mss/:id", h.GetSterilizationTempLog)
+	liquidSugar.Put("/mss/:id", h.UpdateSterilizationTempLog)
+	liquidSugar.Delete("/mss/:id", h.DeleteSterilizationTempLog)
+
+	liquidSugar.Get("/pvk", h.ListLiquidPackagingVisualChecks)
+	liquidSugar.Post("/pvk", h.CreateLiquidPackagingVisualCheck)
+	liquidSugar.Get("/pvk/:id", h.GetLiquidPackagingVisualCheck)
+	liquidSugar.Put("/pvk/:id", h.UpdateLiquidPackagingVisualCheck)
+	liquidSugar.Delete("/pvk/:id", h.DeleteLiquidPackagingVisualCheck)
+
+	liquidSugar.Get("/mnc", h.ListLiquidSugarProcessingLogs)
+	liquidSugar.Post("/mnc", h.CreateLiquidSugarProcessingLog)
+	liquidSugar.Get("/mnc/:id", h.GetLiquidSugarProcessingLog)
+	liquidSugar.Put("/mnc/:id", h.UpdateLiquidSugarProcessingLog)
+	liquidSugar.Delete("/mnc/:id", h.DeleteLiquidSugarProcessingLog)
+
+	liquidSugar.Get("/pjc", h.ListLiquidSugarFinishedGoodsLogs)
+	liquidSugar.Post("/pjc", h.CreateLiquidSugarFinishedGoodsLog)
+	liquidSugar.Get("/pjc/:id", h.GetLiquidSugarFinishedGoodsLog)
+	liquidSugar.Put("/pjc/:id", h.UpdateLiquidSugarFinishedGoodsLog)
+	liquidSugar.Delete("/pjc/:id", h.DeleteLiquidSugarFinishedGoodsLog)
+
+	liquidSugar.Get("/vhc", h.ListLiquidSugarWashVerifications)
+	liquidSugar.Post("/vhc", h.CreateLiquidSugarWashVerification)
+	liquidSugar.Get("/vhc/:id", h.GetLiquidSugarWashVerification)
+	liquidSugar.Put("/vhc/:id", h.UpdateLiquidSugarWashVerification)
+	liquidSugar.Delete("/vhc/:id", h.DeleteLiquidSugarWashVerification)
 
 	// VCO Dedicated Controls (MMV)
 	vco := qc.Group("/vco")

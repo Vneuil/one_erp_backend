@@ -885,7 +885,9 @@ func (h *Handler) ListMeshBoltLogs(c *fiber.Ctx) error {
 	month := c.Query("month")
 	room := c.Query("room")
 	machineNo := c.Query("machineNo")
-	list, err := uc.ListMeshBoltLogs(c.Context(), month, room, machineNo)
+	formType := c.Query("formType")
+	stageCategory := c.Query("stageCategory")
+	list, err := uc.ListMeshBoltLogs(c.Context(), month, room, machineNo, formType, stageCategory)
 	if err != nil {
 		return err
 	}

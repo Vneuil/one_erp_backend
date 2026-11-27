@@ -594,40 +594,65 @@ func (uc *qcUseCase) CreateMetalVerificationLog(ctx context.Context, dto CreateM
 	if productType == "" {
 		productType = "gula_semut"
 	}
+	isLiquidSugar := strings.EqualFold(productType, "gula_cair")
+	if isLiquidSugar {
+		productType = "gula_cair"
+	}
+
 	loc := dto.Location
 	if loc == "" {
-		loc = "Ruang Packing"
+		if isLiquidSugar {
+			loc = "Gula Cair"
+		} else {
+			loc = "Ruang Packing"
+		}
 	}
 	pkgCat := dto.PackageCategory
 	if pkgCat == "" {
-		pkgCat = "<= 12.5 kg"
+		if isLiquidSugar {
+			pkgCat = "Gula Cair"
+		} else {
+			pkgCat = "<= 12.5 kg"
+		}
 	}
 	round := dto.MonitoringRound
 	if round <= 0 {
 		round = 1
 	}
 
-	// Test Piece Default Specs based on package weight category
+	// Test Piece Default Specs based on product type & package weight category
 	feSize := dto.FeTestPieceSize
 	nonFeSize := dto.NonFeTestPieceSize
 	ssSize := dto.SSTestPieceSize
 
-	if feSize == "" {
-		if pkgCat == "> 12.5 kg" {
-			feSize = "Fe >= 2.5mm"
-		} else {
-			feSize = "Fe >= 2.0mm"
+	if isLiquidSugar {
+		if feSize == "" {
+			feSize = "Fe >= 1.5mm"
 		}
-	}
-	if nonFeSize == "" {
-		if pkgCat == "> 12.5 kg" {
-			nonFeSize = "Non-Fe >= 3.0mm"
-		} else {
-			nonFeSize = "Non-Fe >= 2.0mm"
+		if nonFeSize == "" {
+			nonFeSize = "Non-Fe >= 1.5mm"
 		}
-	}
-	if ssSize == "" {
-		ssSize = "SS >= 3.5mm"
+		if ssSize == "" {
+			ssSize = "SS >= 2.5mm"
+		}
+	} else {
+		if feSize == "" {
+			if pkgCat == "> 12.5 kg" {
+				feSize = "Fe >= 2.5mm"
+			} else {
+				feSize = "Fe >= 2.0mm"
+			}
+		}
+		if nonFeSize == "" {
+			if pkgCat == "> 12.5 kg" {
+				nonFeSize = "Non-Fe >= 3.0mm"
+			} else {
+				nonFeSize = "Non-Fe >= 2.0mm"
+			}
+		}
+		if ssSize == "" {
+			ssSize = "SS >= 3.5mm"
+		}
 	}
 
 	// Fe piece
@@ -674,13 +699,19 @@ func (uc *qcUseCase) CreateMetalVerificationLog(ctx context.Context, dto CreateM
 		return nil, apperrors.NewInternal(err, "Gagal membuat nomor dokumen VMD")
 	}
 
+	revCode := "03"
+	if isLiquidSugar {
+		revCode = "01"
+	}
+
 	log := &domain.MetalDetectorVerificationLog{
 		DocumentNo:           docNo,
-		RevisionCode:         "03",
+		RevisionCode:         revCode,
 		CheckMonth:           month,
 		CheckDate:            dto.CheckDate,
 		ProductType:          productType,
 		Location:             loc,
+		BatchNo:              strings.TrimSpace(dto.BatchNo),
 		PackageCategory:      pkgCat,
 		MonitoringRound:      round,
 		CheckTime:            dto.CheckTime,
@@ -773,6 +804,9 @@ func (uc *qcUseCase) UpdateMetalVerificationLog(ctx context.Context, id uuid.UUI
 	}
 	if dto.Location != "" {
 		log.Location = dto.Location
+	}
+	if dto.BatchNo != "" {
+		log.BatchNo = strings.TrimSpace(dto.BatchNo)
 	}
 	if dto.PackageCategory != "" {
 		log.PackageCategory = dto.PackageCategory

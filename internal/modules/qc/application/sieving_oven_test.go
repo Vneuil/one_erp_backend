@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/divinecoid/one-backend/internal/modules/qc/domain"
@@ -113,9 +114,15 @@ func (m *mockSievingOvenRepo) GetMeshBoltLogByID(ctx context.Context, id uuid.UU
 	return nil, errNotFound
 }
 
-func (m *mockSievingOvenRepo) ListMeshBoltLogs(ctx context.Context, month string, room string, machineNo string) ([]domain.MeshBoltMonitoringLog, error) {
+func (m *mockSievingOvenRepo) ListMeshBoltLogs(ctx context.Context, month string, room string, machineNo string, formType string, stageCategory string) ([]domain.MeshBoltMonitoringLog, error) {
 	var res []domain.MeshBoltMonitoringLog
 	for _, v := range m.meshBoltLogs {
+		if formType != "" && !strings.EqualFold(v.FormType, formType) {
+			continue
+		}
+		if stageCategory != "" && !strings.EqualFold(v.StageCategory, stageCategory) {
+			continue
+		}
 		res = append(res, *v)
 	}
 	return res, nil

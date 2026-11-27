@@ -684,8 +684,8 @@ func (uc *qcUseCase) GetMeshBoltLogByID(ctx context.Context, id uuid.UUID) (*dom
 	return item, nil
 }
 
-func (uc *qcUseCase) ListMeshBoltLogs(ctx context.Context, month string, room string, machineNo string) ([]domain.MeshBoltMonitoringLog, error) {
-	list, err := uc.repo.ListMeshBoltLogs(ctx, month, room, machineNo)
+func (uc *qcUseCase) ListMeshBoltLogs(ctx context.Context, month string, room string, machineNo string, formType string, stageCategory string) ([]domain.MeshBoltMonitoringLog, error) {
+	list, err := uc.repo.ListMeshBoltLogs(ctx, month, room, machineNo, formType, stageCategory)
 	if err != nil {
 		return nil, apperrors.NewInternal(err, "Gagal mengambil daftar monitoring mur & baut")
 	}
@@ -1115,6 +1115,7 @@ func (uc *qcUseCase) CreateFilterMeshLog(ctx context.Context, dto CreateFilterMe
 		DayOfWeek:        dto.DayOfWeek,
 		ProductName:      dto.ProductName,
 		ProductCode:      dto.ProductCode,
+		BatchNo:          strings.TrimSpace(dto.BatchNo),
 		MeshSize:         dto.MeshSize,
 		PICResponsible:   dto.PICResponsible,
 		InitialCondition: initCond,
@@ -1180,6 +1181,9 @@ func (uc *qcUseCase) UpdateFilterMeshLog(ctx context.Context, id uuid.UUID, dto 
 	}
 	if dto.ProductCode != "" {
 		item.ProductCode = dto.ProductCode
+	}
+	if dto.BatchNo != "" {
+		item.BatchNo = strings.TrimSpace(dto.BatchNo)
 	}
 	if dto.MeshSize != "" {
 		item.MeshSize = dto.MeshSize

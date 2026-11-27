@@ -426,7 +426,7 @@ func (r *qcRepository) GetMeshBoltLogByID(ctx context.Context, id uuid.UUID) (*d
 	return &item, nil
 }
 
-func (r *qcRepository) ListMeshBoltLogs(ctx context.Context, month string, room string, machineNo string) ([]domain.MeshBoltMonitoringLog, error) {
+func (r *qcRepository) ListMeshBoltLogs(ctx context.Context, month string, room string, machineNo string, formType string, stageCategory string) ([]domain.MeshBoltMonitoringLog, error) {
 	var logs []domain.MeshBoltMonitoringLog
 	q := r.db.WithContext(ctx).Model(&domain.MeshBoltMonitoringLog{})
 	if month != "" {
@@ -437,6 +437,12 @@ func (r *qcRepository) ListMeshBoltLogs(ctx context.Context, month string, room 
 	}
 	if machineNo != "" {
 		q = q.Where("machine_no = ?", machineNo)
+	}
+	if formType != "" {
+		q = q.Where("UPPER(form_type) = UPPER(?)", formType)
+	}
+	if stageCategory != "" {
+		q = q.Where("LOWER(stage_category) = LOWER(?)", stageCategory)
 	}
 	err := q.Order("check_date DESC, created_at DESC").Find(&logs).Error
 	return logs, err
